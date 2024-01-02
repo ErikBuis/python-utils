@@ -2,21 +2,22 @@ import argparse
 import logging
 import random
 from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 
-from cheatsheet_geometry import Interval, NumberSet
-from plot_times import plot_times
+from plot_times.plot_times import plot_times
+from utils_geometry import Interval, NumberSet
 
 
 def map_to_inputs(
     amount_numbers: int, amount_intervals: int
-) -> tuple[Sequence[NumberSet], Sequence[int | float]]:
+) -> tuple[tuple[Sequence[NumberSet], Sequence[int | float]], dict[str, Any]]:
     # Set random seed for reproducibility.
     random.seed(69)
 
     # Decide on a set of possible bounds.
-    possible_bounds = list(range(-1_0000_000, 1_000_000))  # TODO Change.
+    possible_bounds = list(range(-1_0000_000, 1_000_000))
     possible_inclusions = [True, False]
 
     # Generate a list of random intervals. Do this by randomly choosing a
@@ -37,7 +38,7 @@ def map_to_inputs(
         intervals.append(Interval(start_included, start, end, end_included))
     numbersets = [NumberSet(interval) for interval in intervals]
     numbers = [random.choice(possible_bounds) for _ in range(amount_numbers)]
-    return numbersets, numbers
+    return (numbersets, numbers), {}
 
 
 def main(args: argparse.Namespace) -> None:

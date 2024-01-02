@@ -5,13 +5,14 @@ The results are cached in "plot_times_{task_name}.pkl", and the plot is saved
 as "plot_times_{task_name}.png".
 """
 
+import pickle
 import re
 import unicodedata
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from timeit import timeit
 from typing import Any, Generic, TypeVar, cast
-import pickle
+
 import matplotlib.axes
 import matplotlib.cm
 import matplotlib.pyplot as plt
@@ -59,7 +60,7 @@ def measure_times(
     times: dict[tuple[int, int], tuple[float, float]],
     ns: npt.NDArray[np.int_],
     ms: npt.NDArray[np.int_],
-    map_to_inputs: Callable[[int, int], Any],
+    map_to_inputs: Callable[[int, int], tuple[Sequence[Any], dict[str, Any]]],
     algorithm1: Callable[..., Any],
     algorithm2: Callable[..., Any],
 ) -> dict[tuple[int, int], tuple[float, float]]:
@@ -77,11 +78,12 @@ def measure_times(
         ms: The values of m passed to the algorithms.
             Shape: [amount_ms].
         map_to_inputs: A function mapping a pair of (n, m) to the inputs that
-            should be passed to the algorithms.
-        algorithm1: The function representing algorithm 1. It takes the values
-            returned by map_to_inputs().
-        algorithm2: The function representing algorithm 2. It takes the values
-            returned by map_to_inputs().
+            should be passed to the algorithms. Should return a tuple of
+            (args, kwargs).
+        algorithm1: The function representing algorithm 1. It takes the args
+            and kwargs returned by map_to_inputs().
+        algorithm2: The function representing algorithm 2. It takes the args
+            and kwargs returned by map_to_inputs().
 
     Returns:
         times: The updated cache of the times it took for the algorithms to
@@ -96,9 +98,13 @@ def measure_times(
             if (n, m) in times:
                 time_algorithm1, time_algorithm2 = times[(n, m)]
             else:
-                inputs = map_to_inputs(n, m)
-                time_algorithm1 = auto_timeit(lambda: algorithm1(*inputs))
-                time_algorithm2 = auto_timeit(lambda: algorithm2(*inputs))
+                args, kwargs = map_to_inputs(n, m)
+                time_algorithm1 = auto_timeit(
+                    lambda: algorithm1(*args, **kwargs)
+                )
+                time_algorithm2 = auto_timeit(
+                    lambda: algorithm2(*args, **kwargs)
+                )
                 times[(n, m)] = (time_algorithm1, time_algorithm2)
 
             # Print the results for a fast overview.
