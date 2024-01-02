@@ -7,6 +7,7 @@ as "plot_times_{task_name}.png".
 
 import pickle
 import re
+import sys
 import unicodedata
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -15,6 +16,8 @@ from typing import Any, Generic, TypeVar, cast
 
 import matplotlib.axes
 import matplotlib.cm
+import matplotlib.colors
+import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
@@ -253,7 +256,7 @@ def plot_times(
             label.
         use_log_scale: Whether to use a log scale for the color map.
     """
-    path_to_parent = Path(__file__).resolve().parent
+    path_to_parent = Path(sys.argv[0]).resolve().parent
     task_name_slugified = slugify(task_name)
     path_to_cache = path_to_parent / f"plot_times_{task_name_slugified}.pkl"
     path_to_image = path_to_parent / f"plot_times_{task_name_slugified}.png"
@@ -294,17 +297,26 @@ def plot_times(
             matrix_time_algorithm2[i, j] = times[(n, m)][1]
 
     # Prepare the matrices for plotting.
-    matrix_time_algorithm1 = matrix_time_algorithm1.T[::-1]
-    matrix_time_algorithm2 = matrix_time_algorithm2.T[::-1]
+    matrix_time_algorithm1 = matrix_time_algorithm1.T
+    matrix_time_algorithm2 = matrix_time_algorithm2.T
 
     # Plot the matrices. Use a green-white-red colormap to show the difference
     # between the two methods.
     fig, axs = plt.subplots(
-        1, 3, figsize=(4.5 + 0.35 * 3 * len(ns), 1.5 + 0.35 * len(ms))
+        1,
+        3,
+        figsize=(
+            3.3
+            + len(str(max(ms))) * 0.1 * 3  # width of m tick labels
+            + 0.35 * 3 * len(ns),  # width of cells
+            1.1
+            + len(str(max(ns))) * 0.1  # height of n tick labels
+            + 0.35 * len(ms),  # height of cells
+        ),
     )
     axs = cast(NDArrayGeneric[matplotlib.axes.Axes], axs)
 
-    fig.suptitle(f"Time to {task_name} (in seconds)")
+    fig.suptitle(f"{task_name} (time in seconds)")
 
     # Get color map for both matrices.
     scalar_mappable = get_scalar_mappable(

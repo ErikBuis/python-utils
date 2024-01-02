@@ -68,7 +68,10 @@ def lexsort_along(
     """
     # If x is 1D, we can just do a normal sort.
     if len(x.shape) == 1:
-        return torch.sort(x, dim=dim, descending=descending)
+        torch_return_types_sort = torch.sort(x, dim=dim, descending=descending)
+        return SortOnlyDim(
+            torch_return_types_sort.values, torch_return_types_sort.indices
+        )
 
     # We can use np.lexsort() to only the given dimension. Unfortunately, torch
     # doesn't have a lexsort() equivalent, so we have to convert to numpy.
@@ -190,6 +193,10 @@ def swap_idcs_vals(x: torch.Tensor) -> torch.Tensor:
     The input tensor is assumed to contain exactly all integers from 0 to
     len(x) - 1, in any order.
 
+    Warning: This function does not explicitly check if the input tensor
+    contains no duplicates. If x contains duplicates, no error will be raised
+    and undefined behaviour will occur!
+
     Args:
         x: The tensor to swap.
             Shape: [N]
@@ -203,6 +210,9 @@ def swap_idcs_vals(x: torch.Tensor) -> torch.Tensor:
         >>> swap_idcs_vals(x)
         tensor([2, 4, 0, 1, 3])
     """
+    if len(x.shape) != 1:
+        raise ValueError("x must be 1D.")
+
     x_swapped = torch.empty_like(x)
     x_swapped.scatter_(0, x, torch.arange(len(x), device=x.device))
     return x_swapped
@@ -225,8 +235,73 @@ class TestSwapIdcsVals(unittest.TestCase):
 
     def test_swap_idcs_vals_2D(self) -> None:
         x = torch.tensor([[2, 3], [0, 4], [1, 5]])
-        with self.assertRaises(Exception):
+        with self.assertRaises(ValueError):
             swap_idcs_vals(x)
+
+
+def swap_idcs_vals_duplicates(x: torch.Tensor) -> torch.Tensor:
+    """Swap the indices and values of a 1D tensor, allowing duplicates.
+
+    The input tensor is assumed to contain integers from 0 to M <= N, in any
+    order, and may contain duplicates.
+
+    The output tensor will contain exactly all integers from 0 to len(x) - 1,
+    in any order.
+
+    If the input doesn't contain duplicates, you should use swap_idcs_vals()
+    instead since it is faster (especially for large tensors).
+
+    Args:
+        x: The tensor to swap.
+            Shape: [N]
+
+    Returns:
+        The swapped tensor.
+            Shape: [N]
+
+    Examples:
+        >>> x = torch.tensor([1, 2, 0, 1, 2])
+        >>> swap_idcs_vals_duplicates(x)
+        tensor([2, 0, 3, 1, 4])
+    """
+    if len(x.shape) != 1:
+        raise ValueError("x must be 1D.")
+
+    # Believe it or not, this O(n log n) algorithm is actually faster than a
+    # native implementation that uses a Python for loop with complexity O(n).
+    return torch.sort(x).indices
+
+
+class TestSwapIdcsValsDuplicates(unittest.TestCase):
+    def test_swap_idcs_vals_duplicates_len5(self) -> None:
+        x = torch.tensor([1, 2, 0, 1, 2])
+        self.assertTrue(
+            torch.equal(
+                swap_idcs_vals_duplicates(x), torch.tensor([2, 0, 3, 1, 4])
+            )
+        )
+
+    def test_swap_idcs_vals_duplicates_len10(self) -> None:
+        x = torch.tensor([3, 3, 0, 3, 4, 2, 1, 1, 2, 0])
+        self.assertTrue(
+            torch.equal(
+                swap_idcs_vals_duplicates(x),
+                torch.tensor([2, 9, 6, 7, 5, 8, 0, 1, 3, 4]),
+            )
+        )
+
+    def test_swap_idcs_vals_duplicates_2D(self) -> None:
+        x = torch.tensor([[2, 3], [0, 4], [1, 5]])
+        with self.assertRaises(ValueError):
+            swap_idcs_vals_duplicates(x)
+
+    def test_swap_idcs_vals_duplicates_no_duplicates(self) -> None:
+        x = torch.tensor([2, 3, 0, 4, 1])
+        self.assertTrue(
+            torch.equal(
+                swap_idcs_vals_duplicates(x), torch.tensor([2, 4, 0, 1, 3])
+            )
+        )
 
 
 @overload
@@ -524,8 +599,7 @@ def unique_with_backmap_naive(
     unique, inverse, *aux = torch.unique(
         x, return_inverse=True, return_counts=return_counts, dim=dim
     )
-    backmap = torch.sort(inverse).indices.unsqueeze(0)
+    backmap = swap_idcs_vals_duplicates(inverse).unsqueeze(0)
     if return_inverse:
         return unique, backmap, inverse, *aux  # type: ignore
-    else:
-        return unique, backmap, *aux  # type: ignore
+    return unique, backmap, *aux  # type: ignore

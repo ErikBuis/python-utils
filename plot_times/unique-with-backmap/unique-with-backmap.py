@@ -17,10 +17,10 @@ def map_to_inputs(
     random.seed(69)
 
     # Decide on a tensor to calculate the unique values for.
-    x = torch.randint(0, 9, (amount_rows, amount_cols))
+    x = torch.randint(0, 10, (amount_rows, amount_cols))
 
     # Return the inputs.
-    return (x,), {"return_inverse": True, "return_counts": True, "dim": 1}
+    return (x,), {"return_inverse": True, "return_counts": True, "dim": 0}
 
 
 def main(args: argparse.Namespace) -> None:
@@ -29,8 +29,8 @@ def main(args: argparse.Namespace) -> None:
     Args:
         args: The command line arguments.
     """
-    amount_rows = 2 ** np.arange(0, 11)
-    amount_cols = 2 ** np.arange(0, 11)
+    amount_rows = 2 ** np.arange(0, 21, 2)
+    amount_cols = 2 ** np.arange(0, 11, 2)
 
     plot_times(
         amount_rows,
