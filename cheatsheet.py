@@ -635,9 +635,9 @@ def binary_search_discrete_func(
 ) -> int:
     """
     Calculates the smallest input satisfying `f(input) >= output`.
-    `f` is a monotonically increasing function with a discrete domain.
-    `lower` is an exclusive lower bound for the input.
-    `upper` is an inclusive upper bound for the input.
+    `f` must be a monotonically increasing function with a discrete domain.
+    `lower` must be an exclusive lower bound for the target input.
+    `upper` must be an inclusive upper bound for the target input.
     """
     while upper - lower > 1:
         guess = (lower + upper + 1) // 2
@@ -660,8 +660,9 @@ def binary_search_continuous_func(
     Calculates an input satisfying:
         `f(input - abs_tol) <= output <= f(input + abs_tol)` or
         `f(input - input*rel_tol) <= output <= f(input + input*rel_tol)`
-    `f` is a monotonically increasing function with a continuous domain.
-    `lower` and `upper` are lower and upper bounds for the input.
+    `f` must be a monotonically increasing function with a continuous domain.
+    `lower` and `upper` must be lower and upper bounds for the target input.
+        Whether they are inclusive or exclusive doesn't matter.
     """
     while upper - lower >= abs_tol and abs((upper - lower) / upper) >= rel_tol:
         guess = (lower + upper) / 2
@@ -669,6 +670,35 @@ def binary_search_continuous_func(
             upper = guess
         else:
             lower = guess
+    return upper
+
+
+def ternary_search_discrete_func(
+    f: Callable[[int], float], lower: int, upper: int
+) -> int:
+    """
+    Calculates the smallest input satisfying:
+        `f(input - 1) >= min(f) <= f(input + 1)`
+    `f` must be a unimodal (strictly decreasing followed by strictly
+        increasing) function with a discrete domain, but it is allowed to be
+        constant in between the two strictly monotonic parts. In the latter
+        case, the smallest input that is a minimum will be returned.
+    `lower` is an inclusive lower bound for the target input.
+    `upper` is an inclusive upper bound for the target input.
+    Making your function `f` cache its results is highly recommended, as this
+        algorithm may call it multiple times for the same input.
+    """
+    while upper - lower > 2:
+        m1 = (2 * lower + upper) // 3
+        m2 = (lower + 2 * upper) // 3
+        if f(m1) >= f(m2):
+            lower = m1
+        else:
+            upper = m2
+    if f(lower) <= f(lower + 1):
+        return lower
+    if f(upper - 1) <= f(upper):
+        return upper - 1
     return upper
 
 
@@ -680,12 +710,15 @@ def ternary_search_continuous_func(
     rel_tol: float = 10**-6,
 ) -> float:
     """
-    Calculates an input satisfying (min is the minimum of `f`):
-        `f(input - abs_tol) >= min and f(input + abs_tol) >= min` or
-        `f(input - input*rel_tol) >= min and f(input + input*rel_tol) >= min`
-    `f` is a unimodal (strictly decreasing followed by strictly increasing)
-        function with a continuous domain.
+    Calculates the smallest input satisfying:
+        `f(input - abs_tol) >= min(f) <= f(input + abs_tol)` or
+        `f(input - input*rel_tol) >= min(f) <= f(input + input*rel_tol)`
+    `f` must be a unimodal (strictly decreasing followed by strictly
+        increasing) function with a continuous domain, but it is allowed to be
+        constant in between the two strictly monotonic parts. In the latter
+        case, any input that is a minimum could be returned.
     `lower` and `upper` are the bounds in between which the minimum resides.
+        Whether they are inclusive or exclusive doesn't matter.
     """
     while upper - lower >= abs_tol and abs((upper - lower) / upper) >= rel_tol:
         m1 = (2 * lower + upper) / 3
