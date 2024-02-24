@@ -727,7 +727,7 @@ def ternary_search_continuous_func(
             lower = m1
         else:
             upper = m2
-    return upper
+    return (lower + upper) / 2
 
 
 class SegTree:
