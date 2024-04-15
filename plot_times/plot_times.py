@@ -29,7 +29,7 @@ T = TypeVar("T")
 class NDArrayGeneric(np.ndarray, Generic[T]):
     """np.ndarray that allows for static type hinting of generics."""
 
-    def __getitem__(self, key) -> T:
+    def __getitem__(self, key: Any) -> T:
         return super().__getitem__(key)  # type: ignore
 
 
@@ -172,7 +172,7 @@ def get_scalar_mappable(
             # Make the linear width as small as possible.
             linear_width = values_arr_abs.min()
         norm = matplotlib.colors.AsinhNorm(
-            vmin=vmin, vmax=vmax, linear_width=linear_width  # type: ignore
+            vmin=vmin, vmax=vmax, linear_width=linear_width
         )
     else:
         norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
