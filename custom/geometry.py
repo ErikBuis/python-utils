@@ -91,50 +91,17 @@ This cheatsheet does not use any external libraries.
 from abc import ABC, abstractmethod
 from bisect import bisect_left
 from collections.abc import Iterable, Iterator, Sequence
-from fractions import Fraction
 from heapq import heapify, heappop
 from math import atan2, cos, inf, isinf, pi, sin, sqrt, tan
-from typing import Any, Literal, Self, TypeVar, cast, overload
+from typing import Any, Literal, TypeVar, cast, overload
 
+from modules.bisect import bisect_right_using_left
 
-# Other types could be added to this alias in the future.
-Number = int | float | Fraction
 
 # This alias is mainly meant for functions where multiple arguments or an
 # argument and the return value must be of the same subclass of
 # GeometricObject2D.
 geometricobject2d = TypeVar("geometricobject2d", bound="GeometricObject2D")
-
-
-# GENERAL FUNCTIONS ###########################################################
-
-
-def bisect_left_using_right(
-    a: Sequence[Number], x: Number, bisect_right_idx: int
-) -> int:
-    """Return bisect_left(a, x) using only bisect_right(a, x).
-
-    This function is only faster than bisect_left(a, x) if a contains no more
-    than log(|a|) x's.
-    """
-    for bisect_left_idx in range(bisect_right_idx - 1, -1, -1):
-        if a[bisect_left_idx] < x:
-            return bisect_left_idx + 1
-    return 0
-
-
-def bisect_right_using_left(
-    a: Sequence[Number], x: Number, bisect_left_idx: int
-) -> int:
-    """Return bisect_right(a, x) using only bisect_left(a, x).
-
-    This function is only faster than bisect_right(a, x) if a contains no more
-    than log(|a|) x's.
-    """
-    for bisect_right_idx in range(bisect_left_idx, len(a)):
-        if a[bisect_right_idx] > x:
-            return bisect_right_idx
-    return len(a)
 
 
 # GENERAL CLASSES #############################################################
@@ -151,46 +118,36 @@ class Matrix2D:
     """
 
     @property
-    def a(self) -> Number:
+    def a(self) -> float:
         """The first component of the matrix."""
         return self._a
 
     @property
-    def b(self) -> Number:
+    def b(self) -> float:
         """The second component of the matrix."""
         return self._b
 
     @property
-    def c(self) -> Number:
+    def c(self) -> float:
         """The third component of the matrix."""
         return self._c
 
     @property
-    def d(self) -> Number:
+    def d(self) -> float:
         """The fourth component of the matrix."""
         return self._d
 
-    def __init__(self, a: Number, b: Number, c: Number, d: Number) -> None:
-        """Create a Matrix2D instance."""
-        if not isinstance(a, Number):
-            raise TypeError("Matrix component must be a number.")
-        if not isinstance(b, Number):
-            raise TypeError("Matrix component must be a number.")
-        if not isinstance(c, Number):
-            raise TypeError("Matrix component must be a number.")
-        if not isinstance(d, Number):
-            raise TypeError("Matrix component must be a number.")
-
+    def __init__(self, a: float, b: float, c: float, d: float) -> None:
         self._a = a
         self._b = b
         self._c = c
         self._d = d
 
-    def __iter__(self) -> Iterator[Number]:
+    def __iter__(self) -> Iterator[float]:
         """Iterate over the matrix's components."""
         return iter((self._a, self._b, self._c, self._d))
 
-    def __getitem__(self, index: int) -> Number:
+    def __getitem__(self, index: int) -> float:
         """Get the component at the given index."""
         if index == 0:
             return self._a
@@ -249,13 +206,7 @@ class Matrix2D:
                 self._c * other._a + self._d * other._c,
                 self._c * other._b + self._d * other._d,
             )
-        elif isinstance(other, GeometricObject2D):
-            return other.transform(self)
-        else:
-            raise TypeError(
-                "Matrix multiplication is only defined for matrices and "
-                "geometric objects."
-            )
+        return other.transform(self)
 
 
 class Interval:
@@ -289,12 +240,12 @@ class Interval:
         return "[" if self._start_included else "("
 
     @property
-    def start(self) -> Number:
+    def start(self) -> float:
         """The start of the interval."""
         return self._start
 
     @property
-    def end(self) -> Number:
+    def end(self) -> float:
         """The end of the interval."""
         return self._end
 
@@ -311,8 +262,8 @@ class Interval:
     def __init__(
         self,
         left_bracket: bool | Literal["[", "("],
-        start: Number,
-        end: Number,
+        start: float,
+        end: float,
         right_bracket: bool | Literal["]", ")"],
     ) -> None:
         """Create an Interval instance."""
@@ -342,13 +293,13 @@ class Interval:
             else right_bracket == "]"
         )
 
-    def __iter__(self) -> Iterator[bool | Number]:
+    def __iter__(self) -> Iterator[bool | float]:
         """Iterate over the interval's components."""
         return iter(
             (self._start_included, self._start, self._end, self._end_included)
         )
 
-    def __getitem__(self, index: int) -> bool | Number:
+    def __getitem__(self, index: int) -> bool | float:
         """Get the component at the given index."""
         for i, component in enumerate(self):
             if i == index:
@@ -384,8 +335,6 @@ class Interval:
 
     def __eq__(self, other: "Interval") -> bool:
         """Check if two objects represent the same set of numbers."""
-        if not isinstance(other, Interval):
-            return False
         return all(
             component_self == component_other
             for component_self, component_other in zip(self, other)
@@ -415,7 +364,7 @@ class NumberSet:
     """
 
     @property
-    def components(self) -> Iterator[Interval | Number]:
+    def components(self) -> Iterator[Interval | float]:
         """An iterator of numbers and interval objects stored in the set.
 
         The componets are returned in a sorted manner (ascending).
@@ -436,7 +385,7 @@ class NumberSet:
         """The amount of numbers and intervals contained in the set."""
         return len(self._boundaries) // 2
 
-    def __init__(self, *components: "NumberSet | Interval | Number") -> None:
+    def __init__(self, *components: "NumberSet | Interval | float") -> None:
         """Create a NumberSet instance.
 
         If the set contains an interval from -inf or to inf, then the class
@@ -465,28 +414,24 @@ class NumberSet:
         #       One ends with x, the other starts with x, but both exclude it.
         #   In all other cases, the two numbers/intervals would be adjacent,
         #   which is guaranteed to never happen.
-        self._boundaries: list[Number] = []
+        self._boundaries: list[float] = []
         self._boundaries_included: list[bool] = []
 
         # Add the numbers and intervals to the set.
         for component in components:
-            if isinstance(component, Number):
+            if isinstance(component, float) or isinstance(component, int):
                 self.add_number(component)
             elif isinstance(component, Interval):
                 self |= NumberSet._direct_init(
                     [component.start, component.end],
                     [component.start_included, component.end_included],
                 )
-            elif isinstance(component, NumberSet):
-                self |= component
             else:
-                raise TypeError(
-                    f"Cannot add {component.__class__.__name__} to NumberSet."
-                )
+                self |= component
 
     @classmethod
     def _direct_init(
-        cls, boundaries: list[Number], boundaries_included: list[bool]
+        cls, boundaries: list[float], boundaries_included: list[bool]
     ) -> "NumberSet":
         """Create a NumberSet instance directly.
 
@@ -499,11 +444,11 @@ class NumberSet:
         self._boundaries_included = boundaries_included
         return self
 
-    def __iter__(self) -> Iterator[Interval | Number]:
+    def __iter__(self) -> Iterator[Interval | float]:
         """Iterate over the set's components."""
         return self.components
 
-    def __getitem__(self, index: int) -> Interval | Number:
+    def __getitem__(self, index: int) -> Interval | float:
         """Get the component at the given index."""
         for i, component in enumerate(self):
             if i == index:
@@ -564,7 +509,7 @@ class NumberSet:
             )
         )
 
-    def __contains__(self, number: Number) -> bool:
+    def __contains__(self, number: float) -> bool:
         """Check if the set contains the given number."""
         idx = bisect_left(self._boundaries, number)
         return idx != len(self._boundaries) and (
@@ -637,25 +582,25 @@ class NumberSet:
         self._perform_boolean_operation_ip(other, True, "10", "01")
         return self
 
-    def __lshift__(self, other: Number) -> "NumberSet":
+    def __lshift__(self, other: float) -> "NumberSet":
         """Return the set shifted to the left by the given amount."""
         return NumberSet._direct_init(
             [x - other for x in self._boundaries], self._boundaries_included
         )
 
-    def __ilshift__(self, other: Number) -> "NumberSet":
+    def __ilshift__(self, other: float) -> "NumberSet":
         """Shift the set to the left by the given amount."""
         for idx in range(0, len(self._boundaries)):
             self._boundaries[idx] -= other
         return self
 
-    def __rshift__(self, other: Number) -> "NumberSet":
+    def __rshift__(self, other: float) -> "NumberSet":
         """Return the set shifted to the right by the given amount."""
         return NumberSet._direct_init(
             [x + other for x in self._boundaries], self._boundaries_included
         )
 
-    def __irshift__(self, other: Number) -> "NumberSet":
+    def __irshift__(self, other: float) -> "NumberSet":
         """Shift the set to the right by the given amount."""
         for idx in range(0, len(self._boundaries)):
             self._boundaries[idx] += other
@@ -669,7 +614,7 @@ class NumberSet:
 
     @staticmethod
     def contains_parallel(
-        numbersets: Sequence["NumberSet"], numbers: Sequence[Number]
+        numbersets: Sequence["NumberSet"], numbers: Sequence[float]
     ) -> list[list[int]]:
         """Return which sets the numbers are contained in.
 
@@ -739,10 +684,10 @@ class NumberSet:
 
         # Go through all the sets and add their boundaries to a priority queue
         # so we can easily extract them in sorted order. Runtime: O(m).
-        prioq: list[tuple[Number, str, int]] = []
+        prioq: list[tuple[float, str, int]] = []
         for j, numberset in enumerate(numbersets):
             for component in numberset.components:
-                if isinstance(component, Number):
+                if isinstance(component, float) or isinstance(component, int):
                     prioq.append((component, "c", j))
                 else:
                     letter = "c" if component.start_included else "d"
@@ -760,8 +705,8 @@ class NumberSet:
         # sets the number is in without actually having to filter through all
         # the sets in lookup[idx] as in the naive pseudocode above.
         # Runtime: O(m^2).
-        lookup: list[tuple[Number, list[int], int, int]] = []
-        curr_lookup_number: Number | None = None
+        lookup: list[tuple[float, list[int], int, int]] = []
+        curr_lookup_number: float | None = None
         curr_lookup_list: list[int] = []
         curr_lookup_abc_ends_idx: int | None = None  # exclusive
         curr_lookup_bcd_starts_idx: int | None = None  # inclusive
@@ -782,14 +727,12 @@ class NumberSet:
                     curr_lookup_abc_ends_idx = len(curr_lookup_list)
 
                 # Add the current number to the lookup table.
-                lookup.append(
-                    (
-                        curr_lookup_number,
-                        curr_lookup_list,
-                        curr_lookup_abc_ends_idx,
-                        curr_lookup_bcd_starts_idx,
-                    )
-                )
+                lookup.append((
+                    curr_lookup_number,
+                    curr_lookup_list,
+                    curr_lookup_abc_ends_idx,
+                    curr_lookup_bcd_starts_idx,
+                ))
 
                 # Reset the current lookup variables.
                 curr_lookup_number = number
@@ -837,14 +780,12 @@ class NumberSet:
                 curr_lookup_abc_ends_idx = len(curr_lookup_list)
 
             # Add the current number to the lookup table.
-            lookup.append(
-                (
-                    curr_lookup_number,
-                    curr_lookup_list,
-                    curr_lookup_abc_ends_idx,
-                    curr_lookup_bcd_starts_idx,
-                )
-            )
+            lookup.append((
+                curr_lookup_number,
+                curr_lookup_list,
+                curr_lookup_abc_ends_idx,
+                curr_lookup_bcd_starts_idx,
+            ))
 
         # Now, we can easily find the sets that contain a number.
         # Runtime: O(n*log(m) + z).
@@ -862,21 +803,19 @@ class NumberSet:
 
     @staticmethod
     def contains_parallel_naive(
-        numbersets: Sequence["NumberSet"], numbers: Sequence[Number]
+        numbersets: Sequence["NumberSet"], numbers: Sequence[float]
     ) -> list[list[int]]:
         results: list[list[int]] = []
         for number in numbers:
-            results.append(
-                [
-                    i
-                    for i, numberset in enumerate(numbersets)
-                    if number in numberset
-                ]
-            )
+            results.append([
+                i
+                for i, numberset in enumerate(numbersets)
+                if number in numberset
+            ])
         return results
 
     def lookup(
-        self, number: Number, idx: int | None = None
+        self, number: float, idx: int | None = None
     ) -> tuple[bool, bool, bool, int]:
         """Look up where the number is located within the set.
 
@@ -945,7 +884,7 @@ class NumberSet:
         # The number lies in a hole between 2 intervals.
         return False, True, True, idx
 
-    def add_number(self, number: Number) -> None:
+    def add_number(self, number: float) -> None:
         """Add the given number to the set."""
         if isinf(number):
             raise ValueError(
@@ -975,7 +914,7 @@ class NumberSet:
         # The number is on an excluded boundary.
         self._boundaries_included[idx] = True
 
-    def remove_number(self, number: Number) -> None:
+    def remove_number(self, number: float) -> None:
         """Remove the given number from the set."""
         if isinf(number):
             raise ValueError(
@@ -1211,14 +1150,14 @@ class NumberSet:
 
     def __extract_subset_helper(
         self,
-        a: Number,
-        b: Number,
+        a: float,
+        b: float,
         a_included: bool,
         b_included: bool,
         convert_to: Literal["00", "01", "10", "11"],
         a_idx: int | None = None,
         b_idx: int | None = None,
-    ) -> tuple[list[Number], list[bool]]:
+    ) -> tuple[list[float], list[bool]]:
         """Extract the given subset of the number line from the set.
 
         a and b are the boundaries of the subset. They can be any number,
@@ -1335,8 +1274,8 @@ class NumberSet:
 
     def _extract_subset(
         self,
-        a: Number,
-        b: Number,
+        a: float,
+        b: float,
         a_included: bool,
         b_included: bool,
         convert_to: Literal["00", "01", "10", "11"],
@@ -1361,8 +1300,8 @@ class NumberSet:
 
     @staticmethod
     def __concat_subsets_helper(
-        subsets: list["NumberSet"], transitions: list[Number]
-    ) -> tuple[list[Number], list[bool]]:
+        subsets: list["NumberSet"], transitions: list[float]
+    ) -> tuple[list[float], list[bool]]:
         """Concatenate extracted subsets.
 
         The transitions indicate locations of boundaries between the subsets.
@@ -1462,7 +1401,7 @@ class NumberSet:
 
     @staticmethod
     def _concat_subsets(
-        subsets: list["NumberSet"], transitions: list[Number]
+        subsets: list["NumberSet"], transitions: list[float]
     ) -> "NumberSet":
         """Concatenate extracted subsets.
 
@@ -1473,7 +1412,7 @@ class NumberSet:
         )
 
     def _concat_subsets_ip(
-        self, subsets: list["NumberSet"], transitions: list[Number]
+        self, subsets: list["NumberSet"], transitions: list[float]
     ) -> None:
         """Concatenate extracted subsets.
 
@@ -1489,7 +1428,7 @@ class NumberSet:
         is_symmetric: bool,
         convert_to_if_other_exists: Literal["00", "01", "10", "11"],
         convert_to_if_other_empty: Literal["00", "01", "10", "11"],
-    ) -> tuple[list[Number], list[bool]]:
+    ) -> tuple[list[float], list[bool]]:
         """Perform a boolean operation between two NumberSets.
 
         is_symmetric indicates whether the operation is symmetric, like "and",
@@ -1635,7 +1574,7 @@ class NumberSet:
         """Check if the set can be reduced to one or no componets."""
         return self.amount_components <= 1
 
-    def reduce(self) -> "NumberSet | Interval | Number | None":
+    def reduce(self) -> "NumberSet | Interval | float | None":
         """Reduce the set to an Interval, number or None (if empty)."""
         if not self.is_reducible():
             return self
@@ -1766,7 +1705,7 @@ class GeometricObject2D(ABC):
     """
 
     @property
-    def epsilon(self) -> Number:
+    def epsilon(self) -> float:
         """The tolerance of floating point calculations.
 
         Defaults to 1e-6.
@@ -1794,10 +1733,8 @@ class GeometricObject2D(ABC):
         return self._epsilon
 
     @epsilon.setter
-    def epsilon(self, value: Number) -> None:
+    def epsilon(self, value: float) -> None:
         """Set the tolerance of floating point calculations."""
-        if not isinstance(value, Number):
-            raise TypeError("epsilon must be a number.")
         self._epsilon = value
 
     @abstractmethod
@@ -1839,7 +1776,7 @@ class GeometricObject2D(ABC):
             for component_self, component_other in zip(self, other)
         )
 
-    def __matmul__(self, other: Matrix2D) -> Self:
+    def __matmul__(self, other: Matrix2D) -> "Matrix2D":
         """Transform the object by the given matrix.
 
         Returns a new object that is transformed by the given matrix.
@@ -1847,7 +1784,7 @@ class GeometricObject2D(ABC):
         return self.transform(other)
 
     @abstractmethod
-    def copy(self) -> Self:
+    def copy(self) -> "Matrix2D":
         """Create a copy of this object.
 
         Returns a new object that is a copy of itself.
@@ -1855,7 +1792,7 @@ class GeometricObject2D(ABC):
         ...
 
     @abstractmethod
-    def translate(self, v: "Vector2D") -> Self:
+    def translate(self, v: "Vector2D") -> "Matrix2D":
         """Translate the object by the given amount.
 
         Returns a new object that is translated by the given amount.
@@ -1863,7 +1800,7 @@ class GeometricObject2D(ABC):
         ...
 
     @abstractmethod
-    def scale(self, x: Number, y: Number) -> Self:
+    def scale(self, x: float, y: float) -> "Matrix2D":
         """Scale the object by the given amount.
 
         Returns a new object that is scaled by the given amount.
@@ -1871,7 +1808,7 @@ class GeometricObject2D(ABC):
         ...
 
     @abstractmethod
-    def rotate(self, angle: Number) -> Self:
+    def rotate(self, angle: float) -> "Matrix2D":
         """Rotate the object by the given angle in radians.
 
         Returns a new object that is rotated by the given angle.
@@ -1879,7 +1816,7 @@ class GeometricObject2D(ABC):
         ...
 
     @abstractmethod
-    def reflect(self, v: "Vector2D") -> Self:
+    def reflect(self, v: "Vector2D") -> "Matrix2D":
         """Reflect the object over the given vector.
 
         Returns a new object that is reflected over the given vector.
@@ -1887,7 +1824,7 @@ class GeometricObject2D(ABC):
         ...
 
     @abstractmethod
-    def transform(self, matrix: Matrix2D) -> Self:
+    def transform(self, matrix: Matrix2D) -> "Matrix2D":
         """Transform the object by the given matrix.
 
         Returns a new object that is transformed by the given matrix.
@@ -1903,7 +1840,7 @@ class GeometricObject2D(ABC):
         ...
 
     @abstractmethod
-    def distance_to(self, v: "Vector2D") -> Number:
+    def distance_to(self, v: "Vector2D") -> float:
         """Calculate the shortest distance to the given point.
 
         Returns the shortest distance to the given point.
@@ -1912,8 +1849,8 @@ class GeometricObject2D(ABC):
 
     @abstractmethod
     def intersections_x(
-        self, x: Number
-    ) -> NumberSet | Iterable[Number | Interval]:
+        self, x: float
+    ) -> NumberSet | Iterable[float | Interval]:
         """Calculate the y-coordinates of the intersections at the given x.
 
         If the amount of numbers/intervals that represent the y-coordinates of
@@ -1925,8 +1862,8 @@ class GeometricObject2D(ABC):
 
     @abstractmethod
     def intersections_y(
-        self, y: Number
-    ) -> NumberSet | Iterable[Number | Interval]:
+        self, y: float
+    ) -> NumberSet | Iterable[float | Interval]:
         """Calculate the x-coordinates of the intersections at the given y.
 
         If the amount of numbers/intervals that represent the x-coordinates of
@@ -1953,22 +1890,22 @@ class Vector2D(GeometricObject2D):
     """
 
     @property
-    def x(self) -> Number:
+    def x(self) -> float:
         """The x-coordinate of the vector."""
         return self._x
 
     @property
-    def y(self) -> Number:
+    def y(self) -> float:
         """The y-coordinate of the vector."""
         return self._y
 
-    def __init__(self, x: Number, y: Number) -> None:
+    def __init__(self, x: float, y: float) -> None:
         """Create a Vector2D instance."""
         self._x = x
         self._y = y
         super().__init__()
 
-    def __iter__(self) -> Iterator[Number]:
+    def __iter__(self) -> Iterator[float]:
         """Iterate over the vector's components."""
         return iter((self._x, self._y))
 
@@ -1994,19 +1931,19 @@ class Vector2D(GeometricObject2D):
         """Subtract the given vector from this one."""
         return Vector2D(self._x - other._x, self._y - other._y)
 
-    def __mul__(self, other: Number) -> "Vector2D":
+    def __mul__(self, other: float) -> "Vector2D":
         """Multiply the vector by the given scalar."""
         return Vector2D(self._x * other, self._y * other)
 
-    def __rmul__(self, other: Number) -> "Vector2D":
+    def __rmul__(self, other: float) -> "Vector2D":
         """Multiply the given scalar by the vector."""
         return Vector2D(other * self._x, other * self._y)
 
-    def __truediv__(self, other: Number) -> "Vector2D":
+    def __truediv__(self, other: float) -> "Vector2D":
         """Perform floating point division by the given scalar."""
         return Vector2D(self._x / other, self._y / other)
 
-    def __floordiv__(self, other: Number) -> "Vector2D":
+    def __floordiv__(self, other: float) -> "Vector2D":
         """Perform integer division by the given scalar."""
         return Vector2D(self._x // other, self._y // other)
 
@@ -2024,14 +1961,14 @@ class Vector2D(GeometricObject2D):
         """
         return Vector2D(self._x + v._x, self._y + v._y)
 
-    def scale(self, x: Number, y: Number) -> "Vector2D":
+    def scale(self, x: float, y: float) -> "Vector2D":
         """Scale the vector by the given amount.
 
         Returns a new vector that is scaled by the given amount.
         """
         return Vector2D(self._x * x, self._y * y)
 
-    def rotate(self, angle: Number) -> "Vector2D":
+    def rotate(self, angle: float) -> "Vector2D":
         """Rotate the vector by the given angle in radians.
 
         Returns a vector which has the same length as self but is rotated
@@ -2079,13 +2016,13 @@ class Vector2D(GeometricObject2D):
         """
         return self.copy()
 
-    def distance_to(self, v: "Vector2D") -> Number:
+    def distance_to(self, v: "Vector2D") -> float:
         """Calculate the Euclidean distance to the given vector."""
         return sqrt((self._x - v._x) ** 2 + (self._y - v._y) ** 2)
 
     def intersections_x(
-        self, x: Number
-    ) -> NumberSet | Iterable[Number | Interval]:
+        self, x: float
+    ) -> NumberSet | Iterable[float | Interval]:
         """Calculate the y-coordinates of the intersections at the given x.
 
         See GeometricObject2D.intersections_x() for more information.
@@ -2093,30 +2030,30 @@ class Vector2D(GeometricObject2D):
         return NumberSet(self._y) if self._x == x else NumberSet()
 
     def intersections_y(
-        self, y: Number
-    ) -> NumberSet | Iterable[Number | Interval]:
+        self, y: float
+    ) -> NumberSet | Iterable[float | Interval]:
         """Calculate the x-coordinates of the intersections at the given y.
 
         See GeometricObject2D.intersections_y() for more information.
         """
         return NumberSet(self._x) if self._y == y else NumberSet()
 
-    def distance_squared_to(self, other: "Vector2D") -> Number:
+    def distance_squared_to(self, other: "Vector2D") -> float:
         """Calculate the squared Euclidean distance to the given vector."""
         return (self._x - other._x) ** 2 + (self._y - other._y) ** 2
 
-    def dot(self, other: "Vector2D") -> Number:
+    def dot(self, other: "Vector2D") -> float:
         """Calculate the dot product with the given vector."""
         return self._x * other._x + self._y * other._y
 
-    def cross(self, other: "Vector2D") -> Number:
+    def cross(self, other: "Vector2D") -> float:
         """Calculate the cross product with the given vector.
 
         Returns the third component of the cross product.
         """
         return self._x * other._y - self._y * other._x
 
-    def length(self) -> Number:
+    def length(self) -> float:
         """Return the Euclidean length of the vector.
 
         Calculates the length of the vector which follows from the theorem:
@@ -2124,7 +2061,7 @@ class Vector2D(GeometricObject2D):
         """
         return sqrt(self._x**2 + self._y**2)
 
-    def length_squared(self) -> Number:
+    def length_squared(self) -> float:
         """Return the squared Euclidean length of the vector.
 
         Calculates the length of the vector which follows from the theorem:
@@ -2158,7 +2095,7 @@ class Vector2D(GeometricObject2D):
         """
         return abs(self.length_squared()) < self._epsilon
 
-    def scale_to_length(self, length: Number) -> "Vector2D":
+    def scale_to_length(self, length: float) -> "Vector2D":
         """Scale the vector to the given length.
 
         Returns a new vector that points in the same direction as self but has
@@ -2174,7 +2111,7 @@ class Vector2D(GeometricObject2D):
         return length / self.length() * self
 
     def clamp_magnitude(
-        self, min_length: Number, max_length: Number | None = None
+        self, min_length: float, max_length: float | None = None
     ) -> "Vector2D":
         """Clamp the vector's magnitude between min_length and max_length.
 
@@ -2196,7 +2133,7 @@ class Vector2D(GeometricObject2D):
             return self.scale_to_length(min_length)
         return Vector2D(self._x, self._y)
 
-    def move_towards(self, target: "Vector2D", distance: Number) -> "Vector2D":
+    def move_towards(self, target: "Vector2D", distance: float) -> "Vector2D":
         """Move towards the given vector by the given distance.
 
         Returns a Vector which is moved towards the given Vector by the given
@@ -2233,7 +2170,7 @@ class Vector2D(GeometricObject2D):
             raise ValueError("Cannot project onto the zero vector.")
         return self.dot(other) / self.length_squared() * self
 
-    def angle_to(self, other: "Vector2D") -> Number:
+    def angle_to(self, other: "Vector2D") -> float:
         """Calculate the angle to the given vector in radians.
 
         Returns the angle from self to the passed Vector that would rotate self
@@ -2242,7 +2179,7 @@ class Vector2D(GeometricObject2D):
         """
         return atan2(other._y, other._x) - atan2(self._y, self._x)
 
-    def lerp(self, other: "Vector2D", t: Number) -> "Vector2D":
+    def lerp(self, other: "Vector2D", t: float) -> "Vector2D":
         """Perform linear interpolation to the given vector.
 
         Returns a Vector which is a linear interpolation between self and the
@@ -2254,7 +2191,7 @@ class Vector2D(GeometricObject2D):
             raise ValueError("t must be in the range [0, 1].")
         return self + t * (other - self)
 
-    def slerp(self, other: "Vector2D", t: Number) -> "Vector2D":
+    def slerp(self, other: "Vector2D", t: float) -> "Vector2D":
         """Perform spherical interpolation to the given vector.
 
         Calculates the spherical interpolation from self to the given Vector.
@@ -2295,14 +2232,14 @@ class Line2D(GeometricObject2D):
     # ! further calculations inside this class.
 
     @property
-    def a(self) -> Number:
+    def a(self) -> float:
         """First coefficient of the standard form."""
         if hasattr(self, "_a"):
             pass
         elif self._native_repr == "slope_intercept":
             self._a = -self._slope
         elif self._native_repr == "vectors":
-            self._a = self._v2._y
+            self._a = self._v2.y
         elif self._native_repr == "polar":
             self._a = cos(self._theta)
         else:
@@ -2310,14 +2247,14 @@ class Line2D(GeometricObject2D):
         return self._a
 
     @property
-    def b(self) -> Number:
+    def b(self) -> float:
         """Second coefficient of the standard form."""
         if hasattr(self, "_b"):
             pass
         elif self._native_repr == "slope_intercept":
             self._b = 1
         elif self._native_repr == "vectors":
-            self._b = -self._v2._x
+            self._b = -self._v2.x
         elif self._native_repr == "polar":
             self._b = sin(self._theta)
         else:
@@ -2325,7 +2262,7 @@ class Line2D(GeometricObject2D):
         return self._b
 
     @property
-    def c(self) -> Number:
+    def c(self) -> float:
         """Third coefficient of the standard form."""
         if hasattr(self, "_c"):
             pass
@@ -2340,7 +2277,7 @@ class Line2D(GeometricObject2D):
         return self._c
 
     @property
-    def slope(self) -> Number:
+    def slope(self) -> float:
         """Slope of the line."""
         if hasattr(self, "_slope"):
             pass
@@ -2350,10 +2287,10 @@ class Line2D(GeometricObject2D):
             else:
                 self._slope = -self._a / self._b
         elif self._native_repr == "vectors":
-            if self._v2._x == 0:
+            if self._v2.x == 0:
                 self._slope = inf  # actually also -inf but we ignore that here
             else:
-                self._slope = self._v2._y / self._v2._x
+                self._slope = self._v2.y / self._v2.x
         elif self._native_repr == "polar":
             if self._theta == 0:
                 self._slope = inf  # actually also -inf but we ignore that here
@@ -2364,7 +2301,7 @@ class Line2D(GeometricObject2D):
         return self._slope
 
     @property
-    def intercept(self) -> Number:
+    def intercept(self) -> float:
         """Y-intercept of the line."""
         if hasattr(self, "_intercept"):
             pass
@@ -2374,11 +2311,11 @@ class Line2D(GeometricObject2D):
             else:
                 self._intercept = self._c / self._b
         elif self._native_repr == "vectors":
-            if self._v2._x == 0:
+            if self._v2.x == 0:
                 self._intercept = inf  # mathematically incorrect but useful
             else:
                 self._intercept = (
-                    self._v1._y - self._v2._y / self._v2._x * self._v1._x
+                    self._v1.y - self._v2.y / self._v2.x * self._v1.x
                 )
         elif self._native_repr == "polar":
             if self._theta == 0:
@@ -2436,7 +2373,7 @@ class Line2D(GeometricObject2D):
         elif self._native_repr == "slope_intercept":
             self._normal = Vector2D(-self._slope, 1)
         elif self._native_repr == "vectors":
-            self._normal = Vector2D(-self._v2._y, self._v2._x)
+            self._normal = Vector2D(-self._v2.y, self._v2.x)
         elif self._native_repr == "polar":
             self._normal = Vector2D(cos(self._theta), sin(self._theta))
         else:
@@ -2445,7 +2382,7 @@ class Line2D(GeometricObject2D):
         return self._normal
 
     @property
-    def r(self) -> Number:
+    def r(self) -> float:
         """Smallest distance from the origin to the line."""
         if hasattr(self, "_r"):
             pass
@@ -2460,7 +2397,7 @@ class Line2D(GeometricObject2D):
         return self._r
 
     @property
-    def theta(self) -> Number:
+    def theta(self) -> float:
         """Angle between the x-axis and the closest vector to the line."""
         if hasattr(self, "_theta"):
             pass
@@ -2486,20 +2423,20 @@ class Line2D(GeometricObject2D):
         elif self._native_repr == "vectors":
             if self._v1.cross(self._v2) <= 0:
                 # intercept >= 0 and 0 <= theta < pi
-                if self._v2._x >= 0:
-                    self._theta = atan2(self._v2._x, -self._v2._y)
+                if self._v2.x >= 0:
+                    self._theta = atan2(self._v2.x, -self._v2.y)
                 else:
-                    self._theta = atan2(-self._v2._x, self._v2._y)
+                    self._theta = atan2(-self._v2.x, self._v2.y)
             # intercept < 0 and pi <= theta < 2 * pi
-            elif self._v2._x >= 0:
-                self._theta = atan2(-self._v2._x, self._v2._y) + 2 * pi
+            elif self._v2.x >= 0:
+                self._theta = atan2(-self._v2.x, self._v2.y) + 2 * pi
             else:
-                self._theta = atan2(self._v2._x, -self._v2._y) + 2 * pi
+                self._theta = atan2(self._v2.x, -self._v2.y) + 2 * pi
         else:
             raise ValueError("Invalid native representation.")
         return self._theta
 
-    def __init__(self, _native_repr: str, *args: Number | Vector2D) -> None:
+    def __init__(self, _native_repr: str, *args: float | Vector2D) -> None:
         """Create a Line2D instance.
 
         Only meant for internal use, do not call this function directly.
@@ -2507,23 +2444,23 @@ class Line2D(GeometricObject2D):
         """
         self._native_repr = _native_repr
         if _native_repr == "standard" and len(args) == 3:
-            args = cast(tuple[Number, Number, Number], args)
+            args = cast(tuple[float, float, float], args)
             self._a, self._b, self._c = args
         elif _native_repr == "slope_intercept" and len(args) == 2:
-            args = cast(tuple[Number, Number], args)
+            args = cast(tuple[float, float], args)
             self._slope, self._intercept = args
         elif _native_repr == "vectors" and len(args) == 2:
             args = cast(tuple[Vector2D, Vector2D], args)
             self._v1, self._v2 = args
         elif _native_repr == "polar" and len(args) == 2:
-            args = cast(tuple[Number, Number], args)
+            args = cast(tuple[float, float], args)
             self._r, self._theta = args
         else:
             raise ValueError("Invalid native representation.")
         super().__init__()
 
     @classmethod
-    def from_standard(cls, a: Number, b: Number, c: Number) -> Self:
+    def from_standard(cls, a: float, b: float, c: float) -> "Line2D":
         """Initialize the line from its standard representation.
 
         Represents the line as the equation:
@@ -2542,7 +2479,7 @@ class Line2D(GeometricObject2D):
         return cls("standard", a, b, c)
 
     @classmethod
-    def from_slope_intercept(cls, slope: Number, intercept: Number) -> Self:
+    def from_slope_intercept(cls, slope: float, intercept: float) -> "Line2D":
         """Initialize the line from its slope and intercept.
 
         Represents the line as the equation:
@@ -2561,7 +2498,7 @@ class Line2D(GeometricObject2D):
         return cls("slope_intercept", slope, intercept)
 
     @classmethod
-    def from_vectors(cls, v1: Vector2D, v2: Vector2D) -> Self:
+    def from_vectors(cls, v1: Vector2D, v2: Vector2D) -> "Line2D":
         """Initialize the line from two vectors.
 
         Represents the line as the equation:
@@ -2576,7 +2513,7 @@ class Line2D(GeometricObject2D):
         return cls("vectors", v1, v2)
 
     @classmethod
-    def from_points(cls, p1: Vector2D, p2: Vector2D) -> Self:
+    def from_points(cls, p1: Vector2D, p2: Vector2D) -> "Line2D":
         """Initialize the line from two points.
 
         Represents the line as the equation:
@@ -2591,7 +2528,7 @@ class Line2D(GeometricObject2D):
         return cls.from_vectors(p1, p2 - p1)
 
     @classmethod
-    def from_polar(cls, r: Number, theta: Number) -> Self:
+    def from_polar(cls, r: float, theta: float) -> "Line2D":
         """Initialize the line from its polar representation.
 
         Represents the line as the equation:
@@ -2605,7 +2542,7 @@ class Line2D(GeometricObject2D):
             raise ValueError("r must be non-negative.")
         return cls("polar", r, theta % (2 * pi))
 
-    def __iter__(self) -> Iterator[Number | Vector2D]:
+    def __iter__(self) -> Iterator[float | Vector2D]:
         """Iterate over the parameters of the line."""
         if self._native_repr == "standard":
             yield self._a
@@ -2660,9 +2597,7 @@ class Line2D(GeometricObject2D):
         Warning: this function internally uses a threshold of self.epsilon to
         determine if the point is on the line.
         """
-        return (
-            abs(self.a * point._x + self.b * point._y - self.c) < self.epsilon
-        )
+        return abs(self.a * point.x + self.b * point.y - self.c) < self.epsilon
 
     def copy(self) -> "Line2D":
         """Create a copy of this line.
@@ -2678,14 +2613,14 @@ class Line2D(GeometricObject2D):
         """
         return self.from_vectors(self.v1 + v, self.v2)
 
-    def scale(self, x: Number, y: Number) -> "Line2D":
+    def scale(self, x: float, y: float) -> "Line2D":
         """Scale the line by the given amount.
 
         Returns a new line that is scaled by the given factor in the x and y.
         """
         return self.from_standard(self.a / x, self.b / y, self.c)
 
-    def rotate(self, angle: Number) -> "Line2D":
+    def rotate(self, angle: float) -> "Line2D":
         """Rotate the line by the given angle.
 
         Returns a new line that is rotated by the given angle.
@@ -2716,7 +2651,7 @@ class Line2D(GeometricObject2D):
         """
         return self.v1 + self.v2.project(v - self.v1)
 
-    def distance_to(self, v: Vector2D) -> Number:
+    def distance_to(self, v: Vector2D) -> float:
         """Calculate the distance from the line to the given point.
 
         Returns the distance from the line to the given point. The distance is
@@ -2727,8 +2662,8 @@ class Line2D(GeometricObject2D):
         return self.normal.dot(v - self.v1)
 
     def intersections_x(
-        self, x: Number
-    ) -> NumberSet | Iterable[Number | Interval]:
+        self, x: float
+    ) -> NumberSet | Iterable[float | Interval]:
         """Calculate the y-coordinates of the intersections at the given x.
 
         See GeometricObject2D.intersections_x() for more information.
@@ -2740,8 +2675,8 @@ class Line2D(GeometricObject2D):
         return NumberSet((self.c - self.a * x) / self.b)
 
     def intersections_y(
-        self, y: Number
-    ) -> NumberSet | Iterable[Number | Interval]:
+        self, y: float
+    ) -> NumberSet | Iterable[float | Interval]:
         """Calculate the x-coordinates of the intersections at the given y.
 
         See GeometricObject2D.intersections_y() for more information.
@@ -2760,7 +2695,7 @@ class Line2D(GeometricObject2D):
         """
         return self.closest_to(point) * 2 - point
 
-    def angle_to(self, other: "Line2D") -> Number:
+    def angle_to(self, other: "Line2D") -> float:
         """Calculate the smallest absolute angle to the given line in radians.
 
         Returns the smallest angle from self to the given line that would
@@ -2793,7 +2728,7 @@ class Line2D(GeometricObject2D):
         """
         return not self.is_parallel(other)
 
-    def parallel_line(self, point: Vector2D) -> Self:
+    def parallel_line(self, point: Vector2D) -> "Line2D":
         """Get the parallel line that goes through the given point.
 
         Returns a new line that is parallel to the current line and goes
@@ -2801,7 +2736,7 @@ class Line2D(GeometricObject2D):
         """
         return self.from_vectors(point, self.v2)
 
-    def perpendicular_line(self, point: Vector2D) -> Self:
+    def perpendicular_line(self, point: Vector2D) -> "Line2D":
         """Get the perpendicular line that goes through the given point.
 
         Returns a new line that is perpendicular to the current line and goes
@@ -2844,7 +2779,9 @@ def get_line_length(x1: float, y1: float, x2: float, y2: float) -> float:
     return sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
 
 
-def get_circle_interceptions(x1, y1, r1, x2, y2, r2):
+def get_circle_interceptions(
+    x1: float, y1: float, r1: float, x2: float, y2: float, r2: float
+) -> list[tuple[float, float]]:
     # x1, y1: coordinates of the center of the first circle.
     # r1: radius of the first circle.
     # x2, y2: coordinates of the center of the second circle.
@@ -2864,21 +2801,17 @@ def get_circle_interceptions(x1, y1, r1, x2, y2, r2):
     if get_line_length(x1, y1, x2, y2) == r1 + r2:
         # The circles are tangent to each other.
         interception_factor = r1 / (r1 + r2)
-        return [
-            (
-                x1 + (x2 - x1) * interception_factor,
-                y1 + (y2 - y1) * interception_factor,
-            )
-        ]
+        return [(
+            x1 + (x2 - x1) * interception_factor,
+            y1 + (y2 - y1) * interception_factor,
+        )]
     if get_line_length(x1, y1, x2, y2) == abs(r1 - r2):
         # One circle is inside the other, and they are tangent to each other.
         interception_factor = r1 / (r1 + r2)
-        return [
-            (
-                x1 + (x2 - x1) * interception_factor,
-                y1 + (y2 - y1) * interception_factor,
-            )
-        ]
+        return [(
+            x1 + (x2 - x1) * interception_factor,
+            y1 + (y2 - y1) * interception_factor,
+        )]
     # The circles intercept in two points.
     # https://math.stackexchange.com/questions/256100/
     # how-can-i-find-the-points-at-which-two-circles-intercept says:
@@ -2895,7 +2828,9 @@ def get_circle_interceptions(x1, y1, r1, x2, y2, r2):
     ]
 
 
-def get_tangent_point(xl, yl, xc, yc, r):
+def get_tangent_point(
+    xl: float, yl: float, xc: float, yc: float, r: float
+) -> list[tuple[float, float]]:
     # xl, yl: coordinates of a point on the line.
     # xc, yc: coordinates of the center of the circle.
     # r: radius of the circle.
@@ -2928,7 +2863,7 @@ def get_tangent_point(xl, yl, xc, yc, r):
     return get_circle_interceptions(xc, yc, r, xl, yl, pr)
 
 
-def get_angle_general_triangle(a, b, c):
+def get_angle_general_triangle(a: float, b: float, c: float) -> float:
     # a: length of the side opposite to the angle we want to calculate.
     # b: length of one side adjacent to the angle we want to calculate.
     # c: length of the remaining side.

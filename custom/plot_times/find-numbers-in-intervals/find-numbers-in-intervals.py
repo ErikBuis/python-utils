@@ -5,9 +5,9 @@ from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
-
 from plot_times.plot_times import plot_times
-from utils_geometry import Interval, NumberSet
+
+from custom.geometry import Interval, NumberSet
 
 
 def map_to_inputs(

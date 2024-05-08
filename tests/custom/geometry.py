@@ -1,840 +1,32 @@
-"""Unit tests for the cheatsheet module.
+# pyright: reportPrivateUsage=false
+# pyright: reportUninitializedInstanceVariable=false
 
-This module contains unit tests for the functions in the cheatsheet module.
-The tests are written using the unittest module from the Python standard
-library.
-
-To run the tests, run the following command from the root directory of the
-repository:
-```
-pytest cheatsheet_tests.py
-```
-(You can also run the tests using `python3 -m unittest cheatsheet_tests.py`,
- but pytest is recommended because it provides more detailed and coloured
- output. You may need to install pytest first using `python3 -m pip install
- pytest`.)
-"""
 
 import random
 import unittest
-from collections.abc import Callable
 from math import inf
-from typing import TypeVar
 
-import cheatsheet
-import cheatsheet_extra
-import cheatsheet_geometry
-
-
-T = TypeVar("T")
-
-
-def create_undigraph() -> list[list[int]]:
-    return [[1, 2, 3, 4], [0, 2], [0, 1], [0], [0], [6], [5]]
-
-
-def create_digraph() -> list[list[int]]:
-    return [[1, 4], [2, 3], [3], [1, 5], [5], [6], [4]]
-
-
-def create_dag() -> list[list[int]]:
-    return [[2, 5], [3, 4], [3, 5], [5, 6], [5], [6], []]
-
-
-def create_tree() -> list[list[int]]:
-    return [[1, 2, 3], [4, 5], [6], [], [], [], []]
-
-
-def create_weighted_undigraph() -> list[list[tuple[int, float]]]:
-    return [
-        [(1, 1), (2, 3), (3, 2), (4, 4)],
-        [(0, 1), (2, 1)],
-        [(0, 3), (1, 1)],
-        [(0, 2)],
-        [(0, 4)],
-        [(6, 1)],
-        [(5, 1)],
-    ]
-
-
-def create_weighted_digraph() -> list[list[tuple[int, float]]]:
-    return [
-        [(1, 1), (4, 4)],
-        [(2, 2), (3, 4)],
-        [(3, 1)],
-        [(1, 3), (5, 1)],
-        [(5, 2)],
-        [(6, 1)],
-        [(4, 1)],
-    ]
-
-
-def create_weighted_dag() -> list[list[tuple[int, float]]]:
-    return [
-        [(2, 1), (5, 5)],
-        [(3, 5), (4, 2)],
-        [(3, 1), (5, 3)],
-        [(5, 1), (6, 3)],
-        [(5, 3)],
-        [(6, 1)],
-        [],
-    ]
-
-
-def create_weighted_tree() -> list[list[tuple[int, float]]]:
-    return [
-        [(1, 1), (2, 2), (3, 3)],
-        [(4, 4), (5, 5)],
-        [(6, 6)],
-        [],
-        [],
-        [],
-        [],
-    ]
-
-
-def dict_to_list(d: dict[int, T], V: int, default: T) -> list[T]:
-    l = [default for _ in range(V)]
-    for v, t in d.items():
-        l[v] = t
-    return l
-
-
-def list_to_dict(l: list[T]) -> dict[int, T]:
-    d = {}
-    for v, t in enumerate(l):
-        d[v] = t
-    return d
-
-
-def unweighted_to_weighted(
-    adjlist: list[list[int]],
-) -> list[list[tuple[int, float]]]:
-    return [[(v, 1) for v in nbrs] for nbrs in adjlist]
-
-
-def weighted_to_unweighted(
-    adjlist: list[list[tuple[int, float]]]
-) -> list[list[int]]:
-    return [[v for v, _ in nbrs] for nbrs in adjlist]
-
-
-def check_topological_ordering(
-    self: unittest.TestCase, adjlist: list[list[int]], toposort: list[int]
-) -> None:
-    # Some preprocessing to make the assertions easier.
-    toposort2idx = [-1] * len(toposort)
-    for i, v in enumerate(toposort):
-        toposort2idx[v] = i
-
-    # Check that the topological ordering is correct.
-    for u, nbrs in enumerate(adjlist):
-        for v in nbrs:
-            self.assertLess(toposort2idx[u], toposort2idx[v])
-
-
-def edge_count_heuristic(
-    adjlist: list[list[tuple[int, float]]], goal: int
-) -> Callable[[int], float]:
-    # This is always an admissible heuristic if weight >= 1 for all edges.
-    adjlist_unweighted = weighted_to_unweighted(adjlist)
-
-    def heuristic(v: int) -> float:
-        dist, _ = cheatsheet.bfs(adjlist_unweighted, v)
-        return dist[goal]
-
-    return heuristic
-
-
-class TestReachableVertices(unittest.TestCase):
-    def setUp(self) -> None:
-        self.undigraph = create_undigraph()
-        self.digraph = create_digraph()
-        self.dag = create_dag()
-        self.tree = create_tree()
-
-    def test_reachable_vertices_undigraph(self) -> None:
-        reachable = cheatsheet.reachable_vertices(self.undigraph, 0)
-        self.assertSetEqual(reachable, {0, 1, 2, 3, 4})
-
-        reachable = cheatsheet.reachable_vertices(self.undigraph, 3)
-        self.assertSetEqual(reachable, {0, 1, 2, 3, 4})
-
-        reachable = cheatsheet.reachable_vertices(self.undigraph, 5)
-        self.assertSetEqual(reachable, {5, 6})
-
-        reachable = cheatsheet.reachable_vertices(self.undigraph, 6)
-        self.assertSetEqual(reachable, {5, 6})
-
-    def test_reachable_vertices_digraph(self) -> None:
-        reachable = cheatsheet.reachable_vertices(self.digraph, 0)
-        self.assertSetEqual(reachable, {0, 1, 2, 3, 4, 5, 6})
-
-        reachable = cheatsheet.reachable_vertices(self.digraph, 3)
-        self.assertSetEqual(reachable, {1, 2, 3, 4, 5, 6})
-
-        reachable = cheatsheet.reachable_vertices(self.digraph, 5)
-        self.assertSetEqual(reachable, {4, 5, 6})
-
-        reachable = cheatsheet.reachable_vertices(self.digraph, 6)
-        self.assertSetEqual(reachable, {4, 5, 6})
-
-    def test_reachable_vertices_dag(self) -> None:
-        reachable = cheatsheet.reachable_vertices(self.dag, 0)
-        self.assertSetEqual(reachable, {0, 2, 3, 5, 6})
-
-        reachable = cheatsheet.reachable_vertices(self.dag, 1)
-        self.assertSetEqual(reachable, {1, 3, 4, 5, 6})
-
-        reachable = cheatsheet.reachable_vertices(self.dag, 3)
-        self.assertSetEqual(reachable, {3, 5, 6})
-
-        reachable = cheatsheet.reachable_vertices(self.dag, 6)
-        self.assertSetEqual(reachable, {6})
-
-    def test_reachable_vertices_tree(self) -> None:
-        reachable = cheatsheet.reachable_vertices(self.tree, 0)
-        self.assertSetEqual(reachable, {0, 1, 2, 3, 4, 5, 6})
-
-        reachable = cheatsheet.reachable_vertices(self.tree, 1)
-        self.assertSetEqual(reachable, {1, 4, 5})
-
-        reachable = cheatsheet.reachable_vertices(self.tree, 2)
-        self.assertSetEqual(reachable, {2, 6})
-
-        reachable = cheatsheet.reachable_vertices(self.tree, 5)
-        self.assertSetEqual(reachable, {5})
-
-
-class TestConnectedComponents(unittest.TestCase):
-    def setUp(self) -> None:
-        self.undigraph = create_undigraph()
-
-    def test_connected_components_undigraph(self) -> None:
-        components = cheatsheet.connected_components(self.undigraph)
-        self.assertListEqual(components, [{0, 1, 2, 3, 4}, {5, 6}])
-
-
-class TestBFS(unittest.TestCase):
-    def setUp(self) -> None:
-        self.undigraph = create_undigraph()
-        self.digraph = create_digraph()
-        self.dag = create_dag()
-        self.tree = create_tree()
-
-    def test_bfs_undigraph(self) -> None:
-        dist, parent = cheatsheet.bfs(self.undigraph, 0)
-        self.assertListEqual(dist, [0, 1, 1, 1, 1, inf, inf])
-        self.assertListEqual(parent, [-1, 0, 0, 0, 0, -1, -1])
-
-        dist, parent = cheatsheet.bfs(self.undigraph, 3)
-        self.assertListEqual(dist, [1, 2, 2, 0, 2, inf, inf])
-        self.assertListEqual(parent, [3, 0, 0, -1, 0, -1, -1])
-
-        dist, parent = cheatsheet.bfs(self.undigraph, 5)
-        self.assertListEqual(dist, [inf, inf, inf, inf, inf, 0, 1])
-        self.assertListEqual(parent, [-1, -1, -1, -1, -1, -1, 5])
-
-        dist, parent = cheatsheet.bfs(self.undigraph, 6)
-        self.assertListEqual(dist, [inf, inf, inf, inf, inf, 1, 0])
-        self.assertListEqual(parent, [-1, -1, -1, -1, -1, 6, -1])
-
-    def test_bfs_digraph(self) -> None:
-        dist, parent = cheatsheet.bfs(self.digraph, 0)
-        self.assertListEqual(dist, [0, 1, 2, 2, 1, 2, 3])
-        self.assertListEqual(parent, [-1, 0, 1, 1, 0, 4, 5])
-
-        dist, parent = cheatsheet.bfs(self.digraph, 3)
-        self.assertListEqual(dist, [inf, 1, 2, 0, 3, 1, 2])
-        self.assertListEqual(parent, [-1, 3, 1, -1, 6, 3, 5])
-
-        dist, parent = cheatsheet.bfs(self.digraph, 5)
-        self.assertListEqual(dist, [inf, inf, inf, inf, 2, 0, 1])
-        self.assertListEqual(parent, [-1, -1, -1, -1, 6, -1, 5])
-
-        dist, parent = cheatsheet.bfs(self.digraph, 6)
-        self.assertListEqual(dist, [inf, inf, inf, inf, 1, 2, 0])
-        self.assertListEqual(parent, [-1, -1, -1, -1, 6, 4, -1])
-
-    def test_bfs_dag(self) -> None:
-        dist, parent = cheatsheet.bfs(self.dag, 0)
-        self.assertListEqual(dist, [0, inf, 1, 2, inf, 1, 2])
-        self.assertListEqual(parent, [-1, -1, 0, 2, -1, 0, 5])
-
-        dist, parent = cheatsheet.bfs(self.dag, 1)
-        self.assertListEqual(dist, [inf, 0, inf, 1, 1, 2, 2])
-        self.assertTrue(
-            parent == [-1, -1, -1, 1, 1, 3, 3]
-            or parent == [-1, -1, -1, 1, 1, 4, 3]
-        )
-
-        dist, parent = cheatsheet.bfs(self.dag, 3)
-        self.assertListEqual(dist, [inf, inf, inf, 0, inf, 1, 1])
-        self.assertListEqual(parent, [-1, -1, -1, -1, -1, 3, 3])
-
-        dist, parent = cheatsheet.bfs(self.dag, 6)
-        self.assertListEqual(dist, [inf, inf, inf, inf, inf, inf, 0])
-        self.assertListEqual(parent, [-1, -1, -1, -1, -1, -1, -1])
-
-    def test_bfs_tree(self) -> None:
-        dist, parent = cheatsheet.bfs(self.tree, 0)
-        self.assertListEqual(dist, [0, 1, 1, 1, 2, 2, 2])
-        self.assertListEqual(parent, [-1, 0, 0, 0, 1, 1, 2])
-
-        dist, parent = cheatsheet.bfs(self.tree, 1)
-        self.assertListEqual(dist, [inf, 0, inf, inf, 1, 1, inf])
-        self.assertListEqual(parent, [-1, -1, -1, -1, 1, 1, -1])
-
-        dist, parent = cheatsheet.bfs(self.tree, 2)
-        self.assertListEqual(dist, [inf, inf, 0, inf, inf, inf, 1])
-        self.assertListEqual(parent, [-1, -1, -1, -1, -1, -1, 2])
-
-        dist, parent = cheatsheet.bfs(self.tree, 5)
-        self.assertListEqual(dist, [inf, inf, inf, inf, inf, 0, inf])
-        self.assertListEqual(parent, [-1, -1, -1, -1, -1, -1, -1])
-
-
-class TestBFSVType(unittest.TestCase):
-    def setUp(self) -> None:
-        self.undigraph = create_undigraph()
-        self.digraph = create_digraph()
-        self.dag = create_dag()
-        self.tree = create_tree()
-
-    def compare_to_bfs(self, adjlist: list[list[int]], start: int) -> None:
-        move = adjlist.__getitem__
-
-        dist1, parent1 = cheatsheet.bfs(adjlist, start)
-        dist_dict, parent_dict = cheatsheet_extra.bfs_v_type(move, start)
-
-        dist2 = dict_to_list(dist_dict, len(adjlist), inf)
-        parent2 = dict_to_list(parent_dict, len(adjlist), -1)
-
-        self.assertListEqual(dist1, dist2)
-        self.assertListEqual(parent1, parent2)
-
-    def test_bfs_v_type_undigraph(self) -> None:
-        for start in (0, 3, 5, 6):
-            self.compare_to_bfs(self.undigraph, start)
-
-    def test_bfs_v_type_digraph(self) -> None:
-        for start in (0, 3, 5, 6):
-            self.compare_to_bfs(self.digraph, start)
-
-    def test_bfs_v_type_dag(self) -> None:
-        for start in (0, 1, 3, 6):
-            self.compare_to_bfs(self.dag, start)
-
-    def test_bfs_v_type_tree(self) -> None:
-        for start in (0, 1, 2, 5):
-            self.compare_to_bfs(self.tree, start)
-
-
-class TestReverseDigraph(unittest.TestCase):
-    def setUp(self) -> None:
-        self.undigraph = create_undigraph()
-        self.digraph = create_digraph()
-        self.dag = create_dag()
-        self.tree = create_tree()
-
-    def test_reverse_undigraph(self) -> None:
-        reversed_graph = cheatsheet.reverse_digraph(self.undigraph)
-        self.assertListEqual(reversed_graph, self.undigraph)
-
-    def test_reverse_digraph(self) -> None:
-        reversed_graph = cheatsheet.reverse_digraph(self.digraph)
-        self.assertListEqual(
-            reversed_graph, [[], [0, 3], [1], [1, 2], [0, 6], [3, 4], [5]]
-        )
-
-    def test_reverse_dag(self) -> None:
-        reversed_graph = cheatsheet.reverse_digraph(self.dag)
-        self.assertListEqual(
-            reversed_graph, [[], [], [0], [1, 2], [1], [0, 2, 3, 4], [3, 5]]
-        )
-
-    def test_reverse_tree(self) -> None:
-        reversed_graph = cheatsheet.reverse_digraph(self.tree)
-        self.assertListEqual(
-            reversed_graph, [[], [0], [0], [0], [1], [1], [2]]
-        )
-
-
-class TestKahn(unittest.TestCase):
-    def setUp(self) -> None:
-        self.undigraph = create_undigraph()
-        self.digraph = create_digraph()
-        self.dag = create_dag()
-        self.tree = create_tree()
-        self.undigraph_rev = cheatsheet.reverse_digraph(self.undigraph)
-        self.digraph_rev = cheatsheet.reverse_digraph(self.digraph)
-        self.dag_rev = cheatsheet.reverse_digraph(self.dag)
-        self.tree_rev = cheatsheet.reverse_digraph(self.tree)
-
-    def check_no_topological_ordering(
-        self, adjlist: list[list[int]], toposort: list[int]
-    ) -> None:
-        # Check that no topological ordering was returned.
-        self.assertLess(len(toposort), len(adjlist))
-
-    def test_kahn_undigraph(self) -> None:
-        toposort = cheatsheet.kahn(self.undigraph, self.undigraph_rev)
-        self.check_no_topological_ordering(self.undigraph, toposort)
-
-    def test_kahn_digraph(self) -> None:
-        toposort = cheatsheet.kahn(self.digraph, self.digraph_rev)
-        self.check_no_topological_ordering(self.digraph, toposort)
-
-    def test_kahn_dag(self) -> None:
-        toposort = cheatsheet.kahn(self.dag, self.dag_rev)
-        check_topological_ordering(self, self.dag, toposort)
-
-    def test_kahn_tree(self) -> None:
-        toposort = cheatsheet.kahn(self.tree, self.tree_rev)
-        check_topological_ordering(self, self.tree, toposort)
-
-
-class TestTarjan(unittest.TestCase):
-    def setUp(self) -> None:
-        self.undigraph = create_undigraph()
-        self.digraph = create_digraph()
-        self.dag = create_dag()
-        self.tree = create_tree()
-
-    def check_no_sccs(self, adjlist: list[list[int]]) -> None:
-        # Check that there are no SCCs.
-        amount_components, components = cheatsheet.tarjan(adjlist)
-        self.assertEqual(amount_components, len(adjlist))
-
-        # Create a toposort from the components.
-        toposort_tups = sorted(
-            enumerate(components), key=lambda x: x[1], reverse=True
-        )
-        toposort = [tup[0] for tup in toposort_tups]
-
-        # Check that the topological ordering is correct.
-        check_topological_ordering(self, adjlist, toposort)
-
-    def test_tarjan_undigraph(self) -> None:
-        amount_components, components = cheatsheet.tarjan(self.undigraph)
-        self.assertEqual(amount_components, 2)
-        self.assertTrue(
-            components == [0, 0, 0, 0, 0, 1, 1]
-            or components == [1, 1, 1, 1, 1, 0, 0]
-        )
-
-    def test_tarjan_digraph(self) -> None:
-        amount_components, components = cheatsheet.tarjan(self.digraph)
-        self.assertEqual(amount_components, 3)
-        self.assertListEqual(components, [2, 1, 1, 1, 0, 0, 0])
-
-    def test_tarjan_dag(self) -> None:
-        self.check_no_sccs(self.dag)
-
-    def test_tarjan_tree(self) -> None:
-        self.check_no_sccs(self.tree)
-
-
-class TestComponentGraph(unittest.TestCase):
-    def setUp(self) -> None:
-        self.undigraph = create_undigraph()
-        self.digraph = create_digraph()
-        self.dag = create_dag()
-        self.tree = create_tree()
-        self.undigraph_amount_components, self.undigraph_components = (
-            cheatsheet.tarjan(self.undigraph)
-        )
-        self.digraph_amount_components, self.digraph_components = (
-            cheatsheet.tarjan(self.digraph)
-        )
-        self.dag_amount_components, self.dag_components = cheatsheet.tarjan(
-            self.dag
-        )
-        self.tree_amount_components, self.tree_components = cheatsheet.tarjan(
-            self.tree
-        )
-
-    def check_no_sccs(
-        self,
-        adjlist: list[list[int]],
-        amount_components: int,
-        components: list[int],
-        component_adjlist: list[list[int]],
-    ) -> None:
-        # Check that there are no SCCs.
-        self.assertEqual(amount_components, len(adjlist))
-
-        # Check that exactly every edge in the original graph is also in the
-        # component graph, and that no other edges are in the component graph.
-        for u, nbrs in enumerate(adjlist):
-            self.assertSetEqual(
-                set(component_adjlist[components[u]]),
-                {components[v] for v in nbrs},
-            )
-
-    def test_component_graph_undigraph(self) -> None:
-        component_adjlist = cheatsheet.component_graph(
-            self.undigraph,
-            self.undigraph_amount_components,
-            self.undigraph_components,
-        )
-        self.assertListEqual(component_adjlist, [[], []])
-
-    def test_component_graph_digraph(self) -> None:
-        component_adjlist = cheatsheet.component_graph(
-            self.digraph,
-            self.digraph_amount_components,
-            self.digraph_components,
-        )
-        self.assertListEqual(component_adjlist, [[], [0], [0, 1]])
-
-    def test_component_graph_dag(self) -> None:
-        component_adjlist = cheatsheet.component_graph(
-            self.dag, self.dag_amount_components, self.dag_components
-        )
-        self.check_no_sccs(
-            self.dag,
-            self.dag_amount_components,
-            self.dag_components,
-            component_adjlist,
-        )
-
-    def test_component_graph_tree(self) -> None:
-        component_adjlist = cheatsheet.component_graph(
-            self.tree, self.tree_amount_components, self.tree_components
-        )
-        self.check_no_sccs(
-            self.tree,
-            self.tree_amount_components,
-            self.tree_components,
-            component_adjlist,
-        )
-
-
-class TestDijkstra(unittest.TestCase):
-    def setUp(self) -> None:
-        self.undigraph = create_undigraph()
-        self.digraph = create_digraph()
-        self.dag = create_dag()
-        self.tree = create_tree()
-        self.weighted_undigraph = create_weighted_undigraph()
-        self.weighted_digraph = create_weighted_digraph()
-        self.weighted_dag = create_weighted_dag()
-        self.weighted_tree = create_weighted_tree()
-
-    def compare_to_bfs(
-        self,
-        adjlist: list[list[int]],
-        adjlist_weighted: list[list[tuple[int, float]]],
-        start: int,
-    ) -> None:
-        dist1, parent1 = cheatsheet.bfs(adjlist, start)
-        dist2, parent2 = cheatsheet.dijkstra(adjlist_weighted, start)
-        self.assertListEqual(dist1, dist2)
-        self.assertListEqual(parent1, parent2)
-
-    def test_dijkstra_undigraph_compare_bfs(self) -> None:
-        undigraph_weighted = unweighted_to_weighted(self.undigraph)
-        for start in (0, 3, 5, 6):
-            self.compare_to_bfs(self.undigraph, undigraph_weighted, start)
-
-    def test_dijkstra_digraph_compare_bfs(self) -> None:
-        digraph_weighted = unweighted_to_weighted(self.digraph)
-        for start in (0, 3, 5, 6):
-            self.compare_to_bfs(self.digraph, digraph_weighted, start)
-
-    def test_dijkstra_dag_compare_bfs(self) -> None:
-        dag_weighted = unweighted_to_weighted(self.dag)
-        for start in (0, 1, 3, 6):
-            self.compare_to_bfs(self.dag, dag_weighted, start)
-
-    def test_dijkstra_tree_compare_bfs(self) -> None:
-        tree_weighted = unweighted_to_weighted(self.tree)
-        for start in (0, 1, 2, 5):
-            self.compare_to_bfs(self.tree, tree_weighted, start)
-
-    def test_dijkstra_weighted_undigraph(self) -> None:
-        dist, parent = cheatsheet.dijkstra(self.weighted_undigraph, 0)
-        self.assertListEqual(dist, [0, 1, 2, 2, 4, inf, inf])
-        self.assertListEqual(parent, [-1, 0, 1, 0, 0, -1, -1])
-
-        dist, parent = cheatsheet.dijkstra(self.weighted_undigraph, 3)
-        self.assertListEqual(dist, [2, 3, 4, 0, 6, inf, inf])
-        self.assertListEqual(parent, [3, 0, 1, -1, 0, -1, -1])
-
-        dist, parent = cheatsheet.dijkstra(self.weighted_undigraph, 5)
-        self.assertListEqual(dist, [inf, inf, inf, inf, inf, 0, 1])
-        self.assertListEqual(parent, [-1, -1, -1, -1, -1, -1, 5])
-
-        dist, parent = cheatsheet.dijkstra(self.weighted_undigraph, 6)
-        self.assertListEqual(dist, [inf, inf, inf, inf, inf, 1, 0])
-        self.assertListEqual(parent, [-1, -1, -1, -1, -1, 6, -1])
-
-    def test_dijkstra_weighted_digraph(self) -> None:
-        dist, parent = cheatsheet.dijkstra(self.weighted_digraph, 0)
-        self.assertListEqual(dist, [0, 1, 3, 4, 4, 5, 6])
-        self.assertListEqual(parent, [-1, 0, 1, 2, 0, 3, 5])
-
-        dist, parent = cheatsheet.dijkstra(self.weighted_digraph, 3)
-        self.assertListEqual(dist, [inf, 3, 5, 0, 3, 1, 2])
-        self.assertListEqual(parent, [-1, 3, 1, -1, 6, 3, 5])
-
-        dist, parent = cheatsheet.dijkstra(self.weighted_digraph, 5)
-        self.assertListEqual(dist, [inf, inf, inf, inf, 2, 0, 1])
-        self.assertListEqual(parent, [-1, -1, -1, -1, 6, -1, 5])
-
-        dist, parent = cheatsheet.dijkstra(self.weighted_digraph, 6)
-        self.assertListEqual(dist, [inf, inf, inf, inf, 1, 3, 0])
-        self.assertListEqual(parent, [-1, -1, -1, -1, 6, 4, -1])
-
-    def test_dijkstra_weighted_dag(self) -> None:
-        dist, parent = cheatsheet.dijkstra(self.weighted_dag, 0)
-        self.assertListEqual(dist, [0, inf, 1, 2, inf, 3, 4])
-        self.assertListEqual(parent, [-1, -1, 0, 2, -1, 3, 5])
-
-        dist, parent = cheatsheet.dijkstra(self.weighted_dag, 1)
-        self.assertListEqual(dist, [inf, 0, inf, 5, 2, 5, 6])
-        self.assertListEqual(parent, [-1, -1, -1, 1, 1, 4, 5])
-
-        dist, parent = cheatsheet.dijkstra(self.weighted_dag, 3)
-        self.assertListEqual(dist, [inf, inf, inf, 0, inf, 1, 2])
-        self.assertListEqual(parent, [-1, -1, -1, -1, -1, 3, 5])
-
-        dist, parent = cheatsheet.dijkstra(self.weighted_dag, 6)
-        self.assertListEqual(dist, [inf, inf, inf, inf, inf, inf, 0])
-        self.assertListEqual(parent, [-1, -1, -1, -1, -1, -1, -1])
-
-    def test_dijkstra_weighted_tree(self) -> None:
-        dist, parent = cheatsheet.dijkstra(self.weighted_tree, 0)
-        self.assertListEqual(dist, [0, 1, 2, 3, 5, 6, 8])
-        self.assertListEqual(parent, [-1, 0, 0, 0, 1, 1, 2])
-
-        dist, parent = cheatsheet.dijkstra(self.weighted_tree, 1)
-        self.assertListEqual(dist, [inf, 0, inf, inf, 4, 5, inf])
-        self.assertListEqual(parent, [-1, -1, -1, -1, 1, 1, -1])
-
-        dist, parent = cheatsheet.dijkstra(self.weighted_tree, 2)
-        self.assertListEqual(dist, [inf, inf, 0, inf, inf, inf, 6])
-        self.assertListEqual(parent, [-1, -1, -1, -1, -1, -1, 2])
-
-        dist, parent = cheatsheet.dijkstra(self.weighted_tree, 5)
-        self.assertListEqual(dist, [inf, inf, inf, inf, inf, 0, inf])
-        self.assertListEqual(parent, [-1, -1, -1, -1, -1, -1, -1])
-
-
-class TestDijkstraVType(unittest.TestCase):
-    def setUp(self) -> None:
-        self.weighted_undigraph = create_weighted_undigraph()
-        self.weighted_digraph = create_weighted_digraph()
-        self.weighted_dag = create_weighted_dag()
-        self.weighted_tree = create_weighted_tree()
-
-    def compare_to_dijkstra(
-        self, adjlist: list[list[tuple[int, float]]], start: int
-    ) -> None:
-        move = adjlist.__getitem__
-
-        dist1, parent1 = cheatsheet.dijkstra(adjlist, start)
-        dist_dict, parent_dict = cheatsheet_extra.dijkstra_v_type(move, start)
-
-        dist2 = dict_to_list(dist_dict, len(adjlist), inf)
-        parent2 = dict_to_list(parent_dict, len(adjlist), -1)
-
-        self.assertListEqual(dist1, dist2)
-        self.assertListEqual(parent1, parent2)
-
-    def test_dijkstra_v_type_undigraph_compare_dijkstra(self) -> None:
-        for start in (0, 3, 5, 6):
-            self.compare_to_dijkstra(self.weighted_undigraph, start)
-
-    def test_dijkstra_v_type_digraph_compare_dijkstra(self) -> None:
-        for start in (0, 3, 5, 6):
-            self.compare_to_dijkstra(self.weighted_digraph, start)
-
-    def test_dijkstra_v_type_dag_compare_dijkstra(self) -> None:
-        for start in (0, 1, 3, 6):
-            self.compare_to_dijkstra(self.weighted_dag, start)
-
-    def test_dijkstra_v_type_tree_compare_dijkstra(self) -> None:
-        for start in (0, 1, 2, 5):
-            self.compare_to_dijkstra(self.weighted_tree, start)
-
-
-class TestAStar(unittest.TestCase):
-    def setUp(self) -> None:
-        self.weighted_undigraph = create_weighted_undigraph()
-        self.weighted_digraph = create_weighted_digraph()
-        self.weighted_dag = create_weighted_dag()
-        self.weighted_tree = create_weighted_tree()
-
-    def compare_to_dijkstra(
-        self, adjlist: list[list[tuple[int, float]]], start: int, goal: int
-    ) -> None:
-        # Run Dijkstra's algorithm.
-        dist, parent = cheatsheet.dijkstra(adjlist, start)
-        cost1 = dist[goal]
-        path1 = [goal]
-        while parent[path1[-1]] != -1:
-            path1.append(parent[path1[-1]])
-        path1.reverse()
-
-        # Run A*.
-        cost2, path2 = cheatsheet_extra.a_star(
-            adjlist, start, goal, lambda _: 0
-        )
-
-        # Check that the results are the same.
-        self.assertEqual(cost1, cost2)
-        self.assertListEqual(path1, path2)
-
-    def check_heuristics(
-        self, adjlist: list[list[tuple[int, float]]], start: int, goal: int
-    ) -> None:
-        heuristic = edge_count_heuristic(adjlist, goal)
-
-        cost1, path1 = cheatsheet_extra.a_star(
-            adjlist, start, goal, lambda _: 0
-        )
-        cost2, path2 = cheatsheet_extra.a_star(adjlist, start, goal, heuristic)
-
-        self.assertEqual(cost1, cost2)
-        self.assertListEqual(path1, path2)
-
-    def test_a_star_weighted_undigraph_compare_dijkstra(self) -> None:
-        for start in (0, 3, 5, 6):
-            for goal in (1, 2, 4, 6):
-                self.compare_to_dijkstra(self.weighted_undigraph, start, goal)
-
-    def test_a_star_weighted_digraph_compare_dijkstra(self) -> None:
-        for start in (0, 3, 5, 6):
-            for goal in (1, 2, 4, 6):
-                self.compare_to_dijkstra(self.weighted_digraph, start, goal)
-
-    def test_a_star_weighted_dag_compare_dijkstra(self) -> None:
-        for start in (0, 1, 3, 6):
-            for goal in (1, 2, 4, 6):
-                self.compare_to_dijkstra(self.weighted_dag, start, goal)
-
-    def test_a_star_weighted_tree_compare_dijkstra(self) -> None:
-        for start in (0, 1, 2, 5):
-            for goal in (1, 2, 4, 6):
-                self.compare_to_dijkstra(self.weighted_tree, start, goal)
-
-    def test_a_star_weighted_undigraph_check_heuristics(self) -> None:
-        for start in (0, 3, 5, 6):
-            for goal in (1, 2, 4, 6):
-                self.check_heuristics(self.weighted_undigraph, start, goal)
-
-    def test_a_star_weighted_digraph_check_heuristics(self) -> None:
-        for start in (0, 3, 5, 6):
-            for goal in (1, 2, 4, 6):
-                self.check_heuristics(self.weighted_digraph, start, goal)
-
-    def test_a_star_weighted_dag_check_heuristics(self) -> None:
-        for start in (0, 1, 3, 6):
-            for goal in (1, 2, 4, 6):
-                self.check_heuristics(self.weighted_dag, start, goal)
-
-    def test_a_star_weighted_tree_check_heuristics(self) -> None:
-        for start in (0, 1, 2, 5):
-            for goal in (1, 2, 4, 6):
-                self.check_heuristics(self.weighted_tree, start, goal)
-
-
-class TestAStarVType(unittest.TestCase):
-    def setUp(self) -> None:
-        self.weighted_undigraph = create_weighted_undigraph()
-        self.weighted_digraph = create_weighted_digraph()
-        self.weighted_dag = create_weighted_dag()
-        self.weighted_tree = create_weighted_tree()
-
-    def compare_to_a_star(
-        self, adjlist: list[list[tuple[int, float]]], start: int, goal: int
-    ) -> None:
-        move = adjlist.__getitem__
-        heuristic = edge_count_heuristic(adjlist, goal)
-
-        cost1, path1 = cheatsheet_extra.a_star(adjlist, start, goal, heuristic)
-        cost2, path2 = cheatsheet.a_star_v_type(move, start, goal, heuristic)
-
-        self.assertEqual(cost1, cost2)
-        self.assertListEqual(path1, path2)
-
-    def test_a_star_v_type_weighted_undigraph(self) -> None:
-        for start in (0, 3, 5, 6):
-            for goal in (1, 2, 4, 6):
-                self.compare_to_a_star(self.weighted_undigraph, start, goal)
-
-    def test_a_star_v_type_weighted_digraph(self) -> None:
-        for start in (0, 3, 5, 6):
-            for goal in (1, 2, 4, 6):
-                self.compare_to_a_star(self.weighted_digraph, start, goal)
-
-    def test_a_star_v_type_weighted_dag(self) -> None:
-        for start in (0, 1, 3, 6):
-            for goal in (1, 2, 4, 6):
-                self.compare_to_a_star(self.weighted_dag, start, goal)
-
-    def test_a_star_v_type_weighted_tree(self) -> None:
-        for start in (0, 1, 2, 5):
-            for goal in (1, 2, 4, 6):
-                self.compare_to_a_star(self.weighted_tree, start, goal)
-
-
-class TestPrim(unittest.TestCase):
-    def setUp(self) -> None:
-        self.weighted_undigraph = create_weighted_undigraph()
-
-    def test_prim_weighted_undigraph_start_0(self) -> None:
-        mst = cheatsheet.prim(self.weighted_undigraph, 0)
-        self.assertListEqual(
-            mst,
-            [
-                [(1, 1), (3, 2), (4, 4)],
-                [(0, 1), (2, 1)],
-                [(1, 1)],
-                [(0, 2)],
-                [(0, 4)],
-                [],
-                [],
-            ],
-        )
-
-    def test_prim_weighted_undigraph_start_5(self) -> None:
-        mst = cheatsheet.prim(self.weighted_undigraph, 5)
-        self.assertListEqual(mst, [[], [], [], [], [], [(6, 1)], [(5, 1)]])
+import custom.geometry as geometry
 
 
 class TestMatrix2D(unittest.TestCase):
     # __init__ should initialize the matrix with the given components.
     def test_init(self):
-        matrix = cheatsheet_geometry.Matrix2D(1, 2, 3, 4)
+        matrix = geometry.Matrix2D(1, 2, 3, 4)
         self.assertEqual(matrix.a, 1)
         self.assertEqual(matrix.b, 2)
         self.assertEqual(matrix.c, 3)
         self.assertEqual(matrix.d, 4)
 
-    # __init__ should raise a TypeError if any of the components are not
-    # numbers.
-    def test_init_type_error(self):
-        with self.assertRaises(TypeError):
-            cheatsheet_geometry.Matrix2D("a", 2, 3, 4)  # type: ignore
-        with self.assertRaises(TypeError):
-            cheatsheet_geometry.Matrix2D(1, "b", 3, 4)  # type: ignore
-        with self.assertRaises(TypeError):
-            cheatsheet_geometry.Matrix2D(1, 2, "c", 4)  # type: ignore
-        with self.assertRaises(TypeError):
-            cheatsheet_geometry.Matrix2D(1, 2, 3, "d")  # type: ignore
-
     # __iter__ should return an iterator over the matrix's components.
     def test_iter(self):
-        matrix = cheatsheet_geometry.Matrix2D(1, 2, 3, 4)
+        matrix = geometry.Matrix2D(1, 2, 3, 4)
         components = list(matrix)
         self.assertEqual(components, [1, 2, 3, 4])
 
     # __getitem__ should return the component at the given index.
     def test_getitem(self):
-        matrix = cheatsheet_geometry.Matrix2D(1, 2, 3, 4)
+        matrix = geometry.Matrix2D(1, 2, 3, 4)
         self.assertEqual(matrix[0], 1)
         self.assertEqual(matrix[1], 2)
         self.assertEqual(matrix[2], 3)
@@ -842,52 +34,52 @@ class TestMatrix2D(unittest.TestCase):
 
     # __getitem__ should raise an IndexError if the index is out of bounds.
     def test_getitem_index_error(self):
-        matrix = cheatsheet_geometry.Matrix2D(1, 2, 3, 4)
+        matrix = geometry.Matrix2D(1, 2, 3, 4)
         with self.assertRaises(IndexError):
             matrix[4]
 
     # __repr__ should return a string representation of the matrix.
     def test_repr(self):
-        matrix = cheatsheet_geometry.Matrix2D(1, 2, 3, 4)
+        matrix = geometry.Matrix2D(1, 2, 3, 4)
         expected_output = "Matrix2D(1, 2, 3, 4)"
         self.assertEqual(repr(matrix), expected_output)
 
     # __str__ should return a formatted string representation of the matrix.
     def test_str(self):
-        matrix = cheatsheet_geometry.Matrix2D(1, 2, 3, 4)
+        matrix = geometry.Matrix2D(1, 2, 3, 4)
         expected_output = "| 1  2 |\n| 3  4 |"
         self.assertEqual(str(matrix), expected_output)
 
     # __hash__ should return a unique hash id for the matrix.
     def test_hash(self):
-        matrix1 = cheatsheet_geometry.Matrix2D(1, 2, 3, 4)
-        matrix2 = cheatsheet_geometry.Matrix2D(1, 2, 3, 4)
-        matrix3 = cheatsheet_geometry.Matrix2D(5, 6, 7, 8)
+        matrix1 = geometry.Matrix2D(1, 2, 3, 4)
+        matrix2 = geometry.Matrix2D(1, 2, 3, 4)
+        matrix3 = geometry.Matrix2D(5, 6, 7, 8)
 
         self.assertEqual(hash(matrix1), hash(matrix2))
         self.assertNotEqual(hash(matrix1), hash(matrix3))
 
     # __eq__ should return True iff two matrices are equal.
     def test_eq(self):
-        matrix1 = cheatsheet_geometry.Matrix2D(1, 2, 3, 4)
-        matrix2 = cheatsheet_geometry.Matrix2D(1, 2, 3, 4)
+        matrix1 = geometry.Matrix2D(1, 2, 3, 4)
+        matrix2 = geometry.Matrix2D(1, 2, 3, 4)
         self.assertTrue(matrix1 == matrix2)
 
-        matrix1 = cheatsheet_geometry.Matrix2D(1, 2, 3, 4)
-        matrix2 = cheatsheet_geometry.Matrix2D(5, 6, 7, 8)
+        matrix1 = geometry.Matrix2D(1, 2, 3, 4)
+        matrix2 = geometry.Matrix2D(5, 6, 7, 8)
         self.assertFalse(matrix1 == matrix2)
 
     # __eq__ should return False if the other object is not a matrix.
     def test_eq_non_matrix(self):
-        matrix = cheatsheet_geometry.Matrix2D(1, 2, 3, 4)
+        matrix = geometry.Matrix2D(1, 2, 3, 4)
         non_matrix = "not a matrix"
         self.assertFalse(matrix == non_matrix)
 
     # __matmul__ should return a new matrix with the correct components when
     # multiplying a matrix with another matrix.
     def test_matmul_matrix(self):
-        matrix1 = cheatsheet_geometry.Matrix2D(1, 2, 3, 4)
-        matrix2 = cheatsheet_geometry.Matrix2D(5, 6, 7, 8)
+        matrix1 = geometry.Matrix2D(1, 2, 3, 4)
+        matrix2 = geometry.Matrix2D(5, 6, 7, 8)
         result = matrix1 @ matrix2
         self.assertEqual(result.a, 19)
         self.assertEqual(result.b, 22)
@@ -897,36 +89,29 @@ class TestMatrix2D(unittest.TestCase):
     # __matmul__ should return a new transformed geometric object when
     # multiplying a matrix with a geometric object.
     def test_matmul_geometric_object(self):
-        matrix = cheatsheet_geometry.Matrix2D(2, 0, 0, 2)
-        point = cheatsheet_geometry.Vector2D(1, 1)
+        matrix = geometry.Matrix2D(2, 0, 0, 2)
+        point = geometry.Vector2D(1, 1)
         transformed_point = matrix @ point
         self.assertEqual(transformed_point.x, 2)
         self.assertEqual(transformed_point.y, 2)
-
-    # __matmul__ should raise a TypeError if the argument is not a matrix or a
-    # geometric object.
-    def test_matmul_type_error(self):
-        matrix = cheatsheet_geometry.Matrix2D(1, 2, 3, 4)
-        with self.assertRaises(TypeError):
-            matrix @ "not a matrix or geometric object"  # type: ignore
 
 
 class TestInterval(unittest.TestCase):
     # __init__ should initialize the interval with the given components.
     def test_init(self):
-        interval = cheatsheet_geometry.Interval("[", 1, 5, "]")
+        interval = geometry.Interval("[", 1, 5, "]")
         self.assertEqual(interval.left_bracket, "[")
         self.assertEqual(interval.start, 1)
         self.assertEqual(interval.end, 5)
         self.assertEqual(interval.right_bracket, "]")
 
-        interval = cheatsheet_geometry.Interval("(", -3, 7, ")")
+        interval = geometry.Interval("(", -3, 7, ")")
         self.assertEqual(interval.left_bracket, "(")
         self.assertEqual(interval.start, -3)
         self.assertEqual(interval.end, 7)
         self.assertEqual(interval.right_bracket, ")")
 
-        interval = cheatsheet_geometry.Interval("(", 0, 10, "]")
+        interval = geometry.Interval("(", 0, 10, "]")
         self.assertEqual(interval.left_bracket, "(")
         self.assertEqual(interval.start, 0)
         self.assertEqual(interval.end, 10)
@@ -936,43 +121,43 @@ class TestInterval(unittest.TestCase):
     # infinity and the bracket is not closed.
     def test_init_inf_bracket_not_square(self):
         with self.assertRaises(ValueError):
-            cheatsheet_geometry.Interval("(", -inf, 5, "]")
+            geometry.Interval("(", -inf, 5, "]")
         with self.assertRaises(ValueError):
-            cheatsheet_geometry.Interval("[", 1, inf, ")")
+            geometry.Interval("[", 1, inf, ")")
 
     # __init__ should raise a ValueError if the interval is empty.
     def test_init_interval_not_empty(self):
         with self.assertRaises(ValueError):
-            cheatsheet_geometry.Interval("[", 5, 1, "]")
+            geometry.Interval("[", 5, 1, "]")
         with self.assertRaises(ValueError):
-            cheatsheet_geometry.Interval("(", 5, 5, "]")
+            geometry.Interval("(", 5, 5, "]")
         with self.assertRaises(ValueError):
-            cheatsheet_geometry.Interval("[", 5, 5, ")")
+            geometry.Interval("[", 5, 5, ")")
         with self.assertRaises(ValueError):
-            cheatsheet_geometry.Interval("(", 5, 5, ")")
+            geometry.Interval("(", 5, 5, ")")
 
     # __init__ should raise a ValueError if the interval is a point.
     def test_init_interval_not_point(self):
         with self.assertRaises(ValueError):
-            cheatsheet_geometry.Interval("[", 5, 5, "]")
+            geometry.Interval("[", 5, 5, "]")
 
     # __init__ should raise a ValueError if a bracket is the incorrect way
     # around.
     def test_init_invalid_bracket(self):
         with self.assertRaises(ValueError):
-            cheatsheet_geometry.Interval("]", 1, 5, "]")  # type: ignore
+            geometry.Interval("]", 1, 5, "]")  # type: ignore
         with self.assertRaises(ValueError):
-            cheatsheet_geometry.Interval("[", 1, 5, "(")  # type: ignore
+            geometry.Interval("[", 1, 5, "(")  # type: ignore
 
     # __iter__ should return an iterator over the interval's components.
     def test_iter(self):
-        interval = cheatsheet_geometry.Interval("[", 1, 5, "]")
+        interval = geometry.Interval("[", 1, 5, "]")
         components = list(interval)
         self.assertEqual(components, [True, 1, 5, True])
 
     # __getitem__ should return the component at the given index.
     def test_getitem(self):
-        interval = cheatsheet_geometry.Interval("[", 1, 5, "]")
+        interval = geometry.Interval("[", 1, 5, "]")
         self.assertEqual(interval[0], True)
         self.assertEqual(interval[1], 1)
         self.assertEqual(interval[2], 5)
@@ -980,61 +165,61 @@ class TestInterval(unittest.TestCase):
 
     # __getitem__ should raise an IndexError if the index is out of bounds.
     def test_getitem_invalid_index(self):
-        interval = cheatsheet_geometry.Interval("[", 1, 5, "]")
+        interval = geometry.Interval("[", 1, 5, "]")
         with self.assertRaises(IndexError):
             interval[4]
 
     # __repr__ should return a string representation of the interval.
     def test_interval_repr(self):
-        interval = cheatsheet_geometry.Interval("[", 1, 5, "]")
+        interval = geometry.Interval("[", 1, 5, "]")
         self.assertEqual(repr(interval), "Interval('[', 1, 5, ']')")
-        interval = cheatsheet_geometry.Interval("[", -inf, 10, "]")
+        interval = geometry.Interval("[", -inf, 10, "]")
         self.assertEqual(repr(interval), "Interval('[', -inf, 10, ']')")
-        interval = cheatsheet_geometry.Interval("[", -5, inf, "]")
+        interval = geometry.Interval("[", -5, inf, "]")
         self.assertEqual(repr(interval), "Interval('[', -5, inf, ']')")
-        interval = cheatsheet_geometry.Interval("(", -3.5, 7.8, ")")
+        interval = geometry.Interval("(", -3.5, 7.8, ")")
         self.assertEqual(repr(interval), "Interval('(', -3.5, 7.8, ')')")
 
     # __str__ should return a formatted string representation of the interval.
     def test_interval_str(self):
-        interval = cheatsheet_geometry.Interval("[", 1, 5, "]")
+        interval = geometry.Interval("[", 1, 5, "]")
         self.assertEqual(str(interval), "[1, 5]")
-        interval = cheatsheet_geometry.Interval("[", -inf, 10, "]")
+        interval = geometry.Interval("[", -inf, 10, "]")
         self.assertEqual(str(interval), "[-inf, 10]")
-        interval = cheatsheet_geometry.Interval("[", -5, inf, "]")
+        interval = geometry.Interval("[", -5, inf, "]")
         self.assertEqual(str(interval), "[-5, inf]")
-        interval = cheatsheet_geometry.Interval("(", -3.5, 7.8, ")")
+        interval = geometry.Interval("(", -3.5, 7.8, ")")
         self.assertEqual(str(interval), "(-3.5, 7.8)")
 
     # __hash__ should return a unique hash id for the interval.
     def test_interval_hash(self):
-        interval1 = cheatsheet_geometry.Interval("[", 1, 5, "]")
-        interval2 = cheatsheet_geometry.Interval("[", 1, 5, "]")
-        interval3 = cheatsheet_geometry.Interval("[", 2, 5, "]")
+        interval1 = geometry.Interval("[", 1, 5, "]")
+        interval2 = geometry.Interval("[", 1, 5, "]")
+        interval3 = geometry.Interval("[", 2, 5, "]")
 
         self.assertEqual(hash(interval1), hash(interval2))
         self.assertNotEqual(hash(interval1), hash(interval3))
 
     # __eq__ should return True iff two intervals are equal.
     def test_eq(self):
-        interval1 = cheatsheet_geometry.Interval("[", 1, 5, "]")
-        interval2 = cheatsheet_geometry.Interval("[", 1, 5, "]")
+        interval1 = geometry.Interval("[", 1, 5, "]")
+        interval2 = geometry.Interval("[", 1, 5, "]")
         self.assertEqual(interval1, interval2)
 
-        interval1 = cheatsheet_geometry.Interval("[", -inf, 10, "]")
-        interval2 = cheatsheet_geometry.Interval("[", -inf, 10, ")")
+        interval1 = geometry.Interval("[", -inf, 10, "]")
+        interval2 = geometry.Interval("[", -inf, 10, ")")
         self.assertNotEqual(interval1, interval2)
 
     # __eq__ should return False if the other object is not an interval.
     def test_eq_non_interval(self):
-        interval = cheatsheet_geometry.Interval("[", 1, 5, "]")
+        interval = geometry.Interval("[", 1, 5, "]")
         non_interval_object = "not an interval"
         self.assertFalse(interval == non_interval_object)
 
 
 class TestNumberSet(unittest.TestCase):
     def setUp(self) -> None:
-        self.numberset = cheatsheet_geometry.NumberSet()._direct_init(
+        self.numberset = geometry.NumberSet()._direct_init(
             [0, 0, 1, 2, 3, 5, 5, 6, 8, inf],
             [True, True, True, True, False, False, False, False, False, True],
         )
@@ -1050,10 +235,10 @@ class TestNumberSet(unittest.TestCase):
             list(self.numberset.components),
             [
                 0,
-                cheatsheet_geometry.Interval("[", 1, 2, "]"),
-                cheatsheet_geometry.Interval("(", 3, 5, ")"),
-                cheatsheet_geometry.Interval("(", 5, 6, ")"),
-                cheatsheet_geometry.Interval("(", 8, inf, "]"),
+                geometry.Interval("[", 1, 2, "]"),
+                geometry.Interval("(", 3, 5, ")"),
+                geometry.Interval("(", 5, 6, ")"),
+                geometry.Interval("(", 8, inf, "]"),
             ],
         )
 
@@ -1064,27 +249,21 @@ class TestNumberSet(unittest.TestCase):
             components,
             [
                 0,
-                cheatsheet_geometry.Interval("[", 1, 2, "]"),
-                cheatsheet_geometry.Interval("(", 3, 5, ")"),
-                cheatsheet_geometry.Interval("(", 5, 6, ")"),
-                cheatsheet_geometry.Interval("(", 8, inf, "]"),
+                geometry.Interval("[", 1, 2, "]"),
+                geometry.Interval("(", 3, 5, ")"),
+                geometry.Interval("(", 5, 6, ")"),
+                geometry.Interval("(", 8, inf, "]"),
             ],
         )
 
     # __getitem__ should return the component at the given index.
     def test_getitem(self):
         self.assertEqual(self.numberset[0], 0)
+        self.assertEqual(self.numberset[1], geometry.Interval("[", 1, 2, "]"))
+        self.assertEqual(self.numberset[2], geometry.Interval("(", 3, 5, ")"))
+        self.assertEqual(self.numberset[3], geometry.Interval("(", 5, 6, ")"))
         self.assertEqual(
-            self.numberset[1], cheatsheet_geometry.Interval("[", 1, 2, "]")
-        )
-        self.assertEqual(
-            self.numberset[2], cheatsheet_geometry.Interval("(", 3, 5, ")")
-        )
-        self.assertEqual(
-            self.numberset[3], cheatsheet_geometry.Interval("(", 5, 6, ")")
-        )
-        self.assertEqual(
-            self.numberset[4], cheatsheet_geometry.Interval("(", 8, inf, "]")
+            self.numberset[4], geometry.Interval("(", 8, inf, "]")
         )
 
     # __getitem__ should raise an IndexError if the index is out of bounds.
@@ -1111,15 +290,15 @@ class TestNumberSet(unittest.TestCase):
     # __bool__ should return True iff the set is not empty.
     def test_bool(self):
         self.assertTrue(self.numberset)
-        self.assertFalse(cheatsheet_geometry.NumberSet())
+        self.assertFalse(geometry.NumberSet())
 
     # __eq__ should return True iff two sets are equal.
     def test_eq(self):
-        numberset1 = cheatsheet_geometry.NumberSet._direct_init(
+        numberset1 = geometry.NumberSet._direct_init(
             [0, 0, 1, 2, 3, 5, 5, 6, 8, inf],
             [True, True, True, True, False, False, False, False, False, True],
         )
-        numberset2 = cheatsheet_geometry.NumberSet._direct_init(
+        numberset2 = geometry.NumberSet._direct_init(
             [0, 0, 1, 2, 3, 5, 5, 6, 8, inf],
             [True, True, True, True, False, False, False, False, True, True],
         )
@@ -1133,15 +312,15 @@ class TestNumberSet(unittest.TestCase):
     # __lt__ should return True iff all numbers in the first set are left of
     # all numbers in the second set.
     def test_lt(self):
-        numberset1 = cheatsheet_geometry.NumberSet._direct_init(
+        numberset1 = geometry.NumberSet._direct_init(
             [0, 0, 1, 2, 3, 5, 5, 6, 8, inf],
             [True, True, True, True, False, False, False, False, False, True],
         )
-        numberset2 = cheatsheet_geometry.NumberSet._direct_init(
+        numberset2 = geometry.NumberSet._direct_init(
             [-inf, -8, -6, -5, -5, -3, -2, -1, 0, 0],
             [True, False, False, False, False, False, True, True, True, True],
         )
-        numberset3 = cheatsheet_geometry.NumberSet._direct_init(
+        numberset3 = geometry.NumberSet._direct_init(
             [-inf, -8, -6, -5, -5, -3, -2, -1],
             [True, False, False, False, False, False, True, True],
         )
@@ -1155,15 +334,15 @@ class TestNumberSet(unittest.TestCase):
     # __gt__ should return True iff all numbers in the first set are right of
     # all numbers in the second set.
     def test_gt(self):
-        numberset1 = cheatsheet_geometry.NumberSet._direct_init(
+        numberset1 = geometry.NumberSet._direct_init(
             [0, 0, 1, 2, 3, 5, 5, 6, 8, inf],
             [True, True, True, True, False, False, False, False, False, True],
         )
-        numberset2 = cheatsheet_geometry.NumberSet._direct_init(
+        numberset2 = geometry.NumberSet._direct_init(
             [-inf, -8, -6, -5, -5, -3, -2, -1, 0, 0],
             [True, False, False, False, False, False, True, True, True, True],
         )
-        numberset3 = cheatsheet_geometry.NumberSet._direct_init(
+        numberset3 = geometry.NumberSet._direct_init(
             [-inf, -8, -6, -5, -5, -3, -2, -1],
             [True, False, False, False, False, False, True, True],
         )
@@ -1261,17 +440,13 @@ class TestNumberSet(unittest.TestCase):
                 start, end = end, start
                 start_included, end_included = end_included, start_included
             intervals.append(
-                cheatsheet_geometry.Interval(
-                    start_included, start, end, end_included
-                )
+                geometry.Interval(start_included, start, end, end_included)
             )
-        numbersets = [
-            cheatsheet_geometry.NumberSet(interval) for interval in intervals
-        ]
+        numbersets = [geometry.NumberSet(interval) for interval in intervals]
 
         # For each number, check that the result of contains_parallel is the
         # same as the result of contains for each set.
-        results_parallel = cheatsheet_geometry.NumberSet.contains_parallel(
+        results_parallel = geometry.NumberSet.contains_parallel(
             numbersets, possible_bounds
         )
         for number, result_parallel in zip(possible_bounds, results_parallel):
@@ -1285,7 +460,7 @@ class TestNumberSet(unittest.TestCase):
 
     # lookup returns 4 elements of the correct type.
     def test_lookup_type(self):
-        numberset = cheatsheet_geometry.NumberSet()
+        numberset = geometry.NumberSet()
         in_set, on_start, on_end, idx = numberset.lookup(0)
         self.assertIsInstance(in_set, bool)
         self.assertIsInstance(on_start, bool)
@@ -2160,14 +1335,14 @@ class TestNumberSet(unittest.TestCase):
 
     # __and__ should return the correct set if the other set is empty.
     def test_and_other_empty(self):
-        numberset = self.numberset & cheatsheet_geometry.NumberSet()
+        numberset = self.numberset & geometry.NumberSet()
         self.assertEqual(numberset._boundaries, [])
         self.assertEqual(numberset._boundaries_included, [])
 
     # __and__ should return the correct set if the other set is full.
     def test_and_other_full(self):
-        interval = cheatsheet_geometry.Interval("[", -inf, inf, "]")
-        numberset = self.numberset & cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("[", -inf, inf, "]")
+        numberset = self.numberset & geometry.NumberSet(interval)
         self.assertEqual(numberset._boundaries, self.numberset._boundaries)
         self.assertEqual(
             numberset._boundaries_included, self.numberset._boundaries_included
@@ -2177,7 +1352,7 @@ class TestNumberSet(unittest.TestCase):
     # number.
     def test_and_other_number(self):
         for number in range(9):
-            numberset = self.numberset & cheatsheet_geometry.NumberSet(number)
+            numberset = self.numberset & geometry.NumberSet(number)
             self.assertEqual(
                 numberset._boundaries,
                 [number, number] if number in self.numberset else [],
@@ -2191,10 +1366,8 @@ class TestNumberSet(unittest.TestCase):
     # included.
     def test_and_other_borders_included(self):
         for start in range(9):
-            interval = cheatsheet_geometry.Interval("[", start, start + 1, "]")
-            numberset_and = self.numberset & cheatsheet_geometry.NumberSet(
-                interval
-            )
+            interval = geometry.Interval("[", start, start + 1, "]")
+            numberset_and = self.numberset & geometry.NumberSet(interval)
             numberset_subset = self.numberset._extract_subset(
                 start, start + 1, True, True, "01"
             )
@@ -2210,10 +1383,8 @@ class TestNumberSet(unittest.TestCase):
     # excluded.
     def test_and_other_borders_excluded(self):
         for start in range(9):
-            interval = cheatsheet_geometry.Interval("(", start, start + 1, ")")
-            numberset_and = self.numberset & cheatsheet_geometry.NumberSet(
-                interval
-            )
+            interval = geometry.Interval("(", start, start + 1, ")")
+            numberset_and = self.numberset & geometry.NumberSet(interval)
             numberset_subset = self.numberset._extract_subset(
                 start, start + 1, False, False, "01"
             )
@@ -2223,7 +1394,7 @@ class TestNumberSet(unittest.TestCase):
 
     # __or__ should return the correct set if the other set is empty.
     def test_or_other_empty(self):
-        numberset = self.numberset | cheatsheet_geometry.NumberSet()
+        numberset = self.numberset | geometry.NumberSet()
         self.assertEqual(numberset._boundaries, self.numberset._boundaries)
         self.assertEqual(
             numberset._boundaries_included, self.numberset._boundaries_included
@@ -2231,8 +1402,8 @@ class TestNumberSet(unittest.TestCase):
 
     # __or__ should return the correct set if the other set is full.
     def test_or_other_full(self):
-        interval = cheatsheet_geometry.Interval("[", -inf, inf, "]")
-        numberset = self.numberset | cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("[", -inf, inf, "]")
+        numberset = self.numberset | geometry.NumberSet(interval)
         self.assertEqual(numberset._boundaries, [-inf, inf])
         self.assertEqual(numberset._boundaries_included, [True, True])
 
@@ -2240,9 +1411,7 @@ class TestNumberSet(unittest.TestCase):
     # number.
     def test_or_other_number(self):
         for number in range(9):
-            numberset_or = self.numberset | cheatsheet_geometry.NumberSet(
-                number
-            )
+            numberset_or = self.numberset | geometry.NumberSet(number)
             numberset_add = self.numberset.copy()
             numberset_add.add_number(number)
             self.assertEqual(
@@ -2256,15 +1425,15 @@ class TestNumberSet(unittest.TestCase):
     # __or__ should return the correct set if the other set's borders are
     # included.
     def test_or_other_borders_included(self):
-        interval = cheatsheet_geometry.Interval("[", 0, 1, "]")
-        numberset_or = self.numberset | cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("[", 0, 1, "]")
+        numberset_or = self.numberset | geometry.NumberSet(interval)
         self.assertEqual(numberset_or._boundaries, [0, 2, 3, 5, 5, 6, 8, inf])
         self.assertEqual(
             numberset_or._boundaries_included,
             [True, True, False, False, False, False, False, True],
         )
-        interval = cheatsheet_geometry.Interval("[", 1, 2, "]")
-        numberset_or = self.numberset | cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("[", 1, 2, "]")
+        numberset_or = self.numberset | geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
         )
@@ -2272,15 +1441,15 @@ class TestNumberSet(unittest.TestCase):
             numberset_or._boundaries_included,
             [True, True, True, True, False, False, False, False, False, True],
         )
-        interval = cheatsheet_geometry.Interval("[", 2, 3, "]")
-        numberset_or = self.numberset | cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("[", 2, 3, "]")
+        numberset_or = self.numberset | geometry.NumberSet(interval)
         self.assertEqual(numberset_or._boundaries, [0, 0, 1, 5, 5, 6, 8, inf])
         self.assertEqual(
             numberset_or._boundaries_included,
             [True, True, True, False, False, False, False, True],
         )
-        interval = cheatsheet_geometry.Interval("[", 3, 4, "]")
-        numberset_or = self.numberset | cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("[", 3, 4, "]")
+        numberset_or = self.numberset | geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
         )
@@ -2288,22 +1457,22 @@ class TestNumberSet(unittest.TestCase):
             numberset_or._boundaries_included,
             [True, True, True, True, True, False, False, False, False, True],
         )
-        interval = cheatsheet_geometry.Interval("[", 4, 5, "]")
-        numberset_or = self.numberset | cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("[", 4, 5, "]")
+        numberset_or = self.numberset | geometry.NumberSet(interval)
         self.assertEqual(numberset_or._boundaries, [0, 0, 1, 2, 3, 6, 8, inf])
         self.assertEqual(
             numberset_or._boundaries_included,
             [True, True, True, True, False, False, False, True],
         )
-        interval = cheatsheet_geometry.Interval("[", 5, 6, "]")
-        numberset_or = self.numberset | cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("[", 5, 6, "]")
+        numberset_or = self.numberset | geometry.NumberSet(interval)
         self.assertEqual(numberset_or._boundaries, [0, 0, 1, 2, 3, 6, 8, inf])
         self.assertEqual(
             numberset_or._boundaries_included,
             [True, True, True, True, False, True, False, True],
         )
-        interval = cheatsheet_geometry.Interval("[", 6, 7, "]")
-        numberset_or = self.numberset | cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("[", 6, 7, "]")
+        numberset_or = self.numberset | geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 7, 8, inf]
         )
@@ -2311,8 +1480,8 @@ class TestNumberSet(unittest.TestCase):
             numberset_or._boundaries_included,
             [True, True, True, True, False, False, False, True, False, True],
         )
-        interval = cheatsheet_geometry.Interval("[", 7, 8, "]")
-        numberset_or = self.numberset | cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("[", 7, 8, "]")
+        numberset_or = self.numberset | geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 7, inf]
         )
@@ -2320,8 +1489,8 @@ class TestNumberSet(unittest.TestCase):
             numberset_or._boundaries_included,
             [True, True, True, True, False, False, False, False, True, True],
         )
-        interval = cheatsheet_geometry.Interval("[", 8, 9, "]")
-        numberset_or = self.numberset | cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("[", 8, 9, "]")
+        numberset_or = self.numberset | geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
         )
@@ -2333,15 +1502,15 @@ class TestNumberSet(unittest.TestCase):
     # __or__ should return the correct set if the other set's borders are
     # excluded.
     def test_or_other_borders_excluded(self):
-        interval = cheatsheet_geometry.Interval("(", 0, 1, ")")
-        numberset_or = self.numberset | cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("(", 0, 1, ")")
+        numberset_or = self.numberset | geometry.NumberSet(interval)
         self.assertEqual(numberset_or._boundaries, [0, 2, 3, 5, 5, 6, 8, inf])
         self.assertEqual(
             numberset_or._boundaries_included,
             [True, True, False, False, False, False, False, True],
         )
-        interval = cheatsheet_geometry.Interval("(", 1, 2, ")")
-        numberset_or = self.numberset | cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("(", 1, 2, ")")
+        numberset_or = self.numberset | geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
         )
@@ -2349,8 +1518,8 @@ class TestNumberSet(unittest.TestCase):
             numberset_or._boundaries_included,
             [True, True, True, True, False, False, False, False, False, True],
         )
-        interval = cheatsheet_geometry.Interval("(", 2, 3, ")")
-        numberset_or = self.numberset | cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("(", 2, 3, ")")
+        numberset_or = self.numberset | geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 3, 3, 5, 5, 6, 8, inf]
         )
@@ -2358,8 +1527,8 @@ class TestNumberSet(unittest.TestCase):
             numberset_or._boundaries_included,
             [True, True, True, False, False, False, False, False, False, True],
         )
-        interval = cheatsheet_geometry.Interval("(", 3, 4, ")")
-        numberset_or = self.numberset | cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("(", 3, 4, ")")
+        numberset_or = self.numberset | geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
         )
@@ -2367,8 +1536,8 @@ class TestNumberSet(unittest.TestCase):
             numberset_or._boundaries_included,
             [True, True, True, True, False, False, False, False, False, True],
         )
-        interval = cheatsheet_geometry.Interval("(", 4, 5, ")")
-        numberset_or = self.numberset | cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("(", 4, 5, ")")
+        numberset_or = self.numberset | geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
         )
@@ -2376,8 +1545,8 @@ class TestNumberSet(unittest.TestCase):
             numberset_or._boundaries_included,
             [True, True, True, True, False, False, False, False, False, True],
         )
-        interval = cheatsheet_geometry.Interval("(", 5, 6, ")")
-        numberset_or = self.numberset | cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("(", 5, 6, ")")
+        numberset_or = self.numberset | geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
         )
@@ -2385,8 +1554,8 @@ class TestNumberSet(unittest.TestCase):
             numberset_or._boundaries_included,
             [True, True, True, True, False, False, False, False, False, True],
         )
-        interval = cheatsheet_geometry.Interval("(", 6, 7, ")")
-        numberset_or = self.numberset | cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("(", 6, 7, ")")
+        numberset_or = self.numberset | geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 6, 7, 8, inf]
         )
@@ -2407,8 +1576,8 @@ class TestNumberSet(unittest.TestCase):
                 True,
             ],
         )
-        interval = cheatsheet_geometry.Interval("(", 7, 8, ")")
-        numberset_or = self.numberset | cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("(", 7, 8, ")")
+        numberset_or = self.numberset | geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 7, 8, 8, inf]
         )
@@ -2429,8 +1598,8 @@ class TestNumberSet(unittest.TestCase):
                 True,
             ],
         )
-        interval = cheatsheet_geometry.Interval("(", 8, 9, ")")
-        numberset_or = self.numberset | cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("(", 8, 9, ")")
+        numberset_or = self.numberset | geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
         )
@@ -2441,7 +1610,7 @@ class TestNumberSet(unittest.TestCase):
 
     # __xor__ should return the correct set if the other set is empty.
     def test_xor_other_empty(self):
-        numberset = self.numberset ^ cheatsheet_geometry.NumberSet()
+        numberset = self.numberset ^ geometry.NumberSet()
         self.assertEqual(numberset._boundaries, self.numberset._boundaries)
         self.assertEqual(
             numberset._boundaries_included, self.numberset._boundaries_included
@@ -2449,8 +1618,8 @@ class TestNumberSet(unittest.TestCase):
 
     # __xor__ should return the correct set if the other set is full.
     def test_xor_other_full(self):
-        interval = cheatsheet_geometry.Interval("[", -inf, inf, "]")
-        numberset = self.numberset ^ cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("[", -inf, inf, "]")
+        numberset = self.numberset ^ geometry.NumberSet(interval)
         inv_numberset = ~self.numberset
         self.assertEqual(numberset._boundaries, inv_numberset._boundaries)
         self.assertEqual(
@@ -2461,7 +1630,7 @@ class TestNumberSet(unittest.TestCase):
     # number.
     def test_xor_other_number(self):
         for number in range(9):
-            numberset_number = cheatsheet_geometry.NumberSet(number)
+            numberset_number = geometry.NumberSet(number)
             numberset_xor = self.numberset ^ numberset_number
             if number in self.numberset:
                 numberset_verify = self.numberset.copy()
@@ -2480,8 +1649,8 @@ class TestNumberSet(unittest.TestCase):
     # __xor__ should return the correct set if the other set's borders are
     # included.
     def test_xor_other_borders_included(self):
-        interval = cheatsheet_geometry.Interval("[", 0, 1, "]")
-        numberset_or = self.numberset ^ cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("[", 0, 1, "]")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 1, 1, 2, 3, 5, 5, 6, 8, inf]
         )
@@ -2500,15 +1669,15 @@ class TestNumberSet(unittest.TestCase):
                 True,
             ],
         )
-        interval = cheatsheet_geometry.Interval("[", 1, 2, "]")
-        numberset_or = self.numberset ^ cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("[", 1, 2, "]")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
         self.assertEqual(numberset_or._boundaries, [0, 0, 3, 5, 5, 6, 8, inf])
         self.assertEqual(
             numberset_or._boundaries_included,
             [True, True, False, False, False, False, False, True],
         )
-        interval = cheatsheet_geometry.Interval("[", 2, 3, "]")
-        numberset_or = self.numberset ^ cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("[", 2, 3, "]")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 2, 2, 5, 5, 6, 8, inf]
         )
@@ -2516,8 +1685,8 @@ class TestNumberSet(unittest.TestCase):
             numberset_or._boundaries_included,
             [True, True, True, False, False, False, False, False, False, True],
         )
-        interval = cheatsheet_geometry.Interval("[", 3, 4, "]")
-        numberset_or = self.numberset ^ cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("[", 3, 4, "]")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 2, 3, 3, 4, 5, 5, 6, 8, inf]
         )
@@ -2538,8 +1707,8 @@ class TestNumberSet(unittest.TestCase):
                 True,
             ],
         )
-        interval = cheatsheet_geometry.Interval("[", 4, 5, "]")
-        numberset_or = self.numberset ^ cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("[", 4, 5, "]")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 2, 3, 4, 5, 6, 8, inf]
         )
@@ -2547,8 +1716,8 @@ class TestNumberSet(unittest.TestCase):
             numberset_or._boundaries_included,
             [True, True, True, True, False, False, True, False, False, True],
         )
-        interval = cheatsheet_geometry.Interval("[", 5, 6, "]")
-        numberset_or = self.numberset ^ cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("[", 5, 6, "]")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 6, 6, 8, inf]
         )
@@ -2556,8 +1725,8 @@ class TestNumberSet(unittest.TestCase):
             numberset_or._boundaries_included,
             [True, True, True, True, False, True, True, True, False, True],
         )
-        interval = cheatsheet_geometry.Interval("[", 6, 7, "]")
-        numberset_or = self.numberset ^ cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("[", 6, 7, "]")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 7, 8, inf]
         )
@@ -2565,8 +1734,8 @@ class TestNumberSet(unittest.TestCase):
             numberset_or._boundaries_included,
             [True, True, True, True, False, False, False, True, False, True],
         )
-        interval = cheatsheet_geometry.Interval("[", 7, 8, "]")
-        numberset_or = self.numberset ^ cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("[", 7, 8, "]")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 7, inf]
         )
@@ -2574,8 +1743,8 @@ class TestNumberSet(unittest.TestCase):
             numberset_or._boundaries_included,
             [True, True, True, True, False, False, False, False, True, True],
         )
-        interval = cheatsheet_geometry.Interval("[", 8, 9, "]")
-        numberset_or = self.numberset ^ cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("[", 8, 9, "]")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, 8, 9, inf]
         )
@@ -2600,15 +1769,15 @@ class TestNumberSet(unittest.TestCase):
     # __xor__ should return the correct set if the other set's borders are
     # excluded.
     def test_xor_other_borders_excluded(self):
-        interval = cheatsheet_geometry.Interval("(", 0, 1, ")")
-        numberset_or = self.numberset ^ cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("(", 0, 1, ")")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
         self.assertEqual(numberset_or._boundaries, [0, 2, 3, 5, 5, 6, 8, inf])
         self.assertEqual(
             numberset_or._boundaries_included,
             [True, True, False, False, False, False, False, True],
         )
-        interval = cheatsheet_geometry.Interval("(", 1, 2, ")")
-        numberset_or = self.numberset ^ cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("(", 1, 2, ")")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 1, 2, 2, 3, 5, 5, 6, 8, inf]
         )
@@ -2629,8 +1798,8 @@ class TestNumberSet(unittest.TestCase):
                 True,
             ],
         )
-        interval = cheatsheet_geometry.Interval("(", 2, 3, ")")
-        numberset_or = self.numberset ^ cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("(", 2, 3, ")")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 3, 3, 5, 5, 6, 8, inf]
         )
@@ -2638,8 +1807,8 @@ class TestNumberSet(unittest.TestCase):
             numberset_or._boundaries_included,
             [True, True, True, False, False, False, False, False, False, True],
         )
-        interval = cheatsheet_geometry.Interval("(", 3, 4, ")")
-        numberset_or = self.numberset ^ cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("(", 3, 4, ")")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 2, 4, 5, 5, 6, 8, inf]
         )
@@ -2647,8 +1816,8 @@ class TestNumberSet(unittest.TestCase):
             numberset_or._boundaries_included,
             [True, True, True, True, True, False, False, False, False, True],
         )
-        interval = cheatsheet_geometry.Interval("(", 4, 5, ")")
-        numberset_or = self.numberset ^ cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("(", 4, 5, ")")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 2, 3, 4, 5, 6, 8, inf]
         )
@@ -2656,15 +1825,15 @@ class TestNumberSet(unittest.TestCase):
             numberset_or._boundaries_included,
             [True, True, True, True, False, True, False, False, False, True],
         )
-        interval = cheatsheet_geometry.Interval("(", 5, 6, ")")
-        numberset_or = self.numberset ^ cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("(", 5, 6, ")")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
         self.assertEqual(numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 8, inf])
         self.assertEqual(
             numberset_or._boundaries_included,
             [True, True, True, True, False, False, False, True],
         )
-        interval = cheatsheet_geometry.Interval("(", 6, 7, ")")
-        numberset_or = self.numberset ^ cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("(", 6, 7, ")")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 6, 7, 8, inf]
         )
@@ -2685,8 +1854,8 @@ class TestNumberSet(unittest.TestCase):
                 True,
             ],
         )
-        interval = cheatsheet_geometry.Interval("(", 7, 8, ")")
-        numberset_or = self.numberset ^ cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("(", 7, 8, ")")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 7, 8, 8, inf]
         )
@@ -2707,8 +1876,8 @@ class TestNumberSet(unittest.TestCase):
                 True,
             ],
         )
-        interval = cheatsheet_geometry.Interval("(", 8, 9, ")")
-        numberset_or = self.numberset ^ cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("(", 8, 9, ")")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
         self.assertEqual(
             numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 9, inf]
         )
@@ -2719,13 +1888,13 @@ class TestNumberSet(unittest.TestCase):
 
     # __init__ with no arguments.
     def test_init_empty(self):
-        numberset = cheatsheet_geometry.NumberSet()
+        numberset = geometry.NumberSet()
         self.assertEqual(numberset._boundaries, [])
         self.assertEqual(numberset._boundaries_included, [])
 
     # __init__ with a single number.
     def test_init_number(self):
-        number_set = cheatsheet_geometry.NumberSet(5)
+        number_set = geometry.NumberSet(5)
         self.assertEqual(number_set._boundaries, [5, 5])
         self.assertEqual(number_set._boundaries_included, [True, True])
 
@@ -2733,34 +1902,28 @@ class TestNumberSet(unittest.TestCase):
     # number that is -inf or inf.
     def test_init_number_inf(self):
         with self.assertRaises(ValueError):
-            cheatsheet_geometry.NumberSet(-inf)
+            geometry.NumberSet(-inf)
         with self.assertRaises(ValueError):
-            cheatsheet_geometry.NumberSet(inf)
-
-    # __init__ should raise a TypeError if a non-number/interval/numberset is
-    # passed as an argument.
-    def test_init_invalid_argument(self):
-        with self.assertRaises(TypeError):
-            cheatsheet_geometry.NumberSet("invalid")  # type: ignore
+            geometry.NumberSet(inf)
 
     # __init__ with a single interval.
     def test_init_interval(self):
-        interval = cheatsheet_geometry.Interval("[", 1, 5, "]")
-        numberset = cheatsheet_geometry.NumberSet(interval)
+        interval = geometry.Interval("[", 1, 5, "]")
+        numberset = geometry.NumberSet(interval)
         self.assertEqual(numberset._boundaries, [1, 5])
         self.assertEqual(numberset._boundaries_included, [True, True])
 
     # __init__ with a single NumberSet instance.
     def test_init_numberset(self):
-        interval = cheatsheet_geometry.Interval("[", -3, 1, ")")
-        numberset1 = cheatsheet_geometry.NumberSet(interval)
-        numberset2 = cheatsheet_geometry.NumberSet(numberset1)
+        interval = geometry.Interval("[", -3, 1, ")")
+        numberset1 = geometry.NumberSet(interval)
+        numberset2 = geometry.NumberSet(numberset1)
         self.assertEqual(numberset2._boundaries, [-3, 1])
         self.assertEqual(numberset2._boundaries_included, [True, False])
 
     # __init__ with multiple non-overlapping numbers.
     def test_init_numbers(self):
-        numberset = cheatsheet_geometry.NumberSet(1, 2, 3, 4, 5)
+        numberset = geometry.NumberSet(1, 2, 3, 4, 5)
         self.assertEqual(numberset._boundaries, [1, 1, 2, 2, 3, 3, 4, 4, 5, 5])
         self.assertEqual(
             numberset._boundaries_included,
@@ -2769,12 +1932,10 @@ class TestNumberSet(unittest.TestCase):
 
     # __init__ with multiple non-overlapping intervals.
     def test_init_intervals(self):
-        interval1 = cheatsheet_geometry.Interval("[", 1, 5, ")")
-        interval2 = cheatsheet_geometry.Interval("(", 10, 15, "]")
-        interval3 = cheatsheet_geometry.Interval("[", 20, 25, "]")
-        numberset = cheatsheet_geometry.NumberSet(
-            interval1, interval2, interval3
-        )
+        interval1 = geometry.Interval("[", 1, 5, ")")
+        interval2 = geometry.Interval("(", 10, 15, "]")
+        interval3 = geometry.Interval("[", 20, 25, "]")
+        numberset = geometry.NumberSet(interval1, interval2, interval3)
         self.assertEqual(numberset._boundaries, [1, 5, 10, 15, 20, 25])
         self.assertEqual(
             numberset._boundaries_included,
@@ -2783,11 +1944,11 @@ class TestNumberSet(unittest.TestCase):
 
     # __init__ with multiple non-overlapping numbersets.
     def test_init_numbersets(self):
-        interval1 = cheatsheet_geometry.Interval("[", 1, 5, ")")
-        numberset1 = cheatsheet_geometry.NumberSet(0, interval1)
-        interval2 = cheatsheet_geometry.Interval("(", 10, 15, "]")
-        numberset2 = cheatsheet_geometry.NumberSet(6, 7, interval2)
-        numberset = cheatsheet_geometry.NumberSet(numberset1, numberset2)
+        interval1 = geometry.Interval("[", 1, 5, ")")
+        numberset1 = geometry.NumberSet(0, interval1)
+        interval2 = geometry.Interval("(", 10, 15, "]")
+        numberset2 = geometry.NumberSet(6, 7, interval2)
+        numberset = geometry.NumberSet(numberset1, numberset2)
         self.assertEqual(
             numberset._boundaries, [0, 0, 1, 5, 6, 6, 7, 7, 10, 15]
         )
@@ -2799,10 +1960,10 @@ class TestNumberSet(unittest.TestCase):
     # __init__ with multiple non-overlapping numbers, intervals, and
     # numbersets.
     def test_init_numbers_intervals_numbersets(self):
-        interval = cheatsheet_geometry.Interval("(", -3, 1, ")")
-        interval1 = cheatsheet_geometry.Interval("[", 6, 8, ")")
-        numberset1 = cheatsheet_geometry.NumberSet(5, interval1)
-        numberset = cheatsheet_geometry.NumberSet(-4, interval, numberset1)
+        interval = geometry.Interval("(", -3, 1, ")")
+        interval1 = geometry.Interval("[", 6, 8, ")")
+        numberset1 = geometry.NumberSet(5, interval1)
+        numberset = geometry.NumberSet(-4, interval, numberset1)
         self.assertEqual(numberset._boundaries, [-4, -4, -3, 1, 5, 5, 6, 8])
         self.assertEqual(
             numberset._boundaries_included,
@@ -2811,7 +1972,7 @@ class TestNumberSet(unittest.TestCase):
 
     # __init__ with multiple overlapping numbers.
     def test_init_numbers_overlapping(self):
-        numberset = cheatsheet_geometry.NumberSet(1, 2, 3, 4, 5, 1, 3, 4, 4)
+        numberset = geometry.NumberSet(1, 2, 3, 4, 5, 1, 3, 4, 4)
         self.assertEqual(numberset._boundaries, [1, 1, 2, 2, 3, 3, 4, 4, 5, 5])
         self.assertEqual(
             numberset._boundaries_included,
@@ -2820,11 +1981,11 @@ class TestNumberSet(unittest.TestCase):
 
     # __init__ with multiple overlapping intervals.
     def test_init_intervals_overlapping(self):
-        interval1 = cheatsheet_geometry.Interval("[", 1, 5, "]")
-        interval2 = cheatsheet_geometry.Interval("(", 4, 10, ")")
-        interval3 = cheatsheet_geometry.Interval("[", 10, 12, ")")
-        interval4 = cheatsheet_geometry.Interval("(", 6, 8, "]")
-        numberset = cheatsheet_geometry.NumberSet(
+        interval1 = geometry.Interval("[", 1, 5, "]")
+        interval2 = geometry.Interval("(", 4, 10, ")")
+        interval3 = geometry.Interval("[", 10, 12, ")")
+        interval4 = geometry.Interval("(", 6, 8, "]")
+        numberset = geometry.NumberSet(
             interval1, interval2, interval3, interval4
         )
         self.assertEqual(numberset._boundaries, [1, 12])
@@ -2832,11 +1993,11 @@ class TestNumberSet(unittest.TestCase):
 
     # __init__ with multiple overlapping numbersets.
     def test_init_numbersets_overlapping(self):
-        interval1 = cheatsheet_geometry.Interval("[", 1, 5, "]")
-        numberset1 = cheatsheet_geometry.NumberSet(0, interval1)
-        interval2 = cheatsheet_geometry.Interval("(", 4, 10, ")")
-        numberset2 = cheatsheet_geometry.NumberSet(6, 7, interval2)
-        numberset = cheatsheet_geometry.NumberSet(numberset1, numberset2)
+        interval1 = geometry.Interval("[", 1, 5, "]")
+        numberset1 = geometry.NumberSet(0, interval1)
+        interval2 = geometry.Interval("(", 4, 10, ")")
+        numberset2 = geometry.NumberSet(6, 7, interval2)
+        numberset = geometry.NumberSet(numberset1, numberset2)
         self.assertEqual(numberset._boundaries, [0, 0, 1, 10])
         self.assertEqual(
             numberset._boundaries_included, [True, True, True, False]
@@ -2844,691 +2005,509 @@ class TestNumberSet(unittest.TestCase):
 
     # is_empty should return True iff the NumberSet is empty.
     def test_is_empty(self):
-        numberset = cheatsheet_geometry.NumberSet()
+        numberset = geometry.NumberSet()
         self.assertTrue(numberset.is_empty())
 
-        numberset = cheatsheet_geometry.NumberSet(3)
+        numberset = geometry.NumberSet(3)
         self.assertFalse(numberset.is_empty())
 
-        numberset = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]")
-        )
+        numberset = geometry.NumberSet(geometry.Interval("[", 3, 4, "]"))
         self.assertFalse(numberset.is_empty())
 
     # is_number should return True iff the NumberSet contains a single number.
     def test_is_number(self):
-        numberset = cheatsheet_geometry.NumberSet()
+        numberset = geometry.NumberSet()
         self.assertFalse(numberset.is_number())
 
-        numberset = cheatsheet_geometry.NumberSet(3)
+        numberset = geometry.NumberSet(3)
         self.assertTrue(numberset.is_number())
 
-        numberset = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]")
-        )
+        numberset = geometry.NumberSet(geometry.Interval("[", 3, 4, "]"))
         self.assertFalse(numberset.is_number())
 
     # is_interval should return True iff the NumberSet contains a single
     # interval.
     def test_is_interval(self):
-        numberset = cheatsheet_geometry.NumberSet()
+        numberset = geometry.NumberSet()
         self.assertFalse(numberset.is_interval())
 
-        numberset = cheatsheet_geometry.NumberSet(3)
+        numberset = geometry.NumberSet(3)
         self.assertFalse(numberset.is_interval())
 
-        numberset = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]")
-        )
+        numberset = geometry.NumberSet(geometry.Interval("[", 3, 4, "]"))
         self.assertTrue(numberset.is_interval())
 
-        numberset = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]"),
-            cheatsheet_geometry.Interval("[", 5, 6, "]"),
+        numberset = geometry.NumberSet(
+            geometry.Interval("[", 3, 4, "]"),
+            geometry.Interval("[", 5, 6, "]"),
         )
         self.assertFalse(numberset.is_interval())
 
     # is_reducible should return True iff the NumberSet is reducible.
     def test_is_reducible(self):
-        numberset = cheatsheet_geometry.NumberSet()
+        numberset = geometry.NumberSet()
         self.assertTrue(numberset.is_reducible())
 
-        numberset = cheatsheet_geometry.NumberSet(3)
+        numberset = geometry.NumberSet(3)
         self.assertTrue(numberset.is_reducible())
 
-        numberset = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]")
-        )
+        numberset = geometry.NumberSet(geometry.Interval("[", 3, 4, "]"))
         self.assertTrue(numberset.is_reducible())
 
-        numberset = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]"),
-            cheatsheet_geometry.Interval("[", 5, 6, "]"),
+        numberset = geometry.NumberSet(
+            geometry.Interval("[", 3, 4, "]"),
+            geometry.Interval("[", 5, 6, "]"),
         )
         self.assertFalse(numberset.is_reducible())
 
-        numberset = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]"),
-            cheatsheet_geometry.Interval("[", 4, 5, "]"),
+        numberset = geometry.NumberSet(
+            geometry.Interval("[", 3, 4, "]"),
+            geometry.Interval("[", 4, 5, "]"),
         )
         self.assertTrue(numberset.is_reducible())
 
     # reduce should return the correct object if the NumberSet is reducible.
     def test_reduce(self):
-        numberset = cheatsheet_geometry.NumberSet()
+        numberset = geometry.NumberSet()
         self.assertEqual(numberset.reduce(), None)
 
-        numberset = cheatsheet_geometry.NumberSet(3)
+        numberset = geometry.NumberSet(3)
         self.assertEqual(numberset.reduce(), 3)
 
-        numberset = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]")
-        )
-        self.assertEqual(
-            numberset.reduce(), cheatsheet_geometry.Interval("[", 3, 4, "]")
-        )
+        numberset = geometry.NumberSet(geometry.Interval("[", 3, 4, "]"))
+        self.assertEqual(numberset.reduce(), geometry.Interval("[", 3, 4, "]"))
 
-        numberset = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]"),
-            cheatsheet_geometry.Interval("[", 5, 6, "]"),
+        numberset = geometry.NumberSet(
+            geometry.Interval("[", 3, 4, "]"),
+            geometry.Interval("[", 5, 6, "]"),
         )
         self.assertEqual(numberset.reduce(), numberset)
 
-        numberset = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]"),
-            cheatsheet_geometry.Interval("[", 4, 5, "]"),
+        numberset = geometry.NumberSet(
+            geometry.Interval("[", 3, 4, "]"),
+            geometry.Interval("[", 4, 5, "]"),
         )
-        self.assertEqual(
-            numberset.reduce(), cheatsheet_geometry.Interval("[", 3, 5, "]")
-        )
+        self.assertEqual(numberset.reduce(), geometry.Interval("[", 3, 5, "]"))
 
     # is_overlapping should return True iff the NumberSet overlaps with another
     # NumberSet.
     def test_is_overlapping(self):
-        numberset1 = cheatsheet_geometry.NumberSet()
-        numberset2 = cheatsheet_geometry.NumberSet()
+        numberset1 = geometry.NumberSet()
+        numberset2 = geometry.NumberSet()
         self.assertFalse(numberset1.is_overlapping(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet()
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet()
         self.assertFalse(numberset1.is_overlapping(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(4)
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(4)
         self.assertFalse(numberset1.is_overlapping(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(3)
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(3)
         self.assertTrue(numberset1.is_overlapping(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]")
-        )
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 3, 4, "]"))
         self.assertTrue(numberset1.is_overlapping(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 4, 5, "]"))
         self.assertFalse(numberset1.is_overlapping(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 4, "]"))
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 4, 5, "]"))
         self.assertTrue(numberset1.is_overlapping(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("(", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 4, "]"))
+        numberset2 = geometry.NumberSet(geometry.Interval("(", 4, 5, "]"))
         self.assertFalse(numberset1.is_overlapping(numberset2))
 
     # is_disjoint should return True iff the NumberSet is disjoint with another
     # NumberSet.
     def test_is_disjoint(self):
-        numberset1 = cheatsheet_geometry.NumberSet()
-        numberset2 = cheatsheet_geometry.NumberSet()
+        numberset1 = geometry.NumberSet()
+        numberset2 = geometry.NumberSet()
         self.assertTrue(numberset1.is_disjoint(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet()
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet()
         self.assertTrue(numberset1.is_disjoint(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(4)
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(4)
         self.assertTrue(numberset1.is_disjoint(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(3)
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(3)
         self.assertFalse(numberset1.is_disjoint(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]")
-        )
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 3, 4, "]"))
         self.assertFalse(numberset1.is_disjoint(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 4, 5, "]"))
         self.assertTrue(numberset1.is_disjoint(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 4, "]"))
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 4, 5, "]"))
         self.assertFalse(numberset1.is_disjoint(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("(", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 4, "]"))
+        numberset2 = geometry.NumberSet(geometry.Interval("(", 4, 5, "]"))
         self.assertTrue(numberset1.is_disjoint(numberset2))
 
     # is_subset should return True iff the NumberSet is a subset of another
     # NumberSet.
     def test_is_subset(self):
-        numberset1 = cheatsheet_geometry.NumberSet()
-        numberset2 = cheatsheet_geometry.NumberSet()
+        numberset1 = geometry.NumberSet()
+        numberset2 = geometry.NumberSet()
         self.assertTrue(numberset1.is_subset(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet()
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet()
         self.assertFalse(numberset1.is_subset(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(4)
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(4)
         self.assertFalse(numberset1.is_subset(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(3)
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(3)
         self.assertTrue(numberset1.is_subset(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]")
-        )
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 3, 4, "]"))
         self.assertTrue(numberset1.is_subset(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 4, 5, "]"))
         self.assertFalse(numberset1.is_subset(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 4, "]"))
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 4, 5, "]"))
         self.assertFalse(numberset1.is_subset(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 4, "]"))
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 3, 5, "]"))
         self.assertTrue(numberset1.is_subset(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("(", 3, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 4, "]"))
+        numberset2 = geometry.NumberSet(geometry.Interval("(", 3, 5, "]"))
         self.assertFalse(numberset1.is_subset(numberset2))
 
     # is_superset should return True iff the NumberSet is a superset of another
     # NumberSet.
     def test_is_superset(self):
-        numberset1 = cheatsheet_geometry.NumberSet()
-        numberset2 = cheatsheet_geometry.NumberSet()
+        numberset1 = geometry.NumberSet()
+        numberset2 = geometry.NumberSet()
         self.assertTrue(numberset1.is_superset(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet()
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet()
         self.assertTrue(numberset1.is_superset(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(4)
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(4)
         self.assertFalse(numberset1.is_superset(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(3)
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(3)
         self.assertTrue(numberset1.is_superset(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]")
-        )
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 3, 4, "]"))
         self.assertFalse(numberset1.is_superset(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 4, 5, "]"))
         self.assertFalse(numberset1.is_superset(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 4, "]"))
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 4, 5, "]"))
         self.assertFalse(numberset1.is_superset(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 5, "]")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 5, "]"))
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 4, 5, "]"))
         self.assertTrue(numberset1.is_superset(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 5, ")")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("(", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 5, ")"))
+        numberset2 = geometry.NumberSet(geometry.Interval("(", 4, 5, "]"))
         self.assertFalse(numberset1.is_superset(numberset2))
 
     # is_adjacent should return True iff the NumberSet is adjacent to another
     # NumberSet.
     def test_is_adjacent(self):
-        numberset1 = cheatsheet_geometry.NumberSet()
-        numberset2 = cheatsheet_geometry.NumberSet()
+        numberset1 = geometry.NumberSet()
+        numberset2 = geometry.NumberSet()
         self.assertFalse(numberset1.is_adjacent(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet()
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet()
         self.assertFalse(numberset1.is_adjacent(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(4)
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(4)
         self.assertFalse(numberset1.is_adjacent(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(3)
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(3)
         self.assertFalse(numberset1.is_adjacent(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("(", 3, 4, "]")
-        )
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(geometry.Interval("(", 3, 4, "]"))
         self.assertTrue(numberset1.is_adjacent(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 3, 5, "]"))
         self.assertFalse(numberset1.is_adjacent(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 4, "]"))
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 4, 5, "]"))
         self.assertFalse(numberset1.is_adjacent(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("(", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 4, "]"))
+        numberset2 = geometry.NumberSet(geometry.Interval("(", 4, 5, "]"))
         self.assertTrue(numberset1.is_adjacent(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, ")")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("(", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 4, ")"))
+        numberset2 = geometry.NumberSet(geometry.Interval("(", 4, 5, "]"))
         self.assertFalse(numberset1.is_adjacent(numberset2))
 
     # starts_equal should return True iff the NumberSet starts with the same
     # number as another NumberSet.
     def test_starts_equal(self):
-        numberset1 = cheatsheet_geometry.NumberSet()
-        numberset2 = cheatsheet_geometry.NumberSet()
+        numberset1 = geometry.NumberSet()
+        numberset2 = geometry.NumberSet()
         self.assertFalse(numberset1.starts_equal(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet()
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet()
         self.assertFalse(numberset1.starts_equal(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(4)
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(4)
         self.assertFalse(numberset1.starts_equal(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(3)
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(3)
         self.assertTrue(numberset1.starts_equal(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]")
-        )
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 3, 4, "]"))
         self.assertTrue(numberset1.starts_equal(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 4, 5, "]"))
         self.assertFalse(numberset1.starts_equal(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 4, "]"))
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 4, 5, "]"))
         self.assertFalse(numberset1.starts_equal(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 5, "]")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 5, "]"))
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 3, 5, "]"))
         self.assertTrue(numberset1.starts_equal(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 5, ")")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("(", 3, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 5, ")"))
+        numberset2 = geometry.NumberSet(geometry.Interval("(", 3, 5, "]"))
         self.assertFalse(numberset1.starts_equal(numberset2))
 
     # ends_equal should return True iff the NumberSet ends with the same
     # number as another NumberSet.
     def test_ends_equal(self):
-        numberset1 = cheatsheet_geometry.NumberSet()
-        numberset2 = cheatsheet_geometry.NumberSet()
+        numberset1 = geometry.NumberSet()
+        numberset2 = geometry.NumberSet()
         self.assertFalse(numberset1.ends_equal(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet()
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet()
         self.assertFalse(numberset1.ends_equal(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(4)
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(4)
         self.assertFalse(numberset1.ends_equal(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(3)
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(3)
         self.assertTrue(numberset1.ends_equal(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]")
-        )
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 3, 4, "]"))
         self.assertFalse(numberset1.ends_equal(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 4, 5, "]"))
         self.assertFalse(numberset1.ends_equal(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 4, "]"))
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 4, 5, "]"))
         self.assertFalse(numberset1.ends_equal(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 5, "]")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 5, "]"))
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 4, 5, "]"))
         self.assertTrue(numberset1.ends_equal(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 5, ")")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("(", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 5, ")"))
+        numberset2 = geometry.NumberSet(geometry.Interval("(", 4, 5, "]"))
         self.assertFalse(numberset1.ends_equal(numberset2))
 
     # starts_left should return True iff the NumberSet starts to the left of
     # another NumberSet.
     def test_starts_left(self):
-        numberset1 = cheatsheet_geometry.NumberSet()
-        numberset2 = cheatsheet_geometry.NumberSet()
+        numberset1 = geometry.NumberSet()
+        numberset2 = geometry.NumberSet()
         self.assertFalse(numberset1.starts_left(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet()
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet()
         self.assertFalse(numberset1.starts_left(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(4)
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(4)
         self.assertTrue(numberset1.starts_left(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(3)
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(3)
         self.assertFalse(numberset1.starts_left(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("(", 3, 4, "]")
-        )
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(geometry.Interval("(", 3, 4, "]"))
         self.assertTrue(numberset1.starts_left(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 4, 5, "]"))
         self.assertTrue(numberset1.starts_left(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 4, "]"))
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 4, 5, "]"))
         self.assertTrue(numberset1.starts_left(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 5, "]")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("(", 3, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 5, "]"))
+        numberset2 = geometry.NumberSet(geometry.Interval("(", 3, 5, "]"))
         self.assertTrue(numberset1.starts_left(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 5, ")")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 5, ")"))
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 3, 5, "]"))
         self.assertFalse(numberset1.starts_left(numberset2))
 
     # starts_right should return True iff the NumberSet starts to the right of
     # another NumberSet.
     def test_starts_right(self):
-        numberset1 = cheatsheet_geometry.NumberSet()
-        numberset2 = cheatsheet_geometry.NumberSet()
+        numberset1 = geometry.NumberSet()
+        numberset2 = geometry.NumberSet()
         self.assertFalse(numberset1.starts_right(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet()
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet()
         self.assertFalse(numberset1.starts_right(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(4)
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(4)
         self.assertFalse(numberset1.starts_right(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(3)
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(3)
         self.assertFalse(numberset1.starts_right(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(4)
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("(", 3, 4, "]")
-        )
+        numberset1 = geometry.NumberSet(4)
+        numberset2 = geometry.NumberSet(geometry.Interval("(", 3, 4, "]"))
         self.assertTrue(numberset1.starts_right(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(4)
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(4)
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 4, 5, "]"))
         self.assertFalse(numberset1.starts_right(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, "]")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 4, "]"))
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 4, 5, "]"))
         self.assertFalse(numberset1.starts_right(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("(", 3, 5, "]")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("(", 3, 5, "]"))
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 3, 5, "]"))
         self.assertTrue(numberset1.starts_right(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 5, ")")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 5, ")"))
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 3, 5, "]"))
         self.assertFalse(numberset1.starts_right(numberset2))
 
     # ends_left should return True iff the NumberSet ends to the left of
     # another NumberSet.
     def test_ends_left(self):
-        numberset1 = cheatsheet_geometry.NumberSet()
-        numberset2 = cheatsheet_geometry.NumberSet()
+        numberset1 = geometry.NumberSet()
+        numberset2 = geometry.NumberSet()
         self.assertFalse(numberset1.ends_left(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet()
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet()
         self.assertFalse(numberset1.ends_left(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(4)
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(4)
         self.assertTrue(numberset1.ends_left(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(3)
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(3)
         self.assertFalse(numberset1.ends_left(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(4)
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("(", 3, 4, "]")
-        )
+        numberset1 = geometry.NumberSet(4)
+        numberset2 = geometry.NumberSet(geometry.Interval("(", 3, 4, "]"))
         self.assertFalse(numberset1.ends_left(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(4)
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(4)
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 4, 5, "]"))
         self.assertTrue(numberset1.ends_left(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, ")")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 4, ")"))
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 4, 5, "]"))
         self.assertTrue(numberset1.ends_left(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 5, "]")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("(", 3, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 5, "]"))
+        numberset2 = geometry.NumberSet(geometry.Interval("(", 3, 5, "]"))
         self.assertFalse(numberset1.ends_left(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 5, ")")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 5, ")"))
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 3, 5, "]"))
         self.assertTrue(numberset1.ends_left(numberset2))
 
     # ends_right should return True iff the NumberSet ends to the right of
     # another NumberSet.
     def test_ends_right(self):
-        numberset1 = cheatsheet_geometry.NumberSet()
-        numberset2 = cheatsheet_geometry.NumberSet()
+        numberset1 = geometry.NumberSet()
+        numberset2 = geometry.NumberSet()
         self.assertFalse(numberset1.ends_right(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet()
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet()
         self.assertFalse(numberset1.ends_right(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(4)
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(4)
         self.assertFalse(numberset1.ends_right(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(3)
-        numberset2 = cheatsheet_geometry.NumberSet(3)
+        numberset1 = geometry.NumberSet(3)
+        numberset2 = geometry.NumberSet(3)
         self.assertFalse(numberset1.ends_right(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(4)
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("(", 3, 4, ")")
-        )
+        numberset1 = geometry.NumberSet(4)
+        numberset2 = geometry.NumberSet(geometry.Interval("(", 3, 4, ")"))
         self.assertTrue(numberset1.ends_right(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(5)
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(5)
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 4, 5, "]"))
         self.assertFalse(numberset1.ends_right(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 4, ")")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 4, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 4, ")"))
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 4, 5, "]"))
         self.assertFalse(numberset1.ends_right(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 5, "]")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("(", 3, 5, "]")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 5, "]"))
+        numberset2 = geometry.NumberSet(geometry.Interval("(", 3, 5, "]"))
         self.assertFalse(numberset1.ends_right(numberset2))
 
-        numberset1 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 5, "]")
-        )
-        numberset2 = cheatsheet_geometry.NumberSet(
-            cheatsheet_geometry.Interval("[", 3, 5, ")")
-        )
+        numberset1 = geometry.NumberSet(geometry.Interval("[", 3, 5, "]"))
+        numberset2 = geometry.NumberSet(geometry.Interval("[", 3, 5, ")"))
         self.assertTrue(numberset1.ends_right(numberset2))
 
 

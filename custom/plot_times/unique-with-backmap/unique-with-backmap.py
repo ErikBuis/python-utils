@@ -5,9 +5,9 @@ from typing import Any
 
 import numpy as np
 import torch
-
 from plot_times.plot_times import plot_times
-from utils_torch import unique_with_backmap, unique_with_backmap_naive
+
+from modules.torch import unique_with_backmap, unique_with_backmap_naive
 
 
 def map_to_inputs(
