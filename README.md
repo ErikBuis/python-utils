@@ -14,16 +14,17 @@ The repository is organized as follows:
 .
 ├── ℹ️ <b>README.md</b>: This file.
 ├── 🛡️ <b>LICENCE.md</b>: Licence file.
+├── 📁 <b>guides</b>: General guides for installing common software or other components often required for real-world projects.
 ├── 📁 <b>modules</b>: General utility functions organized by the Python module they correlate most with. Each file is completely independent from the rest of the files, so you can safely copy-paste a single file into your project.
 ├── 📁 <b>modules_batched</b>: Batched versions of general utility functions, again organized by their Python module. Note that these functions often have another dependency, such as PyTorch.
 ├── 📁 <b>custom</b>: Custom utility functions that aren't associated with a specific Python module.
 ├── 📁 <b>custom_batched</b>: Batched versions of custom utility functions.
-└── 📁 <b>guides</b>: General guides for installing common software or other components often required for real-world projects.
+└── 📁 <b>tests</b>: Tests for all modules, written using the unittest module from the Python standard library.
 </pre>
 
 
 # Testing
-The `tests` directory contains tests for all modules. The tests are written using the `unittest` module from the Python standard library.
+The `tests` directory contains unittests for all modules. The tests are written using the `unittest` module from the Python standard library.
 
 To run the tests, run the following command from the root directory of the repository:
 ```bash
