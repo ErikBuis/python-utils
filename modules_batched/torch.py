@@ -67,7 +67,7 @@ def pad_packed_batched(
     return values_padded
 
 
-def mask_batched(L_bs: torch.Tensor, max_L_b: int) -> torch.Tensor:
+def mask_padding_batched(L_bs: torch.Tensor, max_L_b: int) -> torch.Tensor:
     """Create a mask that indicates which values are valid in each sample.
 
     Args:
@@ -96,11 +96,11 @@ def replace_padding_batched(
     padding_value: Any = 0,
     in_place: bool = False,
 ) -> torch.Tensor:
-    """Pad the values with zeros to create a tensor with a fixed size.
+    """Pad the values with padding_value to create a tensor with a fixed size.
 
     Args:
-        values: The values to pad with zeros for heterogenous batch sizes.
-            Will be modified in-place if `in_place` is True.
+        values: The values to pad with padding_value for heterogenous batch
+            sizes. Will be modified in-place if in_place is True.
             Shape: [B, max(L_b), *]
         mask: A mask that indicates which values are valid in each sample.
             Shape: [B, max(L_b)]
@@ -108,7 +108,7 @@ def replace_padding_batched(
         in_place: Whether to perform the operation in-place.
 
     Returns:
-        The values padded with zeros for heterogenous batch sizes.
+        The values padded with padding_value for heterogenous batch sizes.
             Shape: [B, max(L_b), *]
     """
     values_padded = values if in_place else values.clone()
@@ -116,7 +116,9 @@ def replace_padding_batched(
     return values_padded
 
 
-def mean_batched(values: torch.Tensor, L_bs: torch.Tensor) -> torch.Tensor:
+def mean_padding_batched(
+    values: torch.Tensor, L_bs: torch.Tensor
+) -> torch.Tensor:
     """Calculate the mean per dimension for each sample in the batch.
 
     Args:
@@ -138,47 +140,7 @@ def mean_batched(values: torch.Tensor, L_bs: torch.Tensor) -> torch.Tensor:
     # fmt: on
 
 
-def min_batched(values: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-    """Calculate the minimum per dimension for each sample in the batch.
-
-    Args:
-        values: The values to calculate the minimum for. The values must be
-            padded with zeros for heterogenous batch sizes.
-            Shape: [B, max(L_b), *]
-        mask: A mask that indicates which values are valid in each sample.
-            Shape: [B, max(L_b)]
-
-    Returns:
-        The minimum value per dimension for each sample.
-            Shape: [B, *]
-    """
-    values_min = replace_padding_batched(
-        values, mask, padding_value=float("inf")
-    )
-    return torch.amin(values_min, dim=1)  # [B, *]
-
-
-def max_batched(values: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-    """Calculate the maximum per dimension for each sample in the batch.
-
-    Args:
-        values: The values to calculate the maximum for. The values must be
-            padded with zeros for heterogenous batch sizes.
-            Shape: [B, max(L_b), *]
-        mask: A mask that indicates which values are valid in each sample.
-            Shape: [B, max(L_b)]
-
-    Returns:
-        The maximum value per dimension for each sample.
-            Shape: [B, *]
-    """
-    values_max = replace_padding_batched(
-        values, mask, padding_value=float("-inf")
-    )
-    return torch.amax(values_max, dim=1)  # [B, *]
-
-
-def stddev_batched(
+def stddev_padding_batched(
     values: torch.Tensor, L_bs: torch.Tensor, mask: torch.Tensor
 ) -> torch.Tensor:
     """Calculate the standard dev. per dimension for each sample in the batch.
@@ -199,10 +161,89 @@ def stddev_batched(
         The standard deviation per dimension for each sample.
             Shape: [B, *]
     """
-    means = mean_batched(values, L_bs)  # [B, *]
+    means = mean_padding_batched(values, L_bs)  # [B, *]
     values_centered = values - means.unsqueeze(1)  # [B, max(L_b), *]
     replace_padding_batched(values_centered, mask, in_place=True)
-    return mean_batched(values_centered**2, L_bs).sqrt()  # [B, *]
+    return mean_padding_batched(values_centered**2, L_bs).sqrt()  # [B, *]
+
+
+def min_padding_batched(
+    values: torch.Tensor, mask: torch.Tensor
+) -> torch.Tensor:
+    """Calculate the minimum per dimension for each sample in the batch.
+
+    Args:
+        values: The values to calculate the minimum for. The values must be
+            padded (doesn't matter with what) for heterogenous batch sizes.
+            Shape: [B, max(L_b), *]
+        mask: A mask that indicates which values are valid in each sample.
+            Shape: [B, max(L_b)]
+
+    Returns:
+        The minimum value per dimension for each sample.
+            Shape: [B, *]
+    """
+    values_min = replace_padding_batched(
+        values, mask, padding_value=float("inf")
+    )
+    return torch.amin(values_min, dim=1)  # [B, *]
+
+
+def max_padding_batched(
+    values: torch.Tensor, mask: torch.Tensor
+) -> torch.Tensor:
+    """Calculate the maximum per dimension for each sample in the batch.
+
+    Args:
+        values: The values to calculate the maximum for. The values must be
+            padded (doesn't matter with what) for heterogenous batch sizes.
+            Shape: [B, max(L_b), *]
+        mask: A mask that indicates which values are valid in each sample.
+            Shape: [B, max(L_b)]
+
+    Returns:
+        The maximum value per dimension for each sample.
+            Shape: [B, *]
+    """
+    values_max = replace_padding_batched(
+        values, mask, padding_value=float("-inf")
+    )
+    return torch.amax(values_max, dim=1)  # [B, *]
+
+
+def sample_unique_batched(
+    L_bs: torch.Tensor, max_L_b: int, num_samples: int
+) -> torch.Tensor:
+    """Sample unique indices i in [0, L_b-1] for each element in the batch.
+
+    Warning: If the number of valid values in an element is less than the
+    number of samples, then only the first L_b indices are unique. The
+    remaining indices are sampled with replacement.
+
+    Args:
+        L_bs: The number of valid values for each element in the batch.
+            Shape: [B]
+        max_L_b: The maximum number of values of any element in the batch.
+        num_samples: The number of indices to sample for each element in the
+            batch.
+
+    Returns:
+        The sampled unique indices.
+            Shape: [B, num_samples]
+    """
+    # Select unique elements for each sample in the batch.
+    # If the number of elements is less than the number of samples, we
+    # uniformly# sample with replacement. To do this, the
+    # .clamp(min=num_samples) and % L_b operations are used.
+    weights = mask_padding_batched(
+        L_bs.clamp(min=num_samples), max_L_b
+    ).float()  # [B, max(L_b)]
+    # fmt: off
+    return (
+        torch.multinomial(weights, num_samples, replacement=False)
+        % L_bs.unsqueeze(1)
+    )  # [B, num_samples]
+    # fmt: on
 
 
 def sample_unique_pairs_batched(
@@ -215,11 +256,10 @@ def sample_unique_pairs_batched(
     unique. The remaining pairs are sampled with replacement.
 
     Args:
-        L_bs: The number of valid values in each element.
+        L_bs: The number of valid values for each element in the batch.
             Shape: [B]
-        max_L_b: The maximum number of values of any element in the batch.
-        num_samples: The number of pairs to sample for each element in the
-            batch.
+        max_L_b: The maximum number of valid values.
+        num_samples: The number of pairs to sample.
 
     Returns:
         The sampled unique pairs of indices.
@@ -229,20 +269,12 @@ def sample_unique_pairs_batched(
 
     # Compute the number of unique pairs of indices.
     P_bs = L_bs * (L_bs - 1) // 2  # [B]
+    max_P_b = max_L_b * (max_L_b - 1) // 2
 
-    # Select unique pairs of lines for each sample in the batch.
-    # If the number of pairs is less than the number of iterations, we
-    # uniformly sample with replacement. To do this, the .clamp(min=I) and
-    # % P_bs operations are used.
-    weights = mask_batched(
-        P_bs.clamp(min=num_samples), max_L_b
-    ).float()  # [B, max(L_b)]
-    # fmt: off
-    idcs_pairs = (
-        torch.multinomial(weights, num_samples, replacement=False)
-        % P_bs.unsqueeze(1)
+    # Select unique pairs of elements for each sample in the batch.
+    idcs_pairs = sample_unique_batched(
+        P_bs, max_P_b, num_samples
     )  # [B, num_samples]
-    # fmt: on
 
     # Convert the pair indices to element indices.
     # torch.triu_indices() returns the indices in the wrong order, e.g.:

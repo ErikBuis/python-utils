@@ -93,17 +93,18 @@ def ransac_batched(
         if not is_running.any():
             break
         samples_running = arange_B[is_running]  # [R]
-        r_running = r[samples_running]  # [R, max(L_r)]
-        theta_running = theta[samples_running]  # [R, max(L_r)]
+        R = len(samples_running)
+        arange_R = torch.arange(R, device=device)  # [R]
         L_rs = L_bs[samples_running]  # [R]
+        max_L_r = int(L_rs.max())
         P_rs = P_bs[samples_running]  # [R]
+        r_running = r[samples_running, :max_L_r]  # [R, max(L_r)]
+        theta_running = theta[samples_running, :max_L_r]  # [R, max(L_r)]
         idcs_random_running = idcs_random[samples_running]  # [R, I, 2]
         best_num_inliers_running = best_num_inliers[samples_running]  # [R]
         max_iterations_running = max_iterations[samples_running]  # [R]
         inlier_threshold_running = inlier_threshold[samples_running]  # [R]
         min_inliers_running = min_inliers[samples_running]  # [R]
-        R, max_L_r = r_running.shape
-        arange_R = torch.arange(R, device=device)  # [R]
 
         # Randomly select two lines.
         idcs_random_i = idcs_random_running[:, i, :]  # [R, 2]

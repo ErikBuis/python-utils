@@ -1,13 +1,13 @@
 # Mamba
-[Mamba](https://mamba.readthedocs.io/en/latest/) is a (much) faster and smaller drop-in replacement for the popular [Conda](https://docs.conda.io/en/latest/) package manager. We recommend using Mamba to install the required Python modules, since it uses the exact same command syntax as Conda with the added benefit of being more efficient.
+[Mamba](https://mamba.readthedocs.io/en/latest/) is a (much) faster and smaller drop-in replacement for the popular [Conda](https://docs.conda.io/en/latest/) package manager. We recommend using Mamba to install the required Python modules, since it uses the exact same command syntax as Conda with the added benefit of being more efficient. Note that while you can still use `conda` commands after installing Mamba, you should opt for using the `mamba` variants.
 
 # Installation
-The guide at [this link](https://mamba.readthedocs.io/en/latest/installation/mamba-installation.html) describes how to install Mamba, but for your convenience we have put the necessary commands below. Start by running the following commands in your terminal:
+The guide at [this link](https://mamba.readthedocs.io/en/latest/installation/mamba-installation.html) describes how to ***install Mamba***, but for your convenience we have put the necessary commands below. Start by running the following commands in your terminal:
 ```bash
 wget "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh"
 bash Miniforge3-$(uname)-$(uname -m).sh
 ```
-Then, restart your shell. We recommend entering `conda config --set auto_activate_base false` (yes, start the command with `conda`) if you do not want Conda/Mamba to activate the base environment every time you start a terminal window.
+Then, ***restart your shell***. We recommend entering `conda config --set auto_activate_base false` (yes, start the command with `conda`) if you do not want Conda/Mamba to activate the base environment every time you start a terminal window.
 
 # Usage
 Mamba commands do not differ in a significant way from their Conda equivalents. Below are a few examples of frequently used commands:
@@ -79,7 +79,7 @@ dependencies:
 ```
 
 # Extras
-The following parts of the tutorial are totally optional and only for those who want to further customize their Mamba environment. If you are not interested in this, you are now done with the installation process. Enjoy your Mamba package manager!
+The following parts of the tutorial are totally optional and only for those who want to further customize their Mamba environment. If you are not interested in this, you are now done with the installation process. Enjoy the Mamba package manager!
 
 ## IPython autoreload
 When testing stuff in IPython, it can be useful to have IPython automatically reload modules when they change. To enable this, you should edit your config file. First, generate a default config file by running:

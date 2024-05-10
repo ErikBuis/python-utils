@@ -22,6 +22,57 @@ SortOnlyDim = NamedTuple(
 )
 
 
+def cumsum_start_0(
+    t: torch.Tensor,
+    dim: int | None = None,
+    dtype: torch.dtype | None = None,
+    out: torch.Tensor | None = None,
+) -> torch.Tensor:
+    """Like torch.cumsum, but adds a zero at the start of the tensor.
+
+    Args:
+        a: Input tensor.
+            Shape: [N_1, ..., N_dim, ..., N_D]
+        dim: Dimension along which the cumulative sum is computed. The default
+            (None) is to compute the cumsum over the flattened tensor.
+        dtype: Type of the returned tensor and of the accumulator in which the
+            elements are summed. If dtype is not specified, it defaults to the
+            dtype of a.
+        out: Alternative output tensor in which to place the result. It must
+            have the same shape and buffer length as the expected output but
+            the type will be cast if necessary.
+            Shape: [N_1, ..., N_dim + 1, ..., N_D]
+
+    Returns:
+        A new tensor holding the result returned unless out is specified, in
+        which case a reference to out is returned. The result has the same
+        size as a except along the axis dimension where the size is one more.
+            Shape: [N_1, ..., N_dim + 1, ..., N_D]
+    """
+    device = t.device
+
+    if dim is None:
+        t = t.flatten()
+        dim = 0
+
+    if dtype is None:
+        dtype = t.dtype
+
+    if out is not None:
+        idx = [slice(None)] * t.ndim
+        idx[dim] = 0  # type: ignore
+        out[tuple(idx)] = 0
+        idx[dim] = slice(1, None)
+        torch.cumsum(t, dim=dim, dtype=dtype, out=out[tuple(idx)])
+        return out
+
+    shape = list(t.shape)
+    shape[dim] = 1
+    zeros = torch.zeros(shape, dtype=dtype, device=device)
+    cumsum = torch.cumsum(t, dim=dim, dtype=dtype)
+    return torch.concatenate([zeros, cumsum], dim=dim)
+
+
 def to_tensor(
     object: object,
     dtype: torch.dtype | None = None,
@@ -339,9 +390,9 @@ def unique_with_backmap(
         - The unique elements.
             Shape: [N_1, ..., N_dim-1, N_unique, N_dim+1, ..., N_D]
         - The back map as an indexing object, which maps the original input
-            back to the unique values. The first counts[0] indices correspond
-            to the first unique value, the next counts[1] indices correspond
-            to the second unique value, etc.
+            to the unique values. The first counts[0] indices in backmap[dim]
+            correspond to the first unique value, the next counts[1] indices
+            correspond to the second unique value, etc.
             Note: The element at index dim is always a Tensor.
             Length: D
             Shape of inner Tensor objects: [N_dim]
@@ -356,8 +407,9 @@ def unique_with_backmap(
         >>> # 1D example: -----------------------------------------------------
         >>> x = torch.tensor([9, 10, 9, 9, 10, 9])
         >>> dim = 0
+
         >>> uniques, backmap, inverse, counts = unique_with_backmap(
-        >>>     x, return_inverse=True, return_counts=True, dim=0
+        >>>     x, return_inverse=True, return_counts=True, dim=dim
         >>> )
         >>> uniques
         tensor([9, 10])
@@ -372,13 +424,9 @@ def unique_with_backmap(
         >>> x[backmap]
         tensor([9, 9, 9, 9, 10, 10])
 
-        >>> # Get all indices of the first unique value:
-        >>> backmap[dim][:counts[0]]
-        tensor([0, 2, 3, 5])
-
-        >>> # Get all indices of the i'th unique value (for i > 0):
-        >>> cumcounts = counts.cumsum(dim=0)
-        >>> get_idcs = lambda i: backmap[dim][cumcounts[i - 1] : cumcounts[i]]
+        >>> # Get all indices of the i'th unique value:
+        >>> cumcounts = cumsum_start_0(counts)
+        >>> get_idcs = lambda i: backmap[dim][cumcounts[i] : cumcounts[i + 1]]
         >>> get_idcs(1)
         tensor([1, 4])
 
@@ -390,6 +438,7 @@ def unique_with_backmap(
         >>>     [7, 7, 9, 7],
         >>> ])
         >>> dim = 1
+
         >>> uniques, backmap, inverse, counts = unique_with_backmap(
         >>>     x, return_inverse=True, return_counts=True, dim=dim
         >>> )
@@ -412,13 +461,9 @@ def unique_with_backmap(
                 [9, 8, 8, 7],
                 [9, 7, 7, 7]])
 
-        >>> # Get all indices of the first unique value:
-        >>> backmap[dim][:counts[0]]
-        tensor([2])
-
-        >>> # Get all indices of the i'th unique value (for i > 0):
-        >>> cumcounts = counts.cumsum(dim=0)
-        >>> get_idcs = lambda i: backmap[dim][cumcounts[i - 1] : cumcounts[i]]
+        >>> # Get all indices of the i'th unique value:
+        >>> cumcounts = cumsum_start_0(counts)
+        >>> get_idcs = lambda i: backmap[dim][cumcounts[i] : cumcounts[i + 1]]
         >>> get_idcs(1)
         tensor([0, 3])
 
@@ -428,6 +473,7 @@ def unique_with_backmap(
         >>>     [[4, 8, 2, 8], [3, 7, 3, 7], [0, 1, 2, 1]],
         >>> ])
         >>> dim = 2
+
         >>> uniques, backmap, inverse, counts = unique_with_backmap(
         >>>     x, return_inverse=True, return_counts=True, dim=dim
         >>> )
@@ -456,13 +502,9 @@ def unique_with_backmap(
                  [3, 3, 7, 7],
                  [0, 2, 1, 1]]])
 
-        >>> # Get all indices of the first unique value:
-        >>> backmap[dim][:counts[0]]
-        tensor([0])
-
-        >>> # Get all indices of the i'th unique value (for i > 0):
-        >>> cumcounts = counts.cumsum(dim=0)
-        >>> get_idcs = lambda i: backmap[dim][cumcounts[i - 1] : cumcounts[i]]
+        >>> # Get all indices of the i'th unique value:
+        >>> cumcounts = cumsum_start_0(counts)
+        >>> get_idcs = lambda i: backmap[dim][cumcounts[i] : cumcounts[i + 1]]
         >>> get_idcs(1)
         tensor([2])
     """

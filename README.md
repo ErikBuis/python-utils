@@ -5,7 +5,7 @@
 
 
 # Utility functions
-This repository contains utility functions that are meant to be fully reusable between different projects. The functions are organized by the Python module they correlate most with. Additionally, the care has been taken to separate the functionality of all functions from other files or functions, so you can safely copy-paste a single file into your project. Despite our best efforts however, this was not viable everywhere, as some functions must call others to function correctly. In these cases, you may have to copy-paste the dependency files as well.
+This repository contains utility functions that are meant to be fully reusable between different projects. The functions are organized by the Python module they correlate most with. Additionally, the care has been taken to separate the functionality of all files from other files, so you can safely copy-paste a single file into your project. Despite our best efforts however, this was not viable everywhere, as some functions must call specific others to function correctly. In these cases, you may have to copy-paste the dependency files as well.
 
 
 ## Project Structure

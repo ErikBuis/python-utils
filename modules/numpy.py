@@ -14,6 +14,57 @@ class NDArrayGeneric(np.ndarray, Generic[T]):
         return super().__getitem__(key)  # type: ignore
 
 
+def cumsum_start_0(
+    a: npt.ArrayLike,
+    axis: int | None = None,
+    dtype: np.dtype | None = None,
+    out: npt.NDArray | None = None,
+) -> npt.NDArray:
+    """Like np.cumsum, but adds a zero at the start of the array.
+
+    Args:
+        a: Input array.
+            Shape: [N_1, ..., N_axis, ..., N_D]
+        axis: Axis along which the cumulative sum is computed. The default
+            (None) is to compute the cumsum over the flattened array.
+        dtype: Type of the returned array and of the accumulator in which the
+            elements are summed. If dtype is not specified, it defaults to the
+            dtype of a.
+        out: Alternative output array in which to place the result. It must
+            have the same shape and buffer length as the expected output but
+            the type will be cast if necessary.
+            Shape: [N_1, ..., N_axis + 1, ..., N_D]
+
+    Returns:
+        A new array holding the result returned unless out is specified, in
+        which case a reference to out is returned. The result has the same
+        size as a except along the axis dimension where the size is one more.
+            Shape: [N_1, ..., N_axis + 1, ..., N_D]
+    """
+    a = np.array(a)
+
+    if axis is None:
+        a = a.flatten()
+        axis = 0
+
+    if dtype is None:
+        dtype = a.dtype
+
+    if out is not None:
+        idx = [slice(None)] * a.ndim
+        idx[axis] = 0  # type: ignore
+        out[tuple(idx)] = 0
+        idx[axis] = slice(1, None)
+        np.cumsum(a, axis=axis, dtype=dtype, out=out[tuple(idx)])
+        return out
+
+    shape = list(a.shape)
+    shape[axis] = 1
+    zeros = np.zeros(shape, dtype=dtype)
+    cumsum = np.cumsum(a, axis=axis, dtype=dtype)
+    return np.concatenate([zeros, cumsum], axis=axis)
+
+
 def pad_sequence(
     sequences: list[npt.ArrayLike],
     batch_first: bool = False,

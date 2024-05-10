@@ -6,7 +6,7 @@ from modules.pytorch3d import get_matrix_rotate_vec_a_to_vec_b
 
 
 class TestGetMatrixRotateVecAToVecB(unittest.TestCase):
-    DTYPE = torch.float32  # for torch.float64, the atol 1e-6 is unnecessary
+    DTYPE = torch.float64  # for torch.float64, the atol 1e-6 is unnecessary
     ITERATIONS = 100
 
     def __generate_random_unit_vec(self) -> torch.Tensor:

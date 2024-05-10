@@ -10,8 +10,8 @@ CUDA is a parallel computing platform and application programming interface (API
 
 # Installation
 To install WSL and CUDA on Windows, follow the steps below:
-1. First download and install the appropriate NVIDIA driver for GPU support from [here](https://www.nvidia.com/Download/index.aspx). You can view your GPU's name by going to the Task Manager app and opening the `Performance > GPU` panel. Note that you must only install this driver and only on Windows. Do not install any Linux drivers after installing WSL, because this will overwrite the WSL NVIDIA driver.
-2. Now install WSL. For future reference, this part of the tutorial is based on [this](https://docs.microsoft.com/en-us/windows/wsl/install) webpage (you don't have to look at this page unless the below commands fail to execute). Start by opening the Windows PowerShell and enter:
+1. First ***update your NVIDIA driver*** if it is not on the latest version already. Note that you most likely already have the most up-to-date drivers installed if you update your system regularly, so in most cases you won't have to do anything! If you want to be sure you have the latest driver, you should download and install the appropriate GPU driver from [here](https://www.nvidia.com/Download/index.aspx). You can view your GPU's name by going to the Task Manager app and opening the `Performance > GPU` panel. Note that you must only install this driver and only on Windows. Do not install any Linux drivers after installing WSL, because this will overwrite the WSL NVIDIA driver!
+2. Now ***install WSL***. For future reference, this part of the tutorial is based on [this](https://docs.microsoft.com/en-us/windows/wsl/install) webpage (you don't have to look at this page unless the below commands fail to execute). Start by opening the Windows PowerShell and enter:
     ```powershell
     wsl --status
     ```
@@ -19,7 +19,7 @@ To install WSL and CUDA on Windows, follow the steps below:
     ```powershell
     wsl --install --no-distribution
     ```
-    Now reboot the system for changes to take effect. After rebooting, we recommend installing the latest version of Ubuntu, which is Ubuntu 22.04 LTS at the time of writing. Of course, feel free to install another distribution from the list of distributions seen in `wsl --list --online`.
+    Now ***reboot the system*** for changes to take effect. After rebooting, we recommend installing the latest version of Ubuntu, which is Ubuntu 22.04 LTS at the time of writing. Of course, feel free to install another distribution from the list of distributions seen in `wsl --list --online`.
     ```powershell
     wsl --install --distribution Ubuntu-22.04
     ```
@@ -32,11 +32,11 @@ To install WSL and CUDA on Windows, follow the steps below:
       NAME            STATE           VERSION
     * Ubuntu-22.04    Stopped         2
     ```
-    Finally, open a Bash terminal by opening the newly installed WSL app and typing to make the system fully up-to-date.
+    Finally, open a Bash terminal by entering `wsl` in a PowerShell window and typing the following to make the system fully up-to-date.
     ```bash
     sudo apt update && sudo apt upgrade
     ```
-3. If we would install the CUDA toolkit via Linux's `apt` command, we would install the Linux NVIDIA drivers which would overwrite the WSL ones. Thus, do NOT install any packages named `cuda`, `cuda-12-x`, or `cuda-drivers` as these packages will overwrite the WSL NVIDIA driver under WSL 2. Instead, we are going to install the `cuda-toolkit-12-x` metapackage only by using [this](https://developer.nvidia.com/cuda-downloads) download chooser utility. On the webpage, select `Linux > x86_64 > WSL-Ubuntu > 2.0 > deb (local)`. The website then suggests a sequence of commands to execute, which at the time of writing are:
+3. If we would install the CUDA toolkit via Linux's `apt` command, we would install the Linux NVIDIA drivers which would overwrite the WSL ones. Thus, do **NOT** install any packages named `cuda`, `cuda-12-x`, `cuda-drivers`, or `cuda-utils-*` as these packages will overwrite the WSL NVIDIA driver under WSL 2. Instead, we are going to ***install the `cuda-toolkit-12-x` metapackage*** only by using [this](https://developer.nvidia.com/cuda-downloads) download chooser utility. On the webpage, select `Linux > x86_64 > WSL-Ubuntu > 2.0 > deb (local)`. The website then suggests a sequence of commands to execute, which at the time of writing are:
     ```bash
     wget https://developer.download.nvidia.com/compute/cuda/repos/wsl-ubuntu/x86_64/cuda-wsl-ubuntu.pin
     sudo mv cuda-wsl-ubuntu.pin /etc/apt/preferences.d/cuda-repository-pin-600
@@ -47,13 +47,13 @@ To install WSL and CUDA on Windows, follow the steps below:
     sudo apt-get -y install cuda-toolkit-12-3
     ```
     After this, you can check if the installation was successful by running `nvidia-smi` in the WSL terminal. If you see a table with information about your GPU, the installation was successful.
-4. To prevent a rare bug with Cuda and get rid of the message `Error: libcuda.so: cannot open shared object file: No such file or directory` that you may have seen pop up a few times during the installation process, add the following lines to your `~/.bashrc` file:
+4. To ***prevent a rare Cuda bug*** and get rid of the message `Error: libcuda.so: cannot open shared object file: No such file or directory` that you may have seen pop up a few times during the installation process, add the following lines to your `~/.bashrc` file:
     ```bash
     # Fix for CUDA 'libcuda.so: cannot open shared object file' error.
     export LD_LIBRARY_PATH="/usr/lib/wsl/lib:$LD_LIBRARY_PATH"
     ```
     Then, restart the WSL terminal and enter `echo $LD_LIBRARY_PATH` to check if the variable has been set correctly.
-5. In order to be able to plot figures using matplotlib within WSL, you need to install an X server on Windows. We recommend using [VcXSrv](https://sourceforge.net/projects/vcxsrv/). After installing, open the program (it is called "XLaunch" in Windows) and make sure that the "Disable access control" box is checked. Then, add the following lines to your `~/.bashrc` file:
+5. In order to be able to plot figures using matplotlib within WSL, you need to ***install an X server*** on Windows. We recommend using [VcXSrv](https://sourceforge.net/projects/vcxsrv/). After installing, open the program (it is called "XLaunch" in Windows) and make sure that the "Disable access control" box is checked. Then, add the following lines to your `~/.bashrc` file:
     ```bash
     # Suppress warning from vcxsrv.exe in WSL.
     export XDG_RUNTIME_DIR=/tmp/vcxsrv
