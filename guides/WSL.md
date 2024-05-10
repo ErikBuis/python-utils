@@ -64,7 +64,6 @@ To install WSL and CUDA on Windows, follow the steps below:
 # Extras
 The following parts of the tutorial are totally optional and only for those who want to further customize their WSL environment. If you are not interested in this, you are now done with the installation process. Enjoy your CUDA-enabled WSL environment!
 
-
 ## Install Remote Development extension pack in VSCode
 If you are using Visual Studio Code and WSL, you can install the ["Remote Development"](https://aka.ms/vscode-remote/download/extension) extension pack to be able to open folders in the WSL file system.
 
@@ -76,26 +75,4 @@ if [ "$color_prompt" = yes ]; then
 else
     PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '
 fi
-```
-
-## IPython autoreload
-When testing stuff in IPython, it can be useful to have IPython automatically reload modules when they change. To enable this, you should edit your config file. First, generate a default config file by running:
-```bash
-ipython profile create
-```
-Then, open the file `~/.ipython/profile_default/ipython_config.py` and change the line
-```python
-# c.InteractiveShellApp.extensions = []
-```
-to
-```python
-c.InteractiveShellApp.extensions = ['autoreload']
-```
-and the line
-```python
-# c.InteractiveShellApp.exec_lines = []
-```
-to
-```python
-c.InteractiveShellApp.exec_lines = ['%autoreload 2']
 ```
