@@ -53,7 +53,7 @@ To install WSL and CUDA on Windows, follow the steps below:
     export LD_LIBRARY_PATH="/usr/lib/wsl/lib:$LD_LIBRARY_PATH"
     ```
     Then, restart the WSL terminal and enter `echo $LD_LIBRARY_PATH` to check if the variable has been set correctly.
-5. In order to be able to plot figures using matplotlib within WSL, you need to install an X server on Windows. We recommend using [VcXSrv](https://sourceforge.net/projects/vcxsrv/). After installing, open the program and make sure that the "Disable access control" box is checked. Then, add the following lines to your `~/.bashrc` file:
+5. In order to be able to plot figures using matplotlib within WSL, you need to install an X server on Windows. We recommend using [VcXSrv](https://sourceforge.net/projects/vcxsrv/). After installing, open the program (it is called "XLaunch" in Windows) and make sure that the "Disable access control" box is checked. Then, add the following lines to your `~/.bashrc` file:
     ```bash
     # Suppress warning from vcxsrv.exe in WSL.
     export XDG_RUNTIME_DIR=/tmp/vcxsrv
