@@ -50,7 +50,7 @@ To install WSL and CUDA on Windows, follow the steps below:
 4. To prevent a rare bug with Cuda and get rid of the message `Error: libcuda.so: cannot open shared object file: No such file or directory` that you may have seen pop up a few times during the installation process, add the following lines to your `~/.bashrc` file:
     ```bash
     # Fix for CUDA 'libcuda.so: cannot open shared object file' error.
-    export LD_LIBRARY_PATH=\"/usr/lib/wsl/lib:\$LD_LIBRARY_PATH\"
+    export LD_LIBRARY_PATH="/usr/lib/wsl/lib:$LD_LIBRARY_PATH"
     ```
     Then, restart the WSL terminal and enter `echo $LD_LIBRARY_PATH` to check if the variable has been set correctly.
 5. In order to be able to plot figures using matplotlib within WSL, you need to install an X server on Windows. We recommend using [VcXSrv](https://sourceforge.net/projects/vcxsrv/). After installing, open the program and make sure that the "Disable access control" box is checked. Then, add the following lines to your `~/.bashrc` file:
