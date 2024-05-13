@@ -7,7 +7,7 @@ from collections.abc import Callable
 from math import inf
 from typing import TypeVar
 
-import custom.cheatsheet as cheatsheet
+from ...custom import cheatsheet
 
 
 T = TypeVar("T")

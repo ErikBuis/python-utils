@@ -3,8 +3,8 @@ import time
 from typing import Any
 
 # TODO Is there a nice way to get rid of these dependencies?
-from modules.logging import is_logger_enabled
-from modules.math import pos_mod
+from .logging import is_logger_enabled
+from .math import pos_mod
 
 
 logger = logging.getLogger(__name__)

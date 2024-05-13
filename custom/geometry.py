@@ -95,7 +95,7 @@ from heapq import heapify, heappop
 from math import atan2, cos, inf, isinf, pi, sin, sqrt, tan
 from typing import Any, Literal, TypeVar, cast, overload
 
-from modules.bisect import bisect_right_using_left
+from ..modules.bisect import bisect_right_using_left
 
 
 # This alias is mainly meant for functions where multiple arguments or an

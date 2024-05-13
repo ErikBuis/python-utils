@@ -2,7 +2,7 @@ import geopandas as gpd
 import torch
 from shapely import Polygon
 
-from modules.scipy import voronoi_constrain_to_rect
+from ..modules.scipy import voronoi_constrain_to_rect
 
 
 def line_intersection_batched(

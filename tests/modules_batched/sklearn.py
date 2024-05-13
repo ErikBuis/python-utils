@@ -6,8 +6,8 @@ import matplotlib.axes
 import torch
 from matplotlib import pyplot as plt
 
-from modules.math import optimal_grid_layout, optimal_size
-from modules_batched.sklearn import ransac_batched
+from ...modules.math import optimal_grid_layout, optimal_size
+from ...modules_batched.sklearn import ransac_batched
 
 
 class TestRansacBatched(unittest.TestCase):

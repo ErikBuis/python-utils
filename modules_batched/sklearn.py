@@ -1,10 +1,10 @@
 import torch
 
-from custom_batched.geometry import (
+from ..custom_batched.geometry import (
     distance_line_to_point_batched,
     line_intersection_batched,
 )
-from modules_batched.torch import (
+from .torch import (
     pack_padded_batched,
     pad_packed_batched,
     sample_unique_pairs_batched,

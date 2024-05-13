@@ -6,7 +6,7 @@ import random
 import unittest
 from math import inf
 
-import custom.geometry as geometry
+from ...custom import geometry
 
 
 class TestMatrix2D(unittest.TestCase):

@@ -16,10 +16,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
 
-from modules.matplotlib import get_scalar_mappable_middle_white
-from modules.numpy import NDArrayGeneric
-from modules.pathlib import slugify
-from modules.timeit import measure_times
+from ...modules.matplotlib import get_scalar_mappable_middle_white
+from ...modules.numpy import NDArrayGeneric
+from ...modules.pathlib import slugify
+from ...modules.timeit import measure_times
 
 
 def plot_times(
