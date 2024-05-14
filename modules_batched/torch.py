@@ -61,8 +61,51 @@ def pad_packed_batched(
             padded_shape, padding_value, dtype=dtype, device=device
         )
     start = 0
-    for values_padded_i, L_b in zip(values_padded, L_bs):
-        values_padded_i[:L_b] = values[start : start + L_b]
+    for i, L_b in enumerate(L_bs):
+        values_padded[i, :L_b] = values[start : start + L_b]
+        start += L_b
+    return values_padded
+
+
+def pad_packed_multiple_batched(
+    values: torch.Tensor,
+    L_bs: torch.Tensor,
+    max_L_b: int,
+    padding_value: Any | None = 0,
+) -> torch.Tensor:
+    """Pad a batch of packed values to create a tensor with a fixed size.
+
+    Args:
+        values: The values to pad with zeros for heterogenous batch sizes.
+            Shape: [N, sum(L_b), *]
+        L_bs: The number of valid values in each sample.
+            Shape: [B]
+        max_L_b: The maximum number of values of any element in the batch.
+        padding_value: The value to pad the values with. If None, the values
+            are padded with random values. This is faster than padding with
+            a specific value.
+
+    Returns:
+        The values padded with zeros for heterogenous batch sizes.
+            Shape: [N, B, max(L_b), *]
+    """
+    dtype = values.dtype
+    device = values.device
+
+    padded_shape = (L_bs.shape[0], L_bs.shape[1], max_L_b, *values.shape[2:])
+    if padding_value is None:
+        values_padded = torch.empty(padded_shape, dtype=dtype, device=device)
+    elif padding_value == 0:
+        values_padded = torch.zeros(padded_shape, dtype=dtype, device=device)
+    elif padding_value == 1:
+        values_padded = torch.ones(padded_shape, dtype=dtype, device=device)
+    else:
+        values_padded = torch.full(
+            padded_shape, padding_value, dtype=dtype, device=device
+        )
+    start = 0
+    for i, L_b in enumerate(L_bs):
+        values_padded[:, i, :L_b] = values[:, start : start + L_b]
         start += L_b
     return values_padded
 

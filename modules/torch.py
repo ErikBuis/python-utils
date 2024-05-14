@@ -21,6 +21,9 @@ SortOnlyDim = NamedTuple(
     "SortOnlyDim", [("values", torch.Tensor), ("indices", torch.Tensor)]
 )
 
+# Indexing object for the output of unique_with_backmap().
+BackMap = tuple[slice | torch.Tensor, ...]
+
 
 def cumsum_start_0(
     t: torch.Tensor,
@@ -308,7 +311,7 @@ def unique_with_backmap(
     return_inverse: Literal[False] = False,
     return_counts: Literal[False] = False,
     dim: int | None = None,
-) -> tuple[torch.Tensor, list[slice | torch.Tensor]]:
+) -> tuple[torch.Tensor, BackMap]:
     # Overload for the case where:
     # - return_inverse is False
     # - return_counts is False
@@ -321,7 +324,7 @@ def unique_with_backmap(
     return_inverse: Literal[True] = True,
     return_counts: Literal[False] = False,
     dim: int | None = None,
-) -> tuple[torch.Tensor, list[slice | torch.Tensor], torch.Tensor]:
+) -> tuple[torch.Tensor, BackMap, torch.Tensor]:
     # Overload for the case where:
     # - return_inverse is True
     # - return_counts is False
@@ -334,7 +337,7 @@ def unique_with_backmap(
     return_inverse: Literal[False] = False,
     return_counts: Literal[True] = True,
     dim: int | None = None,
-) -> tuple[torch.Tensor, list[slice | torch.Tensor], torch.Tensor]:
+) -> tuple[torch.Tensor, BackMap, torch.Tensor]:
     # Overload for the case where:
     # - return_inverse is False
     # - return_counts is True
@@ -347,9 +350,7 @@ def unique_with_backmap(
     return_inverse: Literal[True] = True,
     return_counts: Literal[True] = True,
     dim: int | None = None,
-) -> tuple[
-    torch.Tensor, list[slice | torch.Tensor], torch.Tensor, torch.Tensor
-]:
+) -> tuple[torch.Tensor, BackMap, torch.Tensor, torch.Tensor]:
     # Overload for the case where:
     # - return_inverse is True
     # - return_counts is True
@@ -362,11 +363,9 @@ def unique_with_backmap(
     return_counts: bool = False,
     dim: int | None = None,
 ) -> (
-    tuple[torch.Tensor, list[slice | torch.Tensor]]
-    | tuple[torch.Tensor, list[slice | torch.Tensor], torch.Tensor]
-    | tuple[
-        torch.Tensor, list[slice | torch.Tensor], torch.Tensor, torch.Tensor
-    ]
+    tuple[torch.Tensor, BackMap]
+    | tuple[torch.Tensor, BackMap, torch.Tensor]
+    | tuple[torch.Tensor, BackMap, torch.Tensor, torch.Tensor]
 ):
     """Like torch.unique, but also returns a back map.
 
@@ -414,7 +413,7 @@ def unique_with_backmap(
         >>> uniques
         tensor([9, 10])
         >>> backmap
-        [torch.tensor([0, 2, 3, 5, 1, 4])]
+        (torch.tensor([0, 2, 3, 5, 1, 4]),)
         >>> inverse
         tensor([0, 1, 0, 0, 1, 0])
         >>> counts
@@ -448,7 +447,7 @@ def unique_with_backmap(
                 [9, 8, 7],
                 [9, 7, 7]])
         >>> backmap
-        [slice(None, None, None), tensor([2, 0, 3, 1])]
+        (slice(None, None, None), tensor([2, 0, 3, 1]))
         >>> inverse
         tensor([1, 2, 0, 1])
         >>> counts
@@ -485,9 +484,9 @@ def unique_with_backmap(
                  [3, 3, 7],
                  [0, 2, 1]]])
         >>> backmap
-        [slice(None, None, None),
+        (slice(None, None, None),
          slice(None, None, None),
-         tensor([0, 2, 1, 3])]
+         tensor([0, 2, 1, 3]))
         >>> inverse
         tensor([0, 2, 1, 2])
         >>> counts
@@ -532,10 +531,10 @@ def unique_with_backmap(
         backmap_along_dim_inv = swap_idcs_vals(backmap_along_dim)
         aux[0] = aux[0][backmap_along_dim_inv]
 
-    backmap = [
+    backmap = tuple(
         slice(None) if d != dim else backmap_along_dim
         for d in range(len(x.shape))
-    ]
+    )
 
     return unique, backmap, *aux
 
