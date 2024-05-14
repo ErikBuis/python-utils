@@ -64,15 +64,21 @@ def ransac_batched(
     device = theta.device
 
     if not isinstance(max_iterations, torch.Tensor):
-        max_iterations = torch.full((B,), max_iterations, dtype=torch.int64)
+        max_iterations = torch.full(
+            (B,), max_iterations, dtype=torch.int64, device=device
+        )
     elif max_iterations.dim() == 0:
         max_iterations = max_iterations.expand(B)
     if not isinstance(inlier_threshold, torch.Tensor):
-        inlier_threshold = torch.full((B,), inlier_threshold, dtype=dtype)
+        inlier_threshold = torch.full(
+            (B,), inlier_threshold, dtype=dtype, device=device
+        )
     elif inlier_threshold.dim() == 0:
         inlier_threshold = inlier_threshold.expand(B)
     if not isinstance(min_inliers, torch.Tensor):
-        min_inliers = torch.full((B,), min_inliers, dtype=torch.int64)
+        min_inliers = torch.full(
+            (B,), min_inliers, dtype=torch.int64, device=device
+        )
     elif min_inliers.dim() == 0:
         min_inliers = min_inliers.expand(B)
 
