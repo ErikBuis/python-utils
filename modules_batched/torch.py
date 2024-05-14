@@ -92,7 +92,7 @@ def pad_packed_multiple_batched(
     dtype = values.dtype
     device = values.device
 
-    padded_shape = (L_bs.shape[0], L_bs.shape[1], max_L_b, *values.shape[2:])
+    padded_shape = (len(values), len(L_bs), max_L_b, *values.shape[2:])
     if padding_value is None:
         values_padded = torch.empty(padded_shape, dtype=dtype, device=device)
     elif padding_value == 0:
