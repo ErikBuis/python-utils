@@ -232,8 +232,9 @@ def stop_timer(timer_id: int) -> None:
 
     Args:
         timer_id: The id of the timer to stop. This id is returned by
-            start_timer. If the timer has already been stopped, nothing will
-            happen. If the timer id is -1, nothing will happen.
+            start_timer. If the timer has already been stopped, we will log an
+            error event to the logger. If the timer id is -1, nothing will
+            happen.
     """
     if timer_id == -1:
         return
@@ -241,7 +242,11 @@ def stop_timer(timer_id: int) -> None:
     try:
         timer_config = __timers.pop(timer_id)
     except KeyError:
-        return  # we choose to silently ignore this error
+        logger.error(
+            f"Timer with id {timer_id} does not exist or has already been"
+            " stopped!"
+        )
+        return
     diff = stop_time - timer_config["start_time"]
 
     logger.log(

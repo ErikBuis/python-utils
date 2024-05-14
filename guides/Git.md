@@ -14,7 +14,7 @@ curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo 
 
 # Set up an SSH key
 If you want to clone a private GitHub repository to your local machine, you first have to make GitHub recognize and trust your PC as an authorized entity. To do this, you have to ***generate an SSH keypair and add to to GitHub***. To check if you have already created an SSH key previously, enter `ls -al ~/.ssh`. If you see the entry `id_ed25519.pub`, you can skip this step. Otherwise, please follow one of the following subsections:
-- If you set up GitHub CLI in the last step, please follow the section `Set up an SSH key using GitHub CLI`.
+- If you installed GitHub CLI in the last step, please follow the section `Set up an SSH key using GitHub CLI`.
 - If you did not set up GitHub CLI, you should follow `Set up an SSH key using Bash`.
 
 ## Set up an SSH key using GitHub CLI
