@@ -1,4 +1,6 @@
-from collections.abc import Iterator
+import itertools
+import operator
+from collections.abc import Iterable, Iterator
 from math import ceil, floor, gcd, sqrt
 from typing import TypeVar
 
@@ -46,6 +48,18 @@ def round_to_multiple(x: float, base: NumberT) -> NumberT:
         The rounded number.
     """
     return round(x / base) * base
+
+
+def cumprod(iterable: Iterable[NumberT]) -> Iterator[NumberT]:
+    """Calculate the cumulative product of an iterable.
+
+    Args:
+        iterable: The iterable to calculate the cumulative product of.
+
+    Yields:
+        The cumulative product of the iterable.
+    """
+    return itertools.accumulate(iterable, operator.mul)
 
 
 def extended_gcd(a: int, b: int) -> tuple[int, int, int]:
