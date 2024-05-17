@@ -233,8 +233,8 @@ def is_point_in_polygon_batched(
 
     Args:
         polygon: The polygon as a Shapely Polygon object.
-        points: The points to be checked for intersection with the polygon.
-            Shape: [B, 2]
+        points: The point(s) to be checked for intersection with the polygon.
+            Shape: [2] or [B, 2]
 
     Returns:
         A tensor of booleans. True if the point is in the polygon, False
