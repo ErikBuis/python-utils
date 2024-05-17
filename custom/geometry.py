@@ -465,14 +465,12 @@ class NumberSet:
 
     def __str__(self) -> str:
         """Represent the set as a string."""
-        # fmt: off
         return (
             self.__class__.__name__
             + "{"
             + ", ".join(map(str, self.components))
             + "}"
         )
-        # fmt: on
 
     def __bool__(self) -> bool:
         """Check if the set contains any numbers or intervals."""

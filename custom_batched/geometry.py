@@ -110,9 +110,9 @@ def is_point_in_bbox_batched(
         bounding box, False otherwise.
         Shape: [B]
     """
-    if bboxes.dim() == 1:
+    if bboxes.ndim == 1:
         bboxes = bboxes.unsqueeze(0)
-    if points.dim() == 1:
+    if points.ndim == 1:
         points = points.unsqueeze(0)
 
     return (
@@ -244,7 +244,7 @@ def is_point_in_polygon_batched(
     dtype = points.dtype
     device = points.device
 
-    if points.dim() == 1:
+    if points.ndim == 1:
         points = points.unsqueeze(0)
 
     exterior = torch.tensor(

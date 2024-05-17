@@ -67,19 +67,19 @@ def ransac_batched(
         max_iterations = torch.full(
             (B,), max_iterations, dtype=torch.int64, device=device
         )
-    elif max_iterations.dim() == 0:
+    elif max_iterations.ndim == 0:
         max_iterations = max_iterations.expand(B)
     if not isinstance(inlier_threshold, torch.Tensor):
         inlier_threshold = torch.full(
             (B,), inlier_threshold, dtype=dtype, device=device
         )
-    elif inlier_threshold.dim() == 0:
+    elif inlier_threshold.ndim == 0:
         inlier_threshold = inlier_threshold.expand(B)
     if not isinstance(min_inliers, torch.Tensor):
         min_inliers = torch.full(
             (B,), min_inliers, dtype=torch.int64, device=device
         )
-    elif min_inliers.dim() == 0:
+    elif min_inliers.ndim == 0:
         min_inliers = min_inliers.expand(B)
 
     I = int(max_iterations.max())

@@ -125,9 +125,9 @@ class ProjectToSurface(Transform3d):
         super().__init__(dtype=dtype, device=device_)
 
         # Perform error handling.
-        if surface.dim() == 1:
+        if surface.ndim == 1:
             self.surface = surface.unsqueeze(0)  # [1, 4]
-        if surface.shape[-1] != 4 or surface.dim() > 2:
+        if surface.shape[-1] != 4 or surface.ndim > 2:
             raise ValueError(
                 "surface must have shape [4] or [B, 4], but got"
                 f" {surface.shape}"
@@ -219,17 +219,17 @@ class SurfaceToSurface(Transform3d):
         super().__init__(dtype=dtype, device=device_)
 
         # Perform error handling.
-        if from_surface.dim() == 1:
+        if from_surface.ndim == 1:
             from_surface = from_surface.unsqueeze(0)  # [1, 4]
-        if from_surface.shape[-1] != 4 or from_surface.dim() > 2:
+        if from_surface.shape[-1] != 4 or from_surface.ndim > 2:
             raise ValueError(
                 "from_surface must have shape [4] or [B, 4], but got"
                 f" {from_surface.shape}"
             )
         from_surface = from_surface.to(dtype=dtype, device=device_)
-        if to_surface.dim() == 1:
+        if to_surface.ndim == 1:
             to_surface = to_surface.unsqueeze(0)  # [1, 4]
-        if to_surface.shape[-1] != 4 or to_surface.dim() > 2:
+        if to_surface.shape[-1] != 4 or to_surface.ndim > 2:
             raise ValueError(
                 "to_surface must have shape [4] or [B, 4], but got"
                 f" {to_surface.shape}"

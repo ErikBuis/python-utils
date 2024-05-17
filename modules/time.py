@@ -219,11 +219,16 @@ def start_timer(
     timer_id = 0
     while timer_id in __timers:
         timer_id += 1
-    __timers[timer_id] = {
+    timer = {
         "logging_level": logging_level,
         "msg": msg,
-        "start_time": time.perf_counter_ns(),
+        "start_time": None,
     }
+    __timers[timer_id] = timer
+
+    # Start as late as possible to minimize the time between the start and stop
+    # calls.
+    timer["start_time"] = time.perf_counter_ns()
     return timer_id
 
 
@@ -236,9 +241,13 @@ def stop_timer(timer_id: int) -> None:
             error event to the logger. If the timer id is -1, nothing will
             happen.
     """
+    # Stop as soon as possible to minimize the time between the start and stop
+    # calls.
+    stop_time = time.perf_counter_ns()
+
     if timer_id == -1:
         return
-    stop_time = time.perf_counter_ns()
+
     try:
         timer_config = __timers.pop(timer_id)
     except KeyError:
