@@ -130,5 +130,6 @@ def is_logger_enabled(logging_level: int) -> bool:
 
     raise ValueError(
         f"Invalid logging level: {logging_level}. Please choose one of"
-        " logging.DEBUG, logging.INFO, logging.WARNING, or logging.ERROR."
+        " logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR, or"
+        " logging.CRITICAL."
     )
