@@ -7,6 +7,7 @@ from typing import Any
 
 import pytorch_lightning as pl
 import pytorch_lightning.callbacks as pl_callbacks
+import pytorch_lightning.loggers as pl_loggers
 import torch
 
 
@@ -159,6 +160,21 @@ def load_best_model(
 
     # Hack the Trainer to think that we have just trained a model.
     trainer.checkpoint_callback.best_model_path = path
+
+    # Set the logger to the version that was used during training.
+    if isinstance(trainer.logger, pl_loggers.TensorBoardLogger):
+        # TODO Loop through all logger versions and determine which one was
+        # TODO used during training. This is a bit tricky, since the logger
+        # TODO version is not saved in the checkpoint.
+        # trainer.logger = pl_loggers.TensorBoardLogger(
+        #     save_dir=TODO,
+        #     name=TODO,
+        #     version=TODO,
+        #     default_hp_metric=(
+        #         trainer.logger._default_hp_metric,  # type: ignore
+        #     ),
+        # )
+        pass
 
     # Return the best model.
     return best_model
