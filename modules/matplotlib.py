@@ -41,13 +41,13 @@ def get_scalar_mappable(
 
     Returns:
         scalar_mappable: ScalarMappable color map for the coefficients.
-            Use scalar_mappable.get_cmap() to get the color map.
-            Use scalar_mappable.norm to get the norm.
-                The norm maps the range [vmin, vmax] to [0, 1].
-                To get vmin and vmax, use scalar_mappable.norm.vmin and
-                    scalar_mappable.norm.vmax respectively.
-                To map a value from the range [vmin, vmax] to [0, 1], use
-                    scalar_mappable.norm(value).
+        - Use scalar_mappable.cmap to get the color map.
+        - Use scalar_mappable.norm to get the norm.
+            The norm maps the range [vmin, vmax] to [0, 1].
+            To get vmin and vmax, use scalar_mappable.norm.vmin and
+                scalar_mappable.norm.vmax respectively.
+            To map a value from the range [vmin, vmax] to [0, 1], use
+                scalar_mappable.norm(value).
 
     Examples:
         >>> # The following example will create a mapping to the colors red,

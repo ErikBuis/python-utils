@@ -357,7 +357,7 @@ def optimal_grid_layout(
     min_cells = min(max_cols, max_rows)
     max_cells = max(max_cols, max_rows)
     for m in range(n, max_cols * max_rows + 1):
-        factors_m = list(factors(m))
+        factors_m = sorted(factors(m))
         for i in range((len(factors_m) - 1) // 2, -1, -1):
             f1 = factors_m[i]  # middle left factor
             f2 = n // f1  # middle right factor
