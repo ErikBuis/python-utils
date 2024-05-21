@@ -1,6 +1,29 @@
+from functools import cache
 from typing import Any
 
 import torch
+
+
+@cache
+def mask_padding_batched(L_bs: torch.Tensor, max_L_b: int) -> torch.Tensor:
+    """Create a mask that indicates which values are valid in each sample.
+
+    Args:
+        L_bs: The number of valid values in each sample.
+            Shape: [B]
+        max_L_b: The maximum number of values of any element in the batch.
+
+    Returns:
+        A mask that indicates which values are valid in each sample.
+            Shape: [B, max(L_b)]
+    """
+    dtype = L_bs.dtype
+    device = L_bs.device
+
+    return (
+        torch.arange(max_L_b, dtype=dtype, device=device)  # [max(L_b)]
+        < L_bs.unsqueeze(1)  # [B, 1]
+    )  # [B, max(L_b)]  # fmt: skip
 
 
 def pack_padded_batched(
@@ -68,30 +91,9 @@ def pad_packed_batched(
     return values_padded
 
 
-def mask_padding_batched(L_bs: torch.Tensor, max_L_b: int) -> torch.Tensor:
-    """Create a mask that indicates which values are valid in each sample.
-
-    Args:
-        L_bs: The number of valid values in each sample.
-            Shape: [B]
-        max_L_b: The maximum number of values of any element in the batch.
-
-    Returns:
-        A mask that indicates which values are valid in each sample.
-            Shape: [B, max(L_b)]
-    """
-    dtype = L_bs.dtype
-    device = L_bs.device
-
-    return (
-        torch.arange(max_L_b, dtype=dtype, device=device)  # [max(L_b)]
-        < L_bs.unsqueeze(1)  # [B, 1]
-    )  # [B, max(L_b)]  # fmt: skip
-
-
 def replace_padding_batched(
     values: torch.Tensor,
-    mask: torch.Tensor,
+    L_bs: torch.Tensor,
     padding_value: Any = 0,
     in_place: bool = False,
 ) -> torch.Tensor:
@@ -101,8 +103,8 @@ def replace_padding_batched(
         values: The values to pad with padding_value for heterogenous batch
             sizes. Will be modified in-place if in_place is True.
             Shape: [B, max(L_b), *]
-        mask: A mask that indicates which values are valid in each sample.
-            Shape: [B, max(L_b)]
+        L_bs: The number of valid values in each sample.
+            Shape: [B]
         padding_value: The value to pad the values with.
         in_place: Whether to perform the operation in-place.
 
@@ -110,16 +112,15 @@ def replace_padding_batched(
         The values padded with padding_value for heterogenous batch sizes.
             Shape: [B, max(L_b), *]
     """
+    max_L_b = values.shape[1]
+    mask = mask_padding_batched(L_bs, max_L_b)
     values_padded = values if in_place else values.clone()
     values_padded[~mask] = padding_value
     return values_padded
 
 
 def mean_padding_batched(
-    values: torch.Tensor,
-    L_bs: torch.Tensor,
-    is_padding_zero: bool = False,
-    mask: torch.Tensor | None = None,
+    values: torch.Tensor, L_bs: torch.Tensor, is_padding_zero: bool = False
 ) -> torch.Tensor:
     """Calculate the mean per dimension for each sample in the batch.
 
@@ -130,20 +131,13 @@ def mean_padding_batched(
         L_bs: The number of valid values in each sample.
             Shape: [B]
         is_padding_zero: Whether the values are padded with zeros already.
-        mask: A mask that indicates which values are valid in each sample.
-            Please provide this if you call multiple functions that need this
-            parameter in a row. This will save computation time.
-            Shape: [B, max(L_b)]
 
     Returns:
         The mean value per dimension for each sample.
             Shape: [B, *]
     """
     if not is_padding_zero:
-        if mask is None:
-            max_L_b = values.shape[1]
-            mask = mask_padding_batched(L_bs, max_L_b)
-        values = replace_padding_batched(values, mask)
+        values = replace_padding_batched(values, L_bs)
 
     return (
         torch.sum(values, dim=1)  # [B, *]
@@ -152,10 +146,7 @@ def mean_padding_batched(
 
 
 def stddev_padding_batched(
-    values: torch.Tensor,
-    L_bs: torch.Tensor,
-    is_padding_zero: bool = False,
-    mask: torch.Tensor | None = None,
+    values: torch.Tensor, L_bs: torch.Tensor, is_padding_zero: bool = False
 ) -> torch.Tensor:
     """Calculate the standard dev. per dimension for each sample in the batch.
 
@@ -169,32 +160,23 @@ def stddev_padding_batched(
         L_bs: The number of valid values in each sample.
             Shape: [B]
         is_padding_zero: Whether the values are padded with zeros already.
-        mask: A mask that indicates which values are valid in each sample.
-            Please provide this if you call multiple functions that need this
-            parameter in a row. This will save computation time.
-            Shape: [B, max(L_b)]
 
     Returns:
         The standard deviation per dimension for each sample.
             Shape: [B, *]
     """
-    if mask is None:
-        max_L_b = values.shape[1]
-        mask = mask_padding_batched(L_bs, max_L_b)
-
     means = mean_padding_batched(
-        values, L_bs, is_padding_zero=is_padding_zero, mask=mask
+        values, L_bs, is_padding_zero=is_padding_zero
     )  # [B, *]
     values_centered = values - means.unsqueeze(1)  # [B, max(L_b), *]
-    replace_padding_batched(values_centered, mask, in_place=True)
-    return mean_padding_batched(values_centered**2, L_bs).sqrt()  # [B, *]
+    replace_padding_batched(values_centered, L_bs, in_place=True)
+    return mean_padding_batched(
+        values_centered**2, L_bs, is_padding_zero=True
+    ).sqrt()  # [B, *]
 
 
 def min_padding_batched(
-    values: torch.Tensor,
-    L_bs: torch.Tensor,
-    is_padding_inf: bool = False,
-    mask: torch.Tensor | None = None,
+    values: torch.Tensor, L_bs: torch.Tensor, is_padding_inf: bool = False
 ) -> torch.Tensor:
     """Calculate the minimum per dimension for each sample in the batch.
 
@@ -205,20 +187,15 @@ def min_padding_batched(
         L_bs: The number of valid values in each sample.
             Shape: [B]
         is_padding_inf: Whether the values are padded with inf values already.
-        mask: A mask that indicates which values are valid in each sample.
-            Please provide this if you call multiple functions that need this
-            parameter in a row. This will save computation time.
-            Shape: [B, max(L_b)]
 
     Returns:
         The minimum value per dimension for each sample.
             Shape: [B, *]
     """
     if not is_padding_inf:
-        if mask is None:
-            max_L_b = values.shape[1]
-            mask = mask_padding_batched(L_bs, max_L_b)
-        values = replace_padding_batched(values, mask, float("inf"))
+        values = replace_padding_batched(
+            values, L_bs, padding_value=float("inf")
+        )
 
     return values.amin(dim=1)  # [B, *]
 
@@ -227,7 +204,6 @@ def max_padding_batched(
     values: torch.Tensor,
     L_bs: torch.Tensor,
     is_padding_minus_inf: bool = False,
-    mask: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Calculate the maximum per dimension for each sample in the batch.
 
@@ -239,20 +215,15 @@ def max_padding_batched(
             Shape: [B]
         is_padding_minus_inf: Whether the values are padded with -inf values
             already.
-        mask: A mask that indicates which values are valid in each sample.
-            Please provide this if you call multiple functions that need this
-            parameter in a row. This will save computation time.
-            Shape: [B, max(L_b)]
 
     Returns:
         The maximum value per dimension for each sample.
             Shape: [B, *]
     """
     if not is_padding_minus_inf:
-        if mask is None:
-            max_L_b = values.shape[1]
-            mask = mask_padding_batched(L_bs, max_L_b)
-        values = replace_padding_batched(values, mask, float("-inf"))
+        values = replace_padding_batched(
+            values, L_bs, padding_value=float("-inf")
+        )
 
     return values.amax(dim=1)  # [B, *]
 
