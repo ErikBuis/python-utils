@@ -26,7 +26,7 @@ def transform_2D_points(
 
     # Transform the points.
     points_3d = torch.concatenate(
-        (points, torch.zeros(padding_shape, device=device)), dim=-1
+        [points, torch.zeros(padding_shape, device=device)], dim=-1
     )  # [B, max(P_b), 3] or [P, 3]
     return transform.transform_points(points_3d)  # [B, max(P_b), 3] or [P, 3]
 
@@ -248,10 +248,10 @@ class SurfaceToSurface(Transform3d):
         # Calculate some intermediate values.
         from_n0, from_n1, from_n2, from_d = from_surface.unbind(-1)  # [B], ...
         to_n0, to_n1, to_n2, to_d = to_surface.unbind(-1)  # [B], ...
-        from_n = torch.stack([from_n0, from_n1, from_n2], dim=-1)  # [B, 3]
-        to_n = torch.stack([to_n0, to_n1, to_n2], dim=-1)  # [B, 3]
-        from_n = from_n / torch.norm(from_n, dim=-1, keepdim=True)  # [B, 3]
-        to_n = to_n / torch.norm(to_n, dim=-1, keepdim=True)  # [B, 3]
+        from_n = torch.stack([from_n0, from_n1, from_n2], dim=1)  # [B, 3]
+        to_n = torch.stack([to_n0, to_n1, to_n2], dim=1)  # [B, 3]
+        from_n = from_n / torch.norm(from_n, dim=1, keepdim=True)  # [B, 3]
+        to_n = to_n / torch.norm(to_n, dim=1, keepdim=True)  # [B, 3]
 
         # First translate the points from from_surface to the origin.
         # from_v is the point on from_surface closest to the origin.
