@@ -2,10 +2,6 @@ import logging
 import time
 from typing import Any
 
-# TODO Is there a nice way to get rid of these dependencies?
-from .logging import is_logger_enabled
-from .math import pos_mod
-
 
 logger = logging.getLogger(__name__)
 
@@ -108,18 +104,21 @@ def human_readable_time(
                 time_str = "1" + time_str
 
         # Determine the unit the time should be represented in.
-        if len(time_str) <= 3 and significant_digits >= pos_mod(
-            len(time_str), 3
+        if (
+            len(time_str) <= 3
+            and significant_digits >= (len(time_str) - 1) % 3 + 1
         ):
             unit = "ns" if abbreviate else "nanoseconds"
             factorof10 = 0
-        elif len(time_str) <= 6 and significant_digits >= pos_mod(
-            len(time_str) - 3, 3
+        elif (
+            len(time_str) <= 6
+            and significant_digits >= (len(time_str) - 4) % 3 + 1
         ):
             unit = "µs" if abbreviate else "microseconds"
             factorof10 = 3
-        elif len(time_str) <= 9 and significant_digits >= pos_mod(
-            len(time_str) - 6, 3
+        elif (
+            len(time_str) <= 9
+            and significant_digits >= (len(time_str) - 7) % 3 + 1
         ):
             unit = "ms" if abbreviate else "milliseconds"
             factorof10 = 6
@@ -202,28 +201,18 @@ def start_timer(
 
     Args:
         msg: The message to log.
-        logging_level: The logging level to use for the message. If the logger
-            is not enabled for this level, the timer will not be started and
-            -1 will be returned. This way, computation time is not wasted on
-            logging messages that will not be shown.
+        logging_level: The logging level to use for the message.
 
     Returns:
         The id of the timer. Pass this id to stop_timer to stop the timer.
     """
-    if not is_logger_enabled(logging_level):
-        return -1
-
     logger.log(logging_level, f"{msg}...")
 
     global __timers
     timer_id = 0
     while timer_id in __timers:
         timer_id += 1
-    timer = {
-        "logging_level": logging_level,
-        "msg": msg,
-        "start_time": None,
-    }
+    timer = {"logging_level": logging_level, "msg": msg, "start_time": None}
     __timers[timer_id] = timer
 
     # Start as late as possible to minimize the time between the start and stop
@@ -232,21 +221,21 @@ def start_timer(
     return timer_id
 
 
-def stop_timer(timer_id: int) -> None:
+def stop_timer(timer_id: int) -> int:
     """Stop a timer and log the time passed since start_timer was called.
 
     Args:
         timer_id: The id of the timer to stop. This id is returned by
             start_timer. If the timer has already been stopped, we will log an
-            error event to the logger. If the timer id is -1, nothing will
-            happen.
+            error event to the logger and return -1.
+
+    Returns:
+        The time passed since the corresponding call to start_timer in
+        nanoseconds. If the timer id does not exist, -1 will be returned.
     """
     # Stop as soon as possible to minimize the time between the start and stop
     # calls.
     stop_time = time.perf_counter_ns()
-
-    if timer_id == -1:
-        return
 
     try:
         timer_config = __timers.pop(timer_id)
@@ -255,10 +244,12 @@ def stop_timer(timer_id: int) -> None:
             f"Timer with id {timer_id} does not exist or has already been"
             " stopped!"
         )
-        return
+        return -1
     diff = stop_time - timer_config["start_time"]
 
     logger.log(
         timer_config["logging_level"],
         f"{timer_config['msg']} took {human_readable_time(diff)}",
     )
+
+    return diff

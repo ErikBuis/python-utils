@@ -1,3 +1,5 @@
+import itertools
+import operator
 import random
 import warnings
 from typing import Any, Callable, Literal, NamedTuple, overload
@@ -10,8 +12,6 @@ from torch.utils.data._utils.collate import (
     default_collate_fn_map,
 )
 from torch.utils.data.dataloader import default_collate
-
-from utils.modules.math import cumprod
 
 
 # Allow the dataset to return `None` when an example is corrupted. When it
@@ -330,7 +330,9 @@ def lexsort(
         maxs = torch.amax(keys, dim=dims_not_zero)  # [K]
         extents = maxs - mins + 1  # [K]
         # Python ints can't overflow, so we can safely do cumprod here.
-        extents_cumprod = list(cumprod(extents.tolist()))  # [K]
+        extents_cumprod = list(
+            itertools.accumulate(extents.tolist(), operator.mul)
+        )  # [K]
         if extents_cumprod[-1] <= 2**63 - 1:
             extents_cumprod = torch.tensor(
                 [1] + extents_cumprod[:-1], device=device, dtype=torch.int64
