@@ -461,7 +461,7 @@ def unique_consecutive(
     return_inverse: Literal[False] = False,
     return_counts: Literal[False] = False,
     dim: int | None = None,
-) -> tuple[torch.Tensor]:
+) -> torch.Tensor:
     # Overload for the case where:
     # - return_inverse is False
     # - return_counts is False
@@ -513,7 +513,7 @@ def unique_consecutive(
     return_counts: bool = False,
     dim: int | None = None,
 ) -> (
-    tuple[torch.Tensor]
+    torch.Tensor
     | tuple[torch.Tensor, torch.Tensor]
     | tuple[torch.Tensor, torch.Tensor, torch.Tensor]
 ):
@@ -652,7 +652,10 @@ def unique_consecutive(
         )  # [N_unique]
         aux.append(counts)
 
-    return unique, *aux
+    if aux:
+        return unique, *aux
+    else:
+        return unique
 
 
 @overload
@@ -661,7 +664,7 @@ def unique(
     return_inverse: Literal[False] = False,
     return_counts: Literal[False] = False,
     dim: int | None = None,
-) -> tuple[torch.Tensor]:
+) -> torch.Tensor:
     # Overload for the case where:
     # - return_inverse is False
     # - return_counts is False
@@ -713,7 +716,7 @@ def unique(
     return_counts: bool = False,
     dim: int | None = None,
 ) -> (
-    tuple[torch.Tensor]
+    torch.Tensor
     | tuple[torch.Tensor, torch.Tensor]
     | tuple[torch.Tensor, torch.Tensor, torch.Tensor]
 ):
@@ -815,12 +818,17 @@ def unique(
     # sort the other dimensions as well.
     x_sorted, backmap_along_dim = lexsort_along(x, dim=dim)
 
-    unique, *aux = unique_consecutive(
+    out = unique_consecutive(
         x_sorted,
         return_inverse=return_inverse,  # type: ignore
         return_counts=return_counts,  # type: ignore
         dim=dim,
     )
+    if isinstance(out, tuple):
+        unique, *aux = out
+    else:
+        unique = out
+        aux = []
 
     if return_inverse:
         # The backmap wasn't taken into account by unique_consecutive(), so we
@@ -828,7 +836,10 @@ def unique(
         backmap_along_dim_inv = swap_idcs_vals(backmap_along_dim)
         aux[0] = aux[0][backmap_along_dim_inv]
 
-    return unique, *aux
+    if aux:
+        return unique, *aux
+    else:
+        return unique
 
 
 @overload
@@ -1044,12 +1055,17 @@ def unique_with_backmap(
     # sort the other dimensions as well.
     x_sorted, backmap_along_dim = lexsort_along(x, dim=dim)
 
-    unique, *aux = unique_consecutive(
+    out = unique_consecutive(
         x_sorted,
         return_inverse=return_inverse,  # type: ignore
         return_counts=return_counts,  # type: ignore
         dim=dim,
     )
+    if isinstance(out, tuple):
+        unique, *aux = out
+    else:
+        unique = out
+        aux = []
 
     if return_inverse:
         # The backmap wasn't taken into account by unique_consecutive(), so we
@@ -1063,6 +1079,19 @@ def unique_with_backmap(
     )
 
     return unique, backmap, *aux
+
+
+@overload
+def unique_with_backmap_naive(
+    x: torch.Tensor,
+    return_inverse: Literal[False] = False,
+    return_counts: Literal[False] = False,
+    dim: int | None = None,
+) -> tuple[torch.Tensor, BackMap]:
+    # Overload for the case where:
+    # - return_inverse is False
+    # - return_counts is False
+    ...
 
 
 @overload
@@ -1120,12 +1149,17 @@ def unique_with_backmap_naive(
             " explicitly."
         )
 
-    unique_, *aux = unique(
+    out = unique(
         x,
         return_inverse=True,
         return_counts=return_counts,  # type: ignore
         dim=dim,
     )
+    if isinstance(out, tuple):
+        unique_, *aux = out
+    else:
+        unique_ = out
+        aux = []
     backmap_along_dim = swap_idcs_vals_duplicates(aux[0])
 
     backmap = tuple(
