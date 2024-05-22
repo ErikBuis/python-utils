@@ -176,7 +176,7 @@ def stddev_padding_batched(
 
 
 def min_padding_batched(
-    values: torch.Tensor, L_bs: torch.Tensor, is_padding_ge_min: bool = False
+    values: torch.Tensor, L_bs: torch.Tensor, is_padding_inf: bool = False
 ) -> torch.Tensor:
     """Calculate the minimum per dimension for each sample in the batch.
 
@@ -186,14 +186,14 @@ def min_padding_batched(
             Shape: [B, max(L_b), *]
         L_bs: The number of valid values in each sample.
             Shape: [B]
-        is_padding_ge_min: Whether the values are padded with values
-            >= min(values) already.
+        is_padding_inf: Whether the values are padded with inf values already.
+            already.
 
     Returns:
         The minimum value per dimension for each sample.
             Shape: [B, *]
     """
-    if not is_padding_ge_min:
+    if not is_padding_inf:
         values = replace_padding_batched(
             values, L_bs, padding_value=float("inf")
         )
@@ -202,7 +202,9 @@ def min_padding_batched(
 
 
 def max_padding_batched(
-    values: torch.Tensor, L_bs: torch.Tensor, is_padding_le_max: bool = False
+    values: torch.Tensor,
+    L_bs: torch.Tensor,
+    is_padding_minus_inf: bool = False,
 ) -> torch.Tensor:
     """Calculate the maximum per dimension for each sample in the batch.
 
@@ -212,50 +214,19 @@ def max_padding_batched(
             Shape: [B, max(L_b), *]
         L_bs: The number of valid values in each sample.
             Shape: [B]
-        is_padding_lt_max: Whether the values are padded with values
-            <= max(values) already.
+        is_padding_minus_inf: Whether the values are padded with -inf values
+            already.
 
     Returns:
         The maximum value per dimension for each sample.
             Shape: [B, *]
     """
-    if not is_padding_le_max:
+    if not is_padding_minus_inf:
         values = replace_padding_batched(
             values, L_bs, padding_value=float("-inf")
         )
 
     return values.amax(dim=1)  # [B, *]
-
-
-def minmax_padding_batched(
-    values: torch.Tensor,
-    L_bs: torch.Tensor,
-    is_padding_between_minmax: bool = False,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """Calculate the min and max per dimension for each sample in the batch.
-
-    Args:
-        values: The values to calculate the minimum and maximum for. The values
-            must be padded for heterogenous batch sizes.
-            Shape: [B, max(L_b), *]
-        L_bs: The number of valid values in each sample.
-            Shape: [B]
-        is_padding_between_minmax: Whether the values are padded with values
-            in the interval [min(values), max(values)] already.
-
-    Returns:
-        Tuple containing:
-        - The minimum value per dimension for each sample.
-            Shape: [B, *]
-        - The maximum value per dimension for each sample.
-            Shape: [B, *]
-    """
-    if not is_padding_between_minmax:
-        values = replace_padding_batched(
-            values, L_bs, padding_value=values[(0,) * values.ndim]
-        )
-
-    return values.aminmax(dim=1)  # [B, 2, *]
 
 
 def sample_unique_batched(
