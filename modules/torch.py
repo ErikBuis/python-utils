@@ -933,7 +933,7 @@ def unique_with_backmap(
             correspond to the second unique value, etc.
             Note: The element at index dim is always a Tensor.
             Length: D
-            Shape of inner Tensor objects: [N_dim]
+            Shape of inner tensors: [N_dim]
         - (optional) if return_inverse is True, the indices where elements
             in the original input ended up in the returned unique values.
             Shape: [N_dim]
