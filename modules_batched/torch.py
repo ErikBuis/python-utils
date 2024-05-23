@@ -1,10 +1,10 @@
-from functools import cache
+from functools import lru_cache
 from typing import Any
 
 import torch
 
 
-@cache
+@lru_cache(maxsize=8)
 def mask_padding_batched(L_bs: torch.Tensor, max_L_b: int) -> torch.Tensor:
     """Create a mask that indicates which values are valid in each sample.
 
