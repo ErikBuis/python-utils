@@ -141,9 +141,9 @@ class ProjectToSurface(Transform3d):
         ones = torch.ones(B, dtype=dtype, device=device_)  # [B]
 
         mat = torch.stack([
-            torch.stack([1 - n0**2, -n0 * n1, -n0 * n2, -n0 * d]),
-            torch.stack([-n1 * n0, 1 - n1**2, -n1 * n2, -n1 * d]),
-            torch.stack([-n2 * n0, -n2 * n1, 1 - n2**2, -n2 * d]),
+            torch.stack([1 - n0.square(), -n0 * n1, -n0 * n2, -n0 * d]),
+            torch.stack([-n1 * n0, 1 - n1.square(), -n1 * n2, -n1 * d]),
+            torch.stack([-n2 * n0, -n2 * n1, 1 - n2.square(), -n2 * d]),
             torch.stack([zeros, zeros, zeros, ones]),
         ])  # [4, 4, B]
         # We swap the first and second dimensions as well because pytorch3d

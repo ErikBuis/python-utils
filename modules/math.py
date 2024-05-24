@@ -1,11 +1,13 @@
 import itertools
 import operator
 from collections.abc import Iterable, Iterator
-from math import ceil, floor, gcd, sqrt
+from math import ceil, exp, floor, gcd, isqrt, pi
+from math import pow as mpow
+from math import sqrt
 from typing import TypeVar
 
 
-NumberT = TypeVar("NumberT", int, float)
+NumberT = TypeVar("NumberT", int, float)  # used for typing dependent vars
 
 
 def floor_to_multiple(x: float, base: NumberT) -> NumberT:
@@ -102,7 +104,7 @@ def prime_factors(n: int) -> Iterator[int]:
     while n % 2 == 0:
         yield 2
         n //= 2
-    for i in range(3, int(sqrt(n)) + 1, 2):
+    for i in range(3, isqrt(n) + 1, 2):
         while n % i == 0:
             yield i
             n //= i
@@ -165,9 +167,9 @@ def factors(n: int) -> set[int]:
     # the runtime. Therefore, we will make one final approximation, namely
     # that p! ~ (p/e)^p. The difference between the two is negligible, since
     # the first term grows far less quickly than the second for large p.
-    # 8. Now, we know that the runtime is O[2**p], but this is still not very
+    # 8. Now, we know that the runtime is O[2^p], but this is still not very
     # helpful. Therefore, we will simplify this expression by substituting
-    # p with log2(q), resulting in O[2**p] = O[2**log2(q)] = O[q]. Let's
+    # p with log2(q), resulting in O[2^p] = O[2^log2(q)] = O[q]. Let's
     # also calculate a new approximation for p!:
     # p! ~ (p/e)^p
     #     = (log2(q)/e)^log2(q)
@@ -201,9 +203,9 @@ def check_primality(n: int) -> list[bool]:
     """
     is_prime = [True] * n
     is_prime[0] = is_prime[1] = False
-    for i in range(4, int(sqrt(n)) + 1, 2):
+    for i in range(4, isqrt(n) + 1, 2):
         is_prime[i] = False
-    for i in range(3, int(sqrt(n)) + 1, 2):
+    for i in range(3, isqrt(n) + 1, 2):
         if is_prime[i]:  # use the Sieve of Eratosthenes
             for j in range(i**2, n, i):
                 is_prime[j] = False
@@ -228,6 +230,9 @@ def interp1d(x: float, x1: float, y1: float, x2: float, y2: float) -> float:
 
 def lcm(a: int, b: int) -> int:
     """Return the least common multiple of a and b.
+
+    Note: math.lcm in Python 3.9 and later is around 10% faster than this
+    implementation.
 
     Args:
         a: The first number.
@@ -298,6 +303,20 @@ def pos_mod(n: int, m: int) -> int:
     return (n - 1) % m + 1
 
 
+def gaussian(x: float, mu: float, sigma: float) -> float:
+    """Calculate the value of a Gaussian distribution at x.
+
+    Args:
+        x: The number at which to evaluate the Gaussian distribution.
+        mu: The mean of the Gaussian distribution.
+        sigma: The standard deviation of the Gaussian distribution.
+
+    Returns:
+        The value of the Gaussian distribution at x.
+    """
+    return exp(-mpow((x - mu) / sigma, 2) / 2) / (sigma * sqrt(2 * pi))
+
+
 def monotonic_hyperbolic_rescaling(x: float, r: float) -> float:
     """Monotonically rescale a number using a hyperbolic function.
 
@@ -321,7 +340,7 @@ def monotonic_hyperbolic_rescaling(x: float, r: float) -> float:
     Returns:
         The rescaled number. Will be between 0 and 1.
     """
-    f = (r + 2 - sqrt(r**2 + 4)) / 2
+    f = (r + 2 - sqrt(mpow(r, 2) + 4)) / 2
     return x / (1 - f + f * x)
 
 

@@ -108,7 +108,7 @@ def is_point_in_bbox_batched(
     Returns:
         A tensor of booleans. True if the corresponding point is in the
         bounding box, False otherwise.
-        Shape: [B]
+        Shape: [1] or [B]
     """
     if bboxes.ndim == 1:
         bboxes = bboxes.unsqueeze(0)

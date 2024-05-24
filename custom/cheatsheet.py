@@ -13,7 +13,6 @@ from typing import TypeVar
 
 
 VertexT = TypeVar("VertexT")
-NumberT = TypeVar("NumberT", int, float)
 
 
 # ############################# GRAPH ALGORITHMS ##############################

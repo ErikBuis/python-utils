@@ -92,11 +92,16 @@ from abc import ABC, abstractmethod
 from bisect import bisect_left
 from collections.abc import Iterable, Iterator, Sequence
 from heapq import heapify, heappop
-from math import atan2, cos, inf, isinf, pi, sin, sqrt, tan
+from math import acos, atan2, cos, dist, hypot, inf, isinf, pi
+from math import pow as mpow
+from math import sin, sqrt, tan
 from typing import Any, Literal, TypeVar, cast, overload
 
 from ..modules.bisect import bisect_right_using_left
 
+
+number_type = (int, float)  # used for isinstance() checks
+NumberT = TypeVar("NumberT", int, float)  # used for typing dependent vars
 
 # This alias is mainly meant for functions where multiple arguments or an
 # argument and the return value must be of the same subclass of
@@ -419,7 +424,7 @@ class NumberSet:
 
         # Add the numbers and intervals to the set.
         for component in components:
-            if isinstance(component, float) or isinstance(component, int):
+            if isinstance(component, number_type):
                 self.add_number(component)
             elif isinstance(component, Interval):
                 self |= NumberSet._direct_init(
@@ -685,7 +690,7 @@ class NumberSet:
         prioq: list[tuple[float, str, int]] = []
         for j, numberset in enumerate(numbersets):
             for component in numberset.components:
-                if isinstance(component, float) or isinstance(component, int):
+                if isinstance(component, number_type):
                     prioq.append((component, "c", j))
                 else:
                     letter = "c" if component.start_included else "d"
@@ -2016,7 +2021,7 @@ class Vector2D(GeometricObject2D):
 
     def distance_to(self, v: "Vector2D") -> float:
         """Calculate the Euclidean distance to the given vector."""
-        return sqrt((self._x - v._x) ** 2 + (self._y - v._y) ** 2)
+        return dist((self._x, self._y), (v._x, v._y))
 
     def intersections_x(
         self, x: float
@@ -2038,7 +2043,9 @@ class Vector2D(GeometricObject2D):
 
     def distance_squared_to(self, other: "Vector2D") -> float:
         """Calculate the squared Euclidean distance to the given vector."""
-        return (self._x - other._x) ** 2 + (self._y - other._y) ** 2
+        # Yes, for some reason this is faster than the following:
+        # mpow(self._x - other._x, 2) + mpow(self._y - other._y, 2)
+        return mpow(dist((self._x, self._y), (other._x, other._y)), 2)
 
     def dot(self, other: "Vector2D") -> float:
         """Calculate the dot product with the given vector."""
@@ -2054,19 +2061,21 @@ class Vector2D(GeometricObject2D):
     def length(self) -> float:
         """Return the Euclidean length of the vector.
 
-        Calculates the length of the vector which follows from the theorem:
-        sqrt(x**2 + y**2)
+        Calculates the length of the vector as:
+        sqrt(x^2 + y^2)
         """
-        return sqrt(self._x**2 + self._y**2)
+        return hypot(self._x, self._y)
 
     def length_squared(self) -> float:
         """Return the squared Euclidean length of the vector.
 
-        Calculates the length of the vector which follows from the theorem:
-        x**2 + y**2
+        Calculates the length of the vector as:
+        x^2 + y^2
         This is faster than .length() because it avoids the square root.
         """
-        return self._x**2 + self._y**2
+        # Now in contrast to distance_squared_to(), the following is slower:
+        # mpow(hypot(self._x, self._y), 2)
+        return mpow(self._x, 2) + mpow(self._y, 2)
 
     def normalize(self) -> "Vector2D":
         """Normalize the vector.
@@ -2385,9 +2394,9 @@ class Line2D(GeometricObject2D):
         if hasattr(self, "_r"):
             pass
         elif self._native_repr == "standard":
-            self._r = abs(self._c) / sqrt(self._a**2 + self._b**2)
+            self._r = abs(self._c) / hypot(self._a, self._b)
         elif self._native_repr == "slope_intercept":
-            self._r = abs(self._intercept) / sqrt(1 + self._slope**2)
+            self._r = abs(self._intercept) / sqrt(1 + mpow(self._slope, 2))
         elif self._native_repr == "vectors":
             self._r = abs(self._v1.cross(self._v2)) / self._v2.length()
         else:
@@ -2772,9 +2781,7 @@ def get_arc_length(radius: float, angle_rad: float) -> float:
 
 
 def get_line_length(x1: float, y1: float, x2: float, y2: float) -> float:
-    from math import sqrt
-
-    return sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+    return dist((x1, x2), (y1, y2))
 
 
 def get_circle_interceptions(
@@ -2785,7 +2792,6 @@ def get_circle_interceptions(
     # x2, y2: coordinates of the center of the second circle.
     # r2: radius of the second circle.
     # Returns the coordinates of the interceptions of the two circles.
-    from math import sqrt
 
     if x1 == x2 and y1 == y2 and r1 == r2:
         # The circles are the same.
@@ -2813,9 +2819,10 @@ def get_circle_interceptions(
     # The circles intercept in two points.
     # https://math.stackexchange.com/questions/256100/
     # how-can-i-find-the-points-at-which-two-circles-intercept says:
-    d = sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
-    l = (r1**2 - r2**2 + d**2) / (2 * d)
-    h = sqrt(r1**2 - l**2)
+    d = get_line_length(x1, y1, x2, y2)
+    l = (mpow(r1, 2) - mpow(r2, 2) + mpow(d, 2)) / (2 * d)
+    h = sqrt(mpow(r1, 2) - mpow(l, 2))
+
     x_base = x1 + l / d * (x2 - x1)
     y_base = y1 + l / d * (y2 - y1)
     x_extra = h / d * (y2 - y1)
@@ -2855,7 +2862,7 @@ def get_tangent_point(
     # Step 1.
     mr = r
     pm = get_line_length(xl, yl, xc, yc)
-    pr = sqrt(pm**2 - mr**2)
+    pr = sqrt(mpow(pm, 2) - mpow(mr, 2))
 
     # Step 2.
     return get_circle_interceptions(xc, yc, r, xl, yl, pr)
@@ -2877,6 +2884,4 @@ def get_angle_general_triangle(a: float, b: float, c: float) -> float:
     # Met deze twee regels kun je vanuit drie gegevens alle zijden en hoeken
     # van een willekeurige driehoek berekenen. Dat heet "triangulatie"
     # (driehoeksmeting).
-    from math import acos
-
-    return acos((b**2 + c**2 - a**2) / (2 * b * c))
+    return acos((mpow(b, 2) + mpow(c, 2) - mpow(a, 2)) / (2 * b * c))

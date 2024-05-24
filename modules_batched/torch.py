@@ -171,7 +171,7 @@ def stddev_padding_batched(
     values_centered = values - means.unsqueeze(1)  # [B, max(L_b), *]
     replace_padding_batched(values_centered, L_bs, in_place=True)
     return mean_padding_batched(
-        values_centered**2, L_bs, is_padding_zero=True
+        values_centered.square(), L_bs, is_padding_zero=True
     ).sqrt()  # [B, *]
 
 

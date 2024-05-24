@@ -1,5 +1,5 @@
 import unittest
-from math import ceil, sqrt
+from math import ceil, isqrt, sqrt
 from typing import cast
 
 import matplotlib.axes
@@ -36,7 +36,7 @@ class TestRansacBatched(unittest.TestCase):
 
         # Plot the lines and intersection points.
         ncols, nrows = optimal_grid_layout(
-            B, ceil(sqrt(B)) + 1, ceil(sqrt(B)) + 1
+            B, isqrt(B - 1) + 2, isqrt(B - 1) + 2
         )
         figsize = optimal_size(ncols / nrows, 12, 8)
         fig, axs = plt.subplots(
