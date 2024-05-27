@@ -112,9 +112,9 @@ class ProjectToSurface(Transform3d):
                 where the surface is represented by the equation:
                     n_0 * x + n_1 * y + n_2 * z = d
                 - n = (n_0, n_1, n_2) is the normal vector of the surface.
-                - d is the distance of the surface to the origin divded by
+                - d is the distance of the surface to the origin divided by
                     the length of the normal vector.
-                - (x, y, z) is the coordinates of a point on the surface
+                - (x, y, z) are the coordinates of a point on the surface
             dtype: The data type of the transformation matrix.
             device: The device to store the transformation matrix on.
         """
@@ -146,8 +146,8 @@ class ProjectToSurface(Transform3d):
             torch.stack([-n2 * n0, -n2 * n1, 1 - n2.square(), -n2 * d]),
             torch.stack([zeros, zeros, zeros, ones]),
         ])  # [4, 4, B]
-        # We swap the first and second dimensions as well because pytorch3d
-        # expects the matrix to look like:
+        # We swap the first and second dimensions because pytorch3d expects
+        # the matrix to look like:
         # M = [
         #     [Rxx, Ryx, Rzx, 0],
         #     [Rxy, Ryy, Rzy, 0],
@@ -184,6 +184,10 @@ class SurfaceToSurface(Transform3d):
     ) -> None:
         """Create a transformation that rotates a surface onto another surface.
 
+        The surfaces are rotated using the least amount of rotation possible.
+        Intuitively, this means that when animating the rotation, the
+        "movement" of the normal vector of the surface is minimal.
+
         Args:
             from_surface: The surface(s) to rotate from. Can be one of:
                 - A single surface represented by a tensor.
@@ -194,9 +198,9 @@ class SurfaceToSurface(Transform3d):
                 where the surface is represented by the equation:
                     n_0 * x + n_1 * y + n_2 * z = d
                 - n = (n_0, n_1, n_2) is the normal vector of the surface.
-                - d is the distance of the surface to the origin divded by
+                - d is the distance of the surface to the origin divided by
                     the length of the normal vector.
-                - (x, y, z) is the coordinates of a point on the surface
+                - (x, y, z) are the coordinates of a point on the surface
             to_surface: The surface(s) to rotate to. Can be one of:
                 - A single surface represented by a tensor.
                     Shape: [4]
@@ -206,9 +210,9 @@ class SurfaceToSurface(Transform3d):
                 where the surface is represented by the equation:
                     n_0 * x + n_1 * y + n_2 * z = d
                 - n = (n_0, n_1, n_2) is the normal vector of the surface.
-                - d is the distance of the surface to the origin divded by
+                - d is the distance of the surface to the origin divided by
                     the length of the normal vector.
-                - (x, y, z) is the coordinates of a point on the surface.
+                - (x, y, z) are the coordinates of a point on the surface.
             dtype: The data type of the transformation matrix.
             device: The device to store the transformation matrix on.
         """
