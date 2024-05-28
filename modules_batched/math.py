@@ -72,12 +72,21 @@ def gaussian_batched(
         The value of the Gaussian distribution at x.
             Shape: [1] or [B]
     """
+    if isinstance(x, torch.Tensor):
+        device = x.device
+    elif isinstance(mu, torch.Tensor):
+        device = mu.device
+    elif isinstance(sigma, torch.Tensor):
+        device = sigma.device
+    else:
+        device = "cpu"
+
     if isinstance(x, number_type):
-        x = torch.tensor(x)
+        x = torch.tensor(x, device=device)
     if isinstance(mu, number_type):
-        mu = torch.tensor(mu)
+        mu = torch.tensor(mu, device=device)
     if isinstance(sigma, number_type):
-        sigma = torch.tensor(sigma)
+        sigma = torch.tensor(sigma, device=device)
 
     if x.ndim == 0:
         x = x.unsqueeze(0)
@@ -117,10 +126,17 @@ def monotonic_hyperbolic_rescaling_batched(
         The rescaled numbers. Will be between 0 and 1.
             Shape: [1] or [B]
     """
+    if isinstance(x, torch.Tensor):
+        device = x.device
+    elif isinstance(r, torch.Tensor):
+        device = r.device
+    else:
+        device = "cpu"
+
     if isinstance(x, number_type):
-        x = torch.tensor(x)
+        x = torch.tensor(x, device=device)
     if isinstance(r, number_type):
-        r = torch.tensor(r)
+        r = torch.tensor(r, device=device)
 
     if x.ndim == 0:
         x = x.unsqueeze(0)
