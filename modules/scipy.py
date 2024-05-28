@@ -1,6 +1,201 @@
+from collections.abc import Callable
+from typing import Literal
+
+import matplotlib.axes
 import numpy as np
 import numpy.typing as npt
+import scipy.optimize
 from scipy.spatial import Voronoi
+
+
+def plot_fitted_curve(
+    ax: matplotlib.axes.Axes,
+    x: npt.ArrayLike,
+    y: npt.ArrayLike,
+    func: Callable[..., npt.NDArray[np.float_]],
+    plot_confidence: bool = True,
+    confidence: Literal["68", "95", "99.7"] = "95",
+    sliding_window: float = 0.1,
+    kwargs_optimize_curve_fit: dict | None = None,
+    kwargs_plot: dict | None = None,
+    kwargs_fill_between: dict | None = None,
+) -> tuple[npt.NDArray[np.float_], npt.NDArray[np.float_]]:
+    """Plot a fitted curve with varying confidence intervals.
+
+    Note: The plotted data will be given labels. Make sure to call
+        ax.legend() after this function if you want to display these labels.
+
+    Args:
+        ax: The axes to plot on.
+        x: The x values.
+            Shape: [P]
+        y: The y values.
+            Shape: [P]
+        func: The function to fit the data to, called as f(x, ...). It must
+            take the independent variable as the first argument and a variable
+            number of parameters to fit as its remaining arguments. Note that
+            a higher number of parameters may lead to overfitting (high
+            variance), while a lower number may lead to a poor fit (high bias).
+        plot_confidence: Whether to plot the confidence interval as well as
+            the fitted curve.
+        confidence: The confidence level in percentage.
+            Choose from "68", "95", or "99.7".
+        sliding_window: The relative width of the sliding window compared to
+            the range of x values. The sliding window will be used for
+            calculating the standard deviation of the residuals. Based on the
+            standard deviation, the confidence interval will be calculated.
+            A smaller value will result in a more accurate but less smooth
+            confidence interval.
+        kwargs_optimize_curve_fit: Keyword arguments for
+            scipy.optimize.curve_fit().
+        kwargs_plot: Keyword arguments for the fitted curve.
+            Will be passed to ax.plot().
+        kwargs_fill_between: Keyword arguments for the confidence interval
+            area. Will be passed to ax.fill_between().
+
+    Returns:
+        Tuple containing:
+        - popt: Optimal values for the parameters so that the sum of the
+            squared residuals of f(x, *popt) - y is minimized.
+            Shape: [C]
+        - pcov: The estimated approximate covariance of popt. The diagonals
+            provide the variance of the parameter estimate. To compute one
+            standard deviation errors on the parameters, use
+            perr = np.sqrt(np.diag(pcov)). Note that the relationship between
+            cov and parameter error estimates is derived based on a linear
+            approximation to the model function around the optimum. When this
+            approximation becomes inaccurate, cov may not provide an accurate
+            measure of uncertainty.
+            If the Jacobian matrix at the solution doesn't have a full rank,
+            then this variable is a matrix filled with np.inf. Covariance
+            matrices with large condition numbers (e.g. computed with
+            numpy.linalg.cond) may indicate that results are unreliable.
+    """
+    # Find with how much we need to multiply the stddev to get the desired
+    # confidence interval.
+    if confidence == "68":
+        times_stddev = 1
+    elif confidence == "95":
+        times_stddev = 1.96
+    elif confidence == "99.7":
+        times_stddev = 3
+    else:
+        raise ValueError("Confidence must be one of '68', '95', or '99.7'.")
+
+    # Catch any invalid input.
+    x = np.array(x)
+    y = np.array(y)
+
+    if len(x) == 0 or len(y) == 0:
+        raise ValueError("x and y must not be empty.")
+    if x.shape != y.shape:
+        raise ValueError("x and y must have the same shape.")
+    if x.ndim != 1:
+        raise ValueError("x and y must be 1D arrays.")
+
+    # Give the kwargs a default value if they are not provided.
+    if kwargs_optimize_curve_fit is None:
+        kwargs_optimize_curve_fit = {}
+    if kwargs_plot is None:
+        kwargs_plot = {}
+    if kwargs_fill_between is None:
+        kwargs_fill_between = {}
+    if "label" not in kwargs_plot:
+        kwargs_plot["label"] = "Fitted curve"
+    if "color" not in kwargs_plot:
+        kwargs_plot["color"] = "red"
+    if "label" not in kwargs_fill_between:
+        kwargs_fill_between["label"] = f"Confidence Interval ({confidence}%)"
+    if "color" not in kwargs_fill_between:
+        kwargs_fill_between["color"] = "blue"
+    if "alpha" not in kwargs_fill_between:
+        kwargs_fill_between["alpha"] = 0.2
+
+    # Sort the values if they are not sorted yet.
+    if np.any(np.diff(x) < 0):
+        sort_indices = np.argsort(x)
+        x = x[sort_indices]
+        y = y[sort_indices]
+
+    # Fit a curve to the data.
+    popt, pcov = scipy.optimize.curve_fit(
+        func, x, y, **kwargs_optimize_curve_fit
+    )
+
+    # Create a line space for plotting the curve.
+    x_linspace = np.linspace(x[0], x[-1], 100)
+    y_fitted = func(x_linspace, *popt)
+
+    # Plot the fitted curve.
+    ax.plot(x_linspace, y_fitted, **kwargs_plot)
+
+    if not plot_confidence:
+        return popt, pcov
+
+    # Calculate confidence intervals with varying width.
+    y_upper = np.full_like(y_fitted, np.nan)
+    y_lower = np.full_like(y_fitted, np.nan)
+    sliding_window_half_width = (x[-1] - x[0]) * sliding_window / 2
+    from_idx = 0  # inclusive
+    to_idx = 0  # exclusive
+    prev_non_nan_idx = -1
+
+    for i, x_val in enumerate(x_linspace):
+        # Find the data points close to the current x_val. We do this in a way
+        # such that the overall time complexity is O(n) instead if checking
+        # all values at each iteration, because this would be O(n^2).
+        left_bound = x_val - sliding_window_half_width  # inclusive
+        right_bound = x_val + sliding_window_half_width  # exclusive
+        while to_idx < len(x) and x[to_idx] < right_bound:
+            to_idx += 1
+        while from_idx < len(x) and x[from_idx] < left_bound:
+            from_idx += 1
+
+        if to_idx - from_idx <= 1:
+            continue
+
+        # Calculate the stddev of the residuals in the sliding window.
+        residuals = y[from_idx:to_idx] - func(x[from_idx:to_idx], *popt)
+        stdev = np.sqrt(np.sum(residuals**2) / len(residuals))
+
+        # Calculate the upper and lower bounds using the stddev.
+        y_upper[i] = func(x_val, *popt) + times_stddev * stdev
+        y_lower[i] = func(x_val, *popt) - times_stddev * stdev
+
+        # Substitute NaNs with the interpolated average between the
+        # previous non-NaN value and this one.
+        if prev_non_nan_idx == -1:
+            y_upper[:i] = y_upper[i]
+            y_lower[:i] = y_lower[i]
+        else:
+            y_upper[prev_non_nan_idx : i + 1] = np.linspace(
+                y_upper[prev_non_nan_idx], y_upper[i], i - prev_non_nan_idx + 1
+            )
+            y_lower[prev_non_nan_idx : i + 1] = np.linspace(
+                y_lower[prev_non_nan_idx], y_lower[i], i - prev_non_nan_idx + 1
+            )
+
+        prev_non_nan_idx = i
+
+    # Substitute NaNs with the last non-NaN value.
+    y_upper[prev_non_nan_idx + 1 :] = y_upper[prev_non_nan_idx]
+    y_lower[prev_non_nan_idx + 1 :] = y_lower[prev_non_nan_idx]
+
+    # Approximate the confidence interval's bounds.
+    kwargs_optimize_curve_fit["p0"] = popt
+    popt_upper, _ = scipy.optimize.curve_fit(
+        func, x_linspace, y_upper, **kwargs_optimize_curve_fit
+    )
+    popt_lower, _ = scipy.optimize.curve_fit(
+        func, x_linspace, y_lower, **kwargs_optimize_curve_fit
+    )
+    y_upper = func(x_linspace, *popt_upper)
+    y_lower = func(x_linspace, *popt_lower)
+
+    # Fill the confidence interval area.
+    ax.fill_between(x_linspace, y_lower, y_upper, **kwargs_fill_between)
+
+    return popt, pcov
 
 
 def voronoi_constrain_to_rect(
