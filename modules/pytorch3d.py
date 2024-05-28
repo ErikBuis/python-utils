@@ -28,7 +28,9 @@ def transform_2D_points(
     points_3d = torch.concatenate(
         [points, torch.zeros(padding_shape, device=device)], dim=-1
     )  # [B, max(P_b), 3] or [P, 3]
-    return transform.transform_points(points_3d)  # [B, max(P_b), 3] or [P, 3]
+    return transform.transform_points(
+        points_3d, eps=1e-6
+    )  # [B, max(P_b), 3] or [P, 3]
 
 
 def get_matrix_rotate_vec_a_to_vec_b(
@@ -91,7 +93,7 @@ class ProjectToSurface(Transform3d):
     This class is similar to the PyTorch3D classes in the transforms module in
     the sense that it will only store a homogeneous matrix internally when
     initialized. By doing this, multiple transformations can be applied to the
-    in a single matrix multiplication when .transform_points() is called.
+    in a single matrix multiplication when transform_points() is called.
     """
 
     def __init__(
@@ -172,7 +174,7 @@ class SurfaceToSurface(Transform3d):
     This class is similar to the PyTorch3D classes in the transforms module in
     the sense that it will only store a homogeneous matrix internally when
     initialized. By doing this, multiple transformations can be applied to the
-    in a single matrix multiplication when .transform_points() is called.
+    in a single matrix multiplication when transform_points() is called.
     """
 
     def __init__(

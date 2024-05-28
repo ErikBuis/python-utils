@@ -1,6 +1,6 @@
 import geopandas as gpd
 import torch
-from shapely import Polygon
+from shapely import MultiPolygon, Polygon
 
 from ..modules.scipy import voronoi_constrain_to_rect
 
@@ -108,7 +108,7 @@ def is_point_in_bbox_batched(
     Returns:
         A tensor of booleans. True if the corresponding point is in the
         bounding box, False otherwise.
-        Shape: [1] or [B]
+            Shape: [1] or [B]
     """
     if bboxes.ndim == 1:
         bboxes = bboxes.unsqueeze(0)
@@ -138,7 +138,7 @@ def __is_point_in_polygon_simple_batched(
     Returns:
         A tensor of booleans. True if the point is in the polygon, False
         otherwise.
-        Shape: [B]
+            Shape: [B]
     """
     device = points.device
     B = len(points)
@@ -203,7 +203,7 @@ def __is_point_in_polygon_complex_batched(
     Returns:
         A tensor of booleans. True if the point is in the polygon, False
         otherwise.
-        Shape: [B]
+            Shape: [B]
     """
     dtype = points.dtype
     device = points.device
@@ -239,7 +239,7 @@ def is_point_in_polygon_batched(
     Returns:
         A tensor of booleans. True if the point is in the polygon, False
         otherwise.
-        Shape: [B]
+            Shape: [B]
     """
     dtype = points.dtype
     device = points.device
@@ -257,6 +257,30 @@ def is_point_in_polygon_batched(
         for interior in polygon.interiors
     ]
     return __is_point_in_polygon_complex_batched(exterior, interiors, points)
+
+
+def is_point_in_polygon_like_batched(
+    polygon_like: Polygon | MultiPolygon, points: torch.Tensor
+) -> torch.Tensor:
+    """Check if points are in a polygon or a multipolygon.
+
+    Args:
+        polygon_like: The polygon as a Shapely Polygon or MultiPolygon object.
+        points: The point(s) to be checked for intersection with the polygon or
+            multipolygon.
+            Shape: [2] or [B, 2]
+
+    Returns:
+        A tensor of booleans. True if the point is in the polygon or
+        multipolygon, False otherwise.
+            Shape: [B]
+    """
+    if isinstance(polygon_like, Polygon):
+        return is_point_in_polygon_batched(polygon_like, points)
+    in_polygon = torch.zeros(len(points), dtype=torch.bool)
+    for subpolygon in polygon_like.geoms:
+        in_polygon |= is_point_in_polygon_batched(subpolygon, points)
+    return in_polygon
 
 
 def cut_polygon_around_points(
