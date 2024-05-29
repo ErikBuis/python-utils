@@ -275,9 +275,10 @@ def is_point_in_polygon_like_batched(
         multipolygon, False otherwise.
             Shape: [B]
     """
+    device = points.device
     if isinstance(polygon_like, Polygon):
         return is_point_in_polygon_batched(polygon_like, points)
-    in_polygon = torch.zeros(len(points), dtype=torch.bool)
+    in_polygon = torch.zeros(len(points), device=device, dtype=torch.bool)
     for subpolygon in polygon_like.geoms:
         in_polygon |= is_point_in_polygon_batched(subpolygon, points)
     return in_polygon
