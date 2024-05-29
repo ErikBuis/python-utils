@@ -1,6 +1,6 @@
 import geopandas as gpd
 import torch
-from shapely import MultiPolygon, Polygon
+from shapely import GeometryCollection, MultiPolygon, Polygon
 
 from ..modules.scipy import voronoi_constrain_to_rect
 
@@ -294,9 +294,9 @@ def cut_polygon_around_points(
     that is clipped by the original polygon.
 
     Warning: This function assumes (and does not check) that all points are
-    inside the polygon. If a point is outside the polygon, the function will
-    perform undefined behavior. Do note, however, that points on the boundary
-    or very close to it (to prevent floating point errors) are fine.
+    inside the polygon. If a point is outside the polygon, undefined behavior
+    can occur. Do note, however, that points on the boundary or very close to
+    it (to prevent floating point errors) are fine.
 
     Args:
         polygon: The polygon.
@@ -304,7 +304,8 @@ def cut_polygon_around_points(
             Shape: [B, 2]
 
     Returns:
-        A GeoSeries containing the split polygons.
+        A GeoSeries containing the split polygons as Polygon or MultiPolygon
+        objects.
             Shape: [B]
     """
     if len(points) == 1:
@@ -322,4 +323,15 @@ def cut_polygon_around_points(
 
     # Perform an intersection with the original polygon to remove the parts
     # that lie outside of it.
-    return polygons.intersection(polygon)  # type: ignore
+    polygon_pieces = polygons.intersection(polygon)  # type: ignore
+
+    # Ensure all pieces only consist of Polygon objects.
+    for i, polygon_piece in enumerate(polygon_pieces):
+        if isinstance(polygon_piece, GeometryCollection):
+            polygon_pieces[i] = MultiPolygon([
+                subgeometry
+                for subgeometry in polygon_piece.geoms
+                if isinstance(subgeometry, Polygon)
+            ])
+
+    return polygon_pieces
