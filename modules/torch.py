@@ -14,8 +14,8 @@ from torch.utils.data._utils.collate import (
 from torch.utils.data.dataloader import default_collate
 
 
-# Allow the dataset to return `None` when an example is corrupted. When it
-# does, make torch's default collate function replace it with another example.
+# Allow the dataset to return None when a sample is corrupted. When it does,
+# make torch's default collate function replace it with another sample.
 default_collate_fn_map.update({type(None): collate_str_fn})
 
 # NamedTuple for the output of lexsort_along().
@@ -1179,22 +1179,24 @@ def collate_replace_corrupted(
     dataset: Dataset,
     default_collate_fn: Callable | None = None,
 ) -> Any:
-    """Collate function that allows to replace corrupted examples in the batch.
+    """Collate function that allows to replace corrupted samples in the batch.
 
-    The dataloader should return None when an example is corrupted. This
-    function will then replace all None's in the batch with other
-    randomly-selected examples from the Dataset.
+    The given dataset should return None when a sample is corrupted. This
+    function will then replace such a sample in the batch with another
+    randomly-selected sample from the dataset.
 
-    Warning: Since corrupted examples are replaced with random other examples
+    Warning: Since corrupted samples are replaced with random other samples
     from the dataset, a sample might be sampled multiple times in one pass
     through the dataloader. This implies that a model might be trained on the
-    same example multiple times in one epoch.
+    same sample multiple times in one epoch.
 
     Note: As a DataLoader only accepts collate functions with a single
-    argument, you should use functools.partial to create a partial function
-    first. For example:
+    argument, you should use functools.partial() to pass your dataset object
+    and your default collate function to this function. For example:
     >>> from functools import partial
+    >>> dataset = MyDataset()
     >>> collate_fn = partial(collate_replace_corrupted, dataset=dataset)
+    >>> dataloader = DataLoader(dataset, collate_fn=collate_fn)
 
     This function was based on:
     https://stackoverflow.com/a/69578320/15636460
@@ -1203,11 +1205,11 @@ def collate_replace_corrupted(
         batch: Batch from the DataLoader.
         dataset: Dataset that the DataLoader is passing through.
         default_collate_fn: The collate function to call once the batch has no
-            corrupted examples any more. If None,
+            corrupted samples any more. If None,
             torch.utils.data.dataloader.default_collate is called.
 
     Returns:
-        Batch with new examples instead of corrupted ones.
+        Batch with new samples instead of corrupted ones.
     """
     # Use torch.utils.data.dataloader.default_collate if no other default
     # collate function is specified.
@@ -1217,11 +1219,11 @@ def collate_replace_corrupted(
         else default_collate
     )
 
-    # Filter out all corrupted examples.
+    # Filter out all corrupted samples.
     B = len(batch)
-    batch = [example for example in batch if example is not None]
+    batch = [sample for sample in batch if sample is not None]
 
-    # Replace the corrupted examples with other randomly selected examples.
+    # Replace the corrupted samples with other randomly selected samples.
     while len(batch) < B:
         sample = dataset[random.randint(0, len(dataset) - 1)]  # type: ignore
         if sample is not None:
