@@ -6,7 +6,7 @@ def stringify(
     obj: Any,
     indent_level: int = 0,
     max_line_len: int = 0,
-    ignore: tuple[type, ...] | None = None,
+    ignore: tuple[type, ...] | type | None = None,
 ) -> str:
     """Stringify an object with indentation and line breaks.
 
