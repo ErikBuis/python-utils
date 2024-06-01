@@ -171,7 +171,7 @@ def load_best_model(
         #     name=TODO,
         #     version=TODO,
         #     default_hp_metric=(
-        #         trainer.logger._default_hp_metric,  # type: ignore
+        #         trainer.logger._default_hp_metric,
         #     ),
         # )
         pass
