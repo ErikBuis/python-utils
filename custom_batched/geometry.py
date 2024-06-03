@@ -1,6 +1,15 @@
 import geopandas as gpd
+import numpy as np
 import torch
+import torch.nn as nn
 from shapely import GeometryCollection, MultiPolygon, Polygon
+
+from utils.modules.numpy import unique_consecutive
+from utils.modules.torch import cumsum_start_0
+from utils.modules_batched.torch import (
+    pad_packed_batched,
+    replace_padding_batched,
+)
 
 from ..modules.scipy import voronoi_constrain_to_rect
 
@@ -335,3 +344,277 @@ def cut_polygon_around_points(
             ])
 
     return polygon_pieces
+
+
+def polygon_exterior_vertices(
+    polygon: Polygon, device: torch.device | str = "cpu"
+) -> torch.Tensor:
+    """Get the vertices of a polygon.
+
+    Args:
+        polygon: The Polygon object to get the vertices of.
+        device: The device to use.
+
+    Returns:
+        The vertices of the polygon.
+            Shape: [V, 2]
+    """
+    return torch.tensor(
+        polygon.exterior.coords[:-1], dtype=torch.float32, device=device
+    )
+
+
+def multipolygon_exterior_vertices(
+    polygon: MultiPolygon, device: torch.device | str = "cpu"
+) -> torch.Tensor:
+    """Get the vertices of a multipolygon.
+
+    Args:
+        polygon: The MultiPolygon object to get the vertices of.
+        device: The device to use.
+
+    Returns:
+        The vertices of the multipolygon.
+            Shape: [V, 2]
+    """
+    return torch.concatenate([
+        torch.tensor(
+            polygon_i.exterior.coords[:-1], dtype=torch.float32, device=device
+        )
+        for polygon_i in polygon.geoms
+    ])
+
+
+def polygon_like_exterior_vertices(
+    polygon: Polygon | MultiPolygon, device: torch.device | str = "cpu"
+) -> torch.Tensor:
+    """Get the vertices of a polygon-like object.
+
+    Args:
+        polygon: The Polygon or MultiPolygon object to get the vertices of.
+        device: The device to use.
+
+    Returns:
+        The vertices of the polygon.
+            Shape: [V, 2]
+    """
+    if isinstance(polygon, Polygon):
+        return polygon_exterior_vertices(polygon, device)
+    else:  # polygon is a MultiPolygon
+        return multipolygon_exterior_vertices(polygon, device)
+
+
+def polygons_exterior_vertices(
+    polygons: gpd.GeoSeries, device: torch.device = torch.device("cpu")
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Get the vertices of multiple polygons.
+
+    Note: You should use this function if your GeoSeries only contains Polygon
+    objects, as it is faster than using polygon_exterior_vertices()
+    sequentially, or using polygon_likes_exterior_vertices().
+
+    Args:
+        polygons: A GeoSeries of Polygon objects to get the vertices of.
+            Shape: [B]
+        device: The device to use.
+
+    Returns:
+        Tuple containing:
+        - The vertices of the polygons, padded with zeros for heterogeneous
+            batch sizes.
+            Shape: [B, max(V_b), 2]
+        - The number of vertices in each polygon.
+            Shape: [B]
+    """
+    # I timed multiple different approaches against each other, among which a
+    # sequential version that just called polygon_exterior_vertices()
+    # repeatedly. Literally all conceivable variations of the below code were
+    # timed. This turned out to be the fastest one.
+    coords = polygons.exterior.get_coordinates()
+    coords_tensor = torch.from_numpy(coords.to_numpy(dtype=np.float32)).to(
+        device
+    )
+    V_bs = torch.from_numpy(
+        unique_consecutive(
+            coords.index.to_numpy(), axis=0, return_counts=True
+        )[1]
+    ).to(device)
+    vertices_padded = pad_packed_batched(coords_tensor, V_bs, int(V_bs.max()))
+    replace_padding_batched(
+        vertices_padded, V_bs - 1, padding_value=0, in_place=True
+    )
+    return vertices_padded[:, :-1], V_bs - 1
+
+
+def multipolygons_exterior_vertices(
+    polygons: gpd.GeoSeries, device: torch.device = torch.device("cpu")
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Get the vertices of multiple multipolygons.
+
+    Note: You should use this function if your GeoSeries only contains
+    MultiPolygon objects, as it is faster than using
+    multipolygon_exterior_vertices() sequentially, or using
+    polygon_likes_exterior_vertices().
+
+    Args:
+        polygons: A GeoSeries of MultiPolygon objects to get the vertices of.
+            Shape: [B]
+        device: The device to use.
+
+    Returns:
+        Tuple containing:
+        - The vertices of the multipolygons, padded with zeros for
+            heterogeneous batch sizes.
+            Shape: [B, max(V_b), 2]
+        - The number of vertices in each multipolygon.
+            Shape: [B]
+    """
+    # Unfortunately, there is no way to vectorize this operation, as the
+    # exterior vertices of each polygon in the MultiPolygon can't be requested
+    # seperately from the interior vertices in a batched manner. Therefore, we
+    # have to iterate over the MultiPolygons.
+    vertices_list = [
+        multipolygon_exterior_vertices(polygon, device) for polygon in polygons
+    ]
+    vertices_padded = nn.utils.rnn.pad_sequence(
+        vertices_list, batch_first=True
+    )
+    V_bs = torch.tensor(
+        [len(vertices) for vertices in vertices_list], device=device
+    )
+    return vertices_padded, V_bs
+
+
+def polygon_likes_exterior_vertices(
+    polygons: gpd.GeoSeries, device: torch.device = torch.device("cpu")
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Get the vertices of multiple polygon-like objects.
+
+    Note: You should use this function if your GeoSeries contains both Polygon
+    and MultiPolygon objects, as it is faster than using
+    polygon_exterior_vertices() and multipolygon_exterior_vertices()
+    sequentially.
+
+    Args:
+        polygons: A GeoSeries of Polygon or MultiPolygon objects to get the
+            vertices of.
+            Shape: [B]
+        device: The device to use.
+
+    Returns:
+        Tuple containing:
+        - The vertices of the polygon-like objects, padded with zeros for
+            heterogeneous batch sizes.
+            Shape: [B, max(V_b), 2]
+        - The number of vertices in each polygon-like object.
+            Shape: [B]
+    """
+    # I timed multiple different approaches against each other, among which a
+    # sequential version that just called polygon_like_exterior_vertices()
+    # repeatedly. Literally all conceivable variations of the below code were
+    # timed. This turned out to be the fastest one.
+
+    # Perform some preparatory operations for the Polygon objects.
+    coords = polygons.exterior.get_coordinates()
+    coords_tensor = torch.from_numpy(coords.to_numpy(dtype=np.float32)).to(
+        device
+    )
+    V_bs_polygons = torch.from_numpy(
+        unique_consecutive(
+            coords.index.to_numpy(), axis=0, return_counts=True
+        )[1]
+    ).to(device)
+    V_bs_cumsum = cumsum_start_0(V_bs_polygons, dim=0)
+
+    # Retrieve the exterior coordinates depending on the type of the polygon.
+    i = 0
+    vertices_list = [
+        (
+            coords_tensor[
+                V_bs_cumsum[i] : V_bs_cumsum[i := i + 1] - 1  # noqa: F841
+            ]
+            if isinstance(polygon, Polygon)
+            else multipolygon_exterior_vertices(polygon, device)
+        )
+        for polygon in polygons
+    ]
+
+    # Merge the results into a single tensor.
+    vertices_padded = nn.utils.rnn.pad_sequence(
+        vertices_list, batch_first=True
+    )
+    V_bs = torch.tensor(
+        [len(vertices) for vertices in vertices_list], device=device
+    )
+
+    return vertices_padded, V_bs
+
+
+def polygon_likes_exterior_vertices_naive(
+    polygons: gpd.GeoSeries, device: torch.device = torch.device("cpu")
+) -> tuple[torch.Tensor, torch.Tensor]:
+    vertices_list = []
+    for polygon in polygons:
+        vertices_list.append(polygon_like_exterior_vertices(polygon, device))
+    vertices_padded = nn.utils.rnn.pad_sequence(
+        vertices_list, batch_first=True
+    )
+    V_bs = torch.tensor(
+        [len(vertices) for vertices in vertices_list], device=device
+    )
+    return vertices_padded, V_bs
+
+
+def generate_random_polygon() -> Polygon:
+    # Generate a random Polygon.
+    # Each Polygon has a 50% chance of having holes.
+    # The amount of vertices is between 3 and 50.
+    exterior = torch.rand(np.random.randint(3, 51), 2).tolist()
+    interiors = []
+    while np.random.rand() < 0.5:
+        interiors.append(torch.rand(np.random.randint(3, 51), 2).tolist())
+    return Polygon(exterior, interiors)
+
+
+def generate_random_multipolygon() -> MultiPolygon:
+    # Generate a random MultiPolygon.
+    # Each MultiPolygon contain at least 2 Polygons. Extra Polygons are
+    # continuously added with a 50% chance, until the addition fails.
+    polygons_list = [generate_random_polygon(), generate_random_polygon()]
+    while np.random.rand() < 0.5:
+        polygons_list.append(generate_random_polygon())
+    return MultiPolygon(polygons_list)
+
+
+def generate_random_polygon_like() -> Polygon | MultiPolygon:
+    # Generate a random Polygon or MultiPolygon.
+    # Each has a 50% chance of occurring.
+    if np.random.rand() < 0.5:
+        return generate_random_polygon()
+    else:
+        return generate_random_multipolygon()
+
+
+def generate_random_polygons(amount: int = 64) -> gpd.GeoSeries:
+    # Generate a random GeoSeries of Polygon objects.
+    polygons_list = []
+    for _ in range(amount):
+        polygons_list.append(generate_random_polygon())
+    return gpd.GeoSeries(polygons_list)  # type: ignore
+
+
+def generate_random_multipolygons(amount: int = 64) -> gpd.GeoSeries:
+    # Generate a random GeoSeries of MultiPolygon objects.
+    multipolygons_list = []
+    for _ in range(amount):
+        multipolygons_list.append(generate_random_multipolygon())
+    return gpd.GeoSeries(multipolygons_list)  # type: ignore
+
+
+def generate_random_polygon_likes(amount: int = 64) -> gpd.GeoSeries:
+    # Generate a random GeoSeries of Polygon and MultiPolygon objects.
+    # Each has a 50% chance of occurring for each object.
+    polygon_likes_list = []
+    for _ in range(amount):
+        polygon_likes_list.append(generate_random_polygon_like())
+    return gpd.GeoSeries(polygon_likes_list)  # type: ignore

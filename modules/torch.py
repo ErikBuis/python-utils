@@ -2,7 +2,7 @@ import itertools
 import operator
 import random
 import warnings
-from typing import Any, Callable, Literal, NamedTuple, overload
+from typing import Any, Callable, Literal, overload
 
 import numpy as np
 import torch
@@ -17,11 +17,6 @@ from torch.utils.data.dataloader import default_collate
 # Allow the dataset to return None when a sample is corrupted. When it does,
 # make torch's default collate function replace it with another sample.
 default_collate_fn_map.update({type(None): collate_str_fn})
-
-# NamedTuple for the output of lexsort_along().
-SortOnlyDim = NamedTuple(
-    "SortOnlyDim", [("values", torch.Tensor), ("indices", torch.Tensor)]
-)
 
 # Indexing object for the output of unique_with_backmap().
 BackMap = tuple[slice | torch.Tensor, ...]
@@ -51,7 +46,7 @@ def cumsum_start_0(
     Returns:
         A new tensor holding the result returned unless out is specified, in
         which case a reference to out is returned. The result has the same
-        size as a except along the axis dimension where the size is one more.
+        size as a except along the requested dimension.
             Shape: [N_1, ..., N_dim + 1, ..., N_D]
     """
     device = t.device
@@ -98,11 +93,11 @@ def to_tensor(
     # Torch supported types: bool, uint8, int8, int16, int32, int64, float16,
     # float32, float64, complex64, and complex128.
     if isinstance(object, torch.Tensor):
-        return object.to(dtype=dtype, device=device)
+        return object.to(device, dtype)
 
     if isinstance(object, np.ndarray):
         try:
-            return torch.from_numpy(object).to(dtype=dtype, device=device)
+            return torch.from_numpy(object).to(device, dtype)
         except TypeError as e:
             # Try to convert to a supported type before calling from_numpy().
             np2torch_fallbacks = {
@@ -121,9 +116,7 @@ def to_tensor(
                 f"Can't convert np.ndarray of type {object.dtype} to tensor."
                 f" Falling back to type {fallback}."
             )
-            return torch.from_numpy(object.astype(fallback)).to(
-                dtype=dtype, device=device
-            )
+            return torch.from_numpy(object.astype(fallback)).to(device, dtype)
 
     # Last resort: because numpy recognizes more array-like types than torch,
     # we try to convert to numpy first.
@@ -355,7 +348,9 @@ def lexsort(
     return torch.from_numpy(np.lexsort(keys.detach().cpu().numpy())).to(device)
 
 
-def lexsort_along(x: torch.Tensor, dim: int = -1) -> SortOnlyDim:
+def lexsort_along(
+    x: torch.Tensor, dim: int = -1
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Sort a tensor along a specific dimension, taking all others as constant.
 
     This is like torch.sort(), but it doesn't sort along the other dimensions.
@@ -379,34 +374,30 @@ def lexsort_along(x: torch.Tensor, dim: int = -1) -> SortOnlyDim:
         dim: The dimension to sort along.
 
     Returns:
-        A namedtuple of (values, indices):
-            values: Sorted version of x.
-                Shape: [N_1, ..., N_dim, ..., N_D]
-            indices: The indices where the elements in the original input ended
-                up in the returned sorted values.
-                Shape: [N_dim]
+        Tuple containing:
+        - Sorted version of x.
+            Shape: [N_1, ..., N_dim, ..., N_D]
+        - The indices where the elements in the original input ended up in the
+            returned sorted values.
+            Shape: [N_dim]
 
     Examples:
         >>> x = torch.tensor([[2, 1], [3, 0], [1, 2], [1, 3]])
         >>> lexsort_along(x, dim=0)
-        SortOnlyDim(
-            values=tensor([[1, 2],
-                           [1, 3],
-                           [2, 1],
-                           [3, 0]]),
-            indices=tensor([2, 3, 0, 1])
-        )
+        (tensor([[1, 2],
+                 [1, 3],
+                 [2, 1],
+                 [3, 0]]),
+         tensor([2, 3, 0, 1]))
         >>> torch.sort(x, dim=0)
-        torch.return_types.sort(
-            values=tensor([[1, 0],
-                           [1, 1],
-                           [2, 2],
-                           [3, 3]]),
-            indices=tensor([[2, 1],
-                            [3, 0],
-                            [0, 2],
-                            [1, 3]])
-        )
+        (tensor([[1, 0],
+                 [1, 1],
+                 [2, 2],
+                 [3, 3]]),
+         tensor([[2, 1],
+                 [3, 0],
+                 [0, 2],
+                 [1, 3]])
     """
     # We can use lexsort() to sort only the requested dimension.
     # First, we prepare the tensor for lexsort(). The input to this function
@@ -442,8 +433,8 @@ def lexsort_along(x: torch.Tensor, dim: int = -1) -> SortOnlyDim:
         y = x.unsqueeze(0)  # [1, N_dim]
     else:
         y = x.movedim(dim, -1)  # [N_1, ..., N_dim-1, N_dim+1, ..., N_D, N_dim]
-        y = y.flatten(
-            0, -2
+        y = y.reshape(
+            -1, y.shape[-1]
         )  # [N_1 * ... * N_dim-1 * N_dim+1 * ... * N_D, N_dim]
     y = y.flip(dims=(0,))  # [N_1 * ... * N_dim-1 * N_dim+1 * ... * N_D, N_dim]
     idcs = lexsort(y)  # [N_dim]
@@ -454,7 +445,7 @@ def lexsort_along(x: torch.Tensor, dim: int = -1) -> SortOnlyDim:
     x_sorted = x.index_select(dim, idcs)  # [N_1, ..., N_dim, ..., N_D]
 
     # Finally, we return the sorted tensor and the indices.
-    return SortOnlyDim(x_sorted, idcs)
+    return x_sorted, idcs
 
 
 @overload
@@ -521,8 +512,8 @@ def unique_consecutive(
 ):
     """Like torch.unique_consecutive, but WAY more efficient.
 
-    The returned unique elements are sorted along the given dimension, taking
-    all the other dimensions as constant tuples.
+    The returned unique elements are retrieved along the requested dimension,
+    taking all the other dimensions as constant tuples.
 
     Args:
         x: The input tensor. Must be sorted along the given dimension.
@@ -619,8 +610,8 @@ def unique_consecutive(
         y = x.unsqueeze(0)  # [1, N_dim]
     else:
         y = x.movedim(dim, -1)  # [N_1, ..., N_dim-1, N_dim+1, ..., N_D, N_dim]
-        y = y.flatten(
-            0, -2
+        y = y.reshape(
+            -1, y.shape[-1]
         )  # [N_1 * ... * N_dim-1 * N_dim+1 * ... * N_D, N_dim]
 
     # Find the indices where the values change.
@@ -633,7 +624,7 @@ def unique_consecutive(
     )  # [N_dim]
 
     # Find the unique values.
-    idcs = is_change.nonzero(as_tuple=False).squeeze()  # [N_unique]
+    idcs = is_change.nonzero(as_tuple=True)[0]  # [N_unique]
     unique = x.index_select(
         dim, idcs
     )  # [N_1, ..., N_dim-1, N_unique, N_dim+1, ..., N_D]
@@ -724,8 +715,8 @@ def unique(
 ):
     """Like torch.unique, but WAY more efficient.
 
-    The returned unique elements are sorted along the given dimension, taking
-    all the other dimensions as constant tuples.
+    The returned unique elements are retrieved along the requested dimension,
+    taking all the other dimensions as constant tuples.
 
     Args:
         x: The input tensor.
@@ -908,8 +899,8 @@ def unique_with_backmap(
 ):
     """Like torch.unique, but also returns a back map.
 
-    The returned unique elements are sorted along the given dimension, taking
-    all the other dimensions as constant tuples.
+    The returned unique elements are retrieved along the requested dimension,
+    taking all the other dimensions as constant tuples.
 
     Args:
         x: The input tensor.

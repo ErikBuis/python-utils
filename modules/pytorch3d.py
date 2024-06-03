@@ -134,7 +134,7 @@ class ProjectToSurface(Transform3d):
                 "surface must have shape [4] or [B, 4], but got"
                 f" {surface.shape}"
             )
-        surface = surface.to(dtype=dtype, device=device_)
+        surface = surface.to(device_, dtype)
 
         # Create the projection matrix.
         B = surface.shape[0]
@@ -232,7 +232,7 @@ class SurfaceToSurface(Transform3d):
                 "from_surface must have shape [4] or [B, 4], but got"
                 f" {from_surface.shape}"
             )
-        from_surface = from_surface.to(dtype=dtype, device=device_)
+        from_surface = from_surface.to(device_, dtype)
         if to_surface.ndim == 1:
             to_surface = to_surface.unsqueeze(0)  # [1, 4]
         if to_surface.shape[-1] != 4 or to_surface.ndim > 2:
@@ -240,7 +240,7 @@ class SurfaceToSurface(Transform3d):
                 "to_surface must have shape [4] or [B, 4], but got"
                 f" {to_surface.shape}"
             )
-        to_surface = to_surface.to(dtype=dtype, device=device_)
+        to_surface = to_surface.to(device_, dtype)
         if from_surface.shape[0] == 1 and to_surface.shape[0] != 1:
             from_surface = from_surface.expand(to_surface.shape[0], -1)
         if to_surface.shape[0] == 1 and from_surface.shape[0] != 1:

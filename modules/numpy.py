@@ -1,4 +1,4 @@
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Literal, TypeVar, overload
 
 import numpy as np
 import numpy.typing as npt
@@ -38,7 +38,7 @@ def cumsum_start_0(
     Returns:
         A new array holding the result returned unless out is specified, in
         which case a reference to out is returned. The result has the same
-        size as a except along the axis dimension where the size is one more.
+        size as a except along the requested axis.
             Shape: [N_1, ..., N_axis + 1, ..., N_D]
     """
     a = np.array(a)
@@ -72,9 +72,10 @@ def pad_sequence(
 ) -> npt.NDArray:
     """Pad a list of variable length arrays with padding_value.
 
-    Note: This function is a numpy equivalent of torch.nn.utils.rnn.
-    pad_sequence! It is faster than this implementation, so please use the
-    torch version if you are working with PyTorch tensors.
+    Note: This function is the numpy equivalent of
+    torch.nn.utils.rnn.pad_sequence. It is slower than the torch
+    implementation, so please use the latter if you are working with PyTorch
+    tensors.
 
     Args:
         sequences: A sequence of variable length arrays.
@@ -107,6 +108,307 @@ def pad_sequence(
         else:
             padded[: len(arr), b] = arr
     return padded
+
+
+def lexsort_along(
+    x: npt.NDArray, axis: int = -1
+) -> tuple[npt.NDArray, npt.NDArray]:
+    """Sort an array along a specific dimension, taking all others as constant.
+
+    This is like np.sort(), but it doesn't sort along the other dimensions.
+    As such, the other dimensions are treated as tuples. This function is
+    roughly equivalent to the following Python code, but it is much faster.
+    >>> np.stack(
+    >>>     sorted(
+    >>>         [np.take(x, i, axis=axis) for i in range(x.shape[axis])],
+    >>>         key=lambda n: n.tolist(),
+    >>>         reverse=descending,
+    >>>     ),
+    >>>     axis=axis,
+    >>> )
+
+    The sort is always stable, meaning that the order of equal elements is
+    preserved.
+
+    Args:
+        x: The array to sort.
+            Shape: [N_1, ..., N_axis, ..., N_D]
+        axis: The dimension to sort along.
+
+    Returns:
+        Tuple containing:
+        - Sorted version of x.
+            Shape: [N_1, ..., N_axis, ..., N_D]
+        - The indices where the elements in the original input ended up in the
+            returned sorted values.
+            Shape: [N_axis]
+
+    Examples:
+        >>> x = np.array([[2, 1], [3, 0], [1, 2], [1, 3]])
+        >>> lexsort_along(x, axis=0)
+        (array([[1, 2],
+                [1, 3],
+                [2, 1],
+                [3, 0]]),
+         array([2, 3, 0, 1]))
+        >>> torch.sort(x, axis=0)
+        (array([[1, 0],
+                [1, 1],
+                [2, 2],
+                [3, 3]]),
+         array([[2, 1],
+                [3, 0],
+                [0, 2],
+                [1, 3]])
+    """
+    # We can use np.lexsort() to sort only the requested dimension.
+    # First, we prepare the array for np.lexsort(). The input to this function
+    # must be a tuple of array-like objects, that are evaluated from last to
+    # first. This is quite confusing, so I'll put an example here. If we have:
+    # >>> x = array([[[15, 13],
+    # >>>             [11,  4],
+    # >>>             [16,  2]],
+    # >>>            [[ 7, 21],
+    # >>>             [ 3, 20],
+    # >>>             [ 8, 22]],
+    # >>>            [[19, 14],
+    # >>>             [ 5, 12],
+    # >>>             [ 6,  0]],
+    # >>>            [[23,  1],
+    # >>>             [10, 17],
+    # >>>             [ 9, 18]]])
+    # And axis=1, then the input to lexsort() must be:
+    # >>> lexsort(array([[ 1, 17, 18],
+    # >>>                [23, 10,  9],
+    # >>>                [14, 12,  0],
+    # >>>                [19,  5,  6],
+    # >>>                [21, 20, 22],
+    # >>>                [ 7,  3,  8],
+    # >>>                [13,  4,  2],
+    # >>>                [15, 11, 16]]))
+    # Note that the first row is evaluated last and the last row is evaluated
+    # first. We can now see that the sorting order will be 11 < 15 < 16, so
+    # lexsort() will return array([1, 0, 2]). I thouroughly tested what the
+    # absolute fastest way is to perform this operation, and it turns out that
+    # the following is the best way to do it:
+    if x.ndim == 1:
+        y = np.expand_dims(x, 0)  # [1, N_axis]
+    else:
+        y = np.moveaxis(
+            x, axis, -1
+        )  # [N_1, ..., N_axis-1, N_axis+1, ..., N_D, N_axis]
+        y = y.reshape(
+            -1, y.shape[-1]
+        )  # [N_1 * ... * N_axis-1 * N_axis+1 * ... * N_D, N_axis]
+    y = np.flip(
+        y, axis=(0,)
+    )  # [N_1 * ... * N_axis-1 * N_axis+1 * ... * N_D, N_axis]
+    idcs = np.lexsort(y)  # [N_axis]
+
+    # Now we have to convert the output back to a array. This is a bit tricky,
+    # because we must be able to select indices from any given dimension. To do
+    # this, we perform:
+    x_sorted = x.take(idcs, axis)  # [N_1, ..., N_axis, ..., N_D]
+
+    # Finally, we return the sorted array and the indices.
+    return x_sorted, idcs
+
+
+@overload
+def unique_consecutive(
+    x: npt.NDArray,
+    return_inverse: Literal[False] = False,
+    return_counts: Literal[False] = False,
+    axis: int | None = None,
+) -> npt.NDArray:
+    # Overload for the case where:
+    # - return_inverse is False
+    # - return_counts is False
+    ...
+
+
+@overload
+def unique_consecutive(
+    x: npt.NDArray,
+    return_inverse: Literal[True] = True,
+    return_counts: Literal[False] = False,
+    axis: int | None = None,
+) -> tuple[npt.NDArray, npt.NDArray]:
+    # Overload for the case where:
+    # - return_inverse is True
+    # - return_counts is False
+    ...
+
+
+@overload
+def unique_consecutive(
+    x: npt.NDArray,
+    return_inverse: Literal[False] = False,
+    return_counts: Literal[True] = True,
+    axis: int | None = None,
+) -> tuple[npt.NDArray, npt.NDArray]:
+    # Overload for the case where:
+    # - return_inverse is False
+    # - return_counts is True
+    ...
+
+
+@overload
+def unique_consecutive(
+    x: npt.NDArray,
+    return_inverse: Literal[True] = True,
+    return_counts: Literal[True] = True,
+    axis: int | None = None,
+) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
+    # Overload for the case where:
+    # - return_inverse is True
+    # - return_counts is True
+    ...
+
+
+def unique_consecutive(
+    x: npt.NDArray,
+    return_inverse: bool = False,
+    return_counts: bool = False,
+    axis: int | None = None,
+) -> (
+    npt.NDArray
+    | tuple[npt.NDArray, npt.NDArray]
+    | tuple[npt.NDArray, npt.NDArray, npt.NDArray]
+):
+    """A consecutive version of np.unique.
+
+    The returned unique elements are retrieved along the requested dimension,
+    taking all the other dimensions as constant tuples.
+
+    Args:
+        x: The input array. Must be sorted along the given dimension.
+            Shape: [N_1, ..., N_axis, ..., N_D]
+        return_inverse: Whether to also return the indices for where elements
+            in the original input ended up in the returned unique list.
+        return_counts: Whether to also return the counts for each unique
+            element.
+        axis: The dimension to operate upon. If None, the unique of the
+            flattened input is returned. Otherwise, each of the arrays
+            indexed by the given dimension is treated as one of the elements
+            to apply the unique operation upon. See examples for more details.
+
+    Returns:
+        Tuple containing:
+        - The unique elements.
+            Shape: [N_1, ..., N_axis-1, N_unique, N_axis+1, ..., N_D]
+        - (optional) if return_inverse is True, the indices where elements
+            in the original input ended up in the returned unique values.
+            Shape: [N_axis]
+        - (optional) if return_counts is True, the counts for each unique
+            element.
+            Shape: [N_unique]
+
+    Examples:
+        >>> # 1D example: -----------------------------------------------------
+        >>> x = np.array([9, 9, 9, 9, 10, 10])
+        >>> dim = 0
+
+        >>> uniques, inverse, counts = unique_consecutive(
+        >>>     x, return_inverse=True, return_counts=True, dim=dim
+        >>> )
+        >>> uniques
+        array([9, 10])
+        >>> inverse
+        array([0, 0, 0, 0, 1, 1])
+        >>> counts
+        array([4, 2])
+
+        >>> # 2D example: -----------------------------------------------------
+        >>> x = np.array([
+        >>>     [7,  9,  9, 10],
+        >>>     [8, 10, 10,  9],
+        >>>     [9,  8,  8,  7],
+        >>>     [9,  7,  7,  7],
+        >>> ])
+        >>> dim = 1
+
+        >>> uniques, inverse, counts = unique_consecutive(
+        >>>     x, return_inverse=True, return_counts=True, dim=dim
+        >>> )
+        >>> uniques
+        array([[7, 9, 10],
+                [8, 10, 9],
+                [9, 8, 7],
+                [9, 7, 7]])
+        >>> inverse
+        array([1, 2, 0, 1])
+        >>> counts
+        array([1, 2, 1])
+
+        >>> # 3D example: -----------------------------------------------------
+        >>> x = np.array([
+        >>>     [[0, 1, 2, 2], [4, 6, 5, 5], [9, 8, 7, 7]],
+        >>>     [[4, 2, 8, 8], [3, 3, 7, 7], [0, 2, 1, 1]],
+        >>> ])
+        >>> dim = 2
+
+        >>> uniques, inverse, counts = unique_consecutive(
+        >>>     x, return_inverse=True, return_counts=True, dim=dim
+        >>> )
+        >>> uniques
+        array([[[0, 1, 2],
+                 [4, 6, 5],
+                 [9, 8, 7]],
+                [[4, 2, 8],
+                 [3, 3, 7],
+                 [0, 2, 1]]])
+        >>> inverse
+        array([0, 2, 1, 2])
+        >>> counts
+        array([1, 1, 2])
+    """
+    if axis is None:
+        raise NotImplementedError(
+            "axis=None is not implemented yet. Please specify a dimension"
+            " explicitly."
+        )
+
+    # Flatten all dimensions except the one we want to operate on.
+    if x.ndim == 1:
+        y = np.expand_dims(x, 0)  # [1, N_axis]
+    else:
+        y = np.moveaxis(
+            x, axis, -1
+        )  # [N_1, ..., N_axis-1, N_axis+1, ..., N_D, N_axis]
+        y = y.reshape(
+            -1, y.shape[-1]
+        )  # [N_1 * ... * N_axis-1 * N_axis+1 * ... * N_D, N_axis]
+
+    # Find the indices where the values change.
+    is_change = np.concatenate(
+        [np.array([True]), np.any(y[:, :-1] != y[:, 1:], axis=0)], axis=0
+    )  # [N_axis]
+
+    # Find the unique values.
+    idcs = is_change.nonzero()[0]  # [N_unique]
+    unique = x.take(
+        idcs, axis
+    )  # [N_1, ..., N_axis-1, N_unique, N_axis+1, ..., N_D]
+
+    # Calculate auxiliary values.
+    aux = []
+    if return_inverse:
+        # Find the indices where the elements in the original input ended up
+        # in the returned unique values.
+        inverse = is_change.cumsum(axis=0) - 1  # [N_axis]
+        aux.append(inverse)
+    if return_counts:
+        # Find the counts for each unique element.
+        counts = np.diff(
+            np.concatenate([idcs, np.array([x.shape[axis]])], axis=0)
+        )  # [N_unique]
+        aux.append(counts)
+
+    if aux:
+        return unique, *aux
+    else:
+        return unique
 
 
 def unequal_seqs_add(a: npt.NDArray, b: npt.NDArray) -> npt.NDArray:
