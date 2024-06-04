@@ -16,6 +16,7 @@ def plot_fitted_curve(
     plot_confidence: bool = True,
     confidence: Literal["68", "95", "99.7"] = "95",
     sliding_window: float = 0.1,
+    log_scale: bool = False,
     kwargs_optimize_curve_fit: dict | None = None,
     kwargs_plot: dict | None = None,
     kwargs_fill_between: dict | None = None,
@@ -46,6 +47,11 @@ def plot_fitted_curve(
             standard deviation, the confidence interval will be calculated.
             A smaller value will result in a more accurate but less smooth
             confidence interval.
+        log_scale: Whether the x-axis is scaled logarithmically. Will be used
+            to adjust the sliding window dynamically with the x values. This
+            argument should be set to True if you are calling either
+            ax.set_xscale("log") or ax.set_xscale("symlog"). Note that this
+            function does not set/change the x-axis scale itself.
         kwargs_optimize_curve_fit: Keyword arguments for
             scipy.optimize.curve_fit().
         kwargs_plot: Keyword arguments for the fitted curve.
@@ -103,13 +109,17 @@ def plot_fitted_curve(
     if "label" not in kwargs_plot:
         kwargs_plot["label"] = "Fitted curve"
     if "color" not in kwargs_plot:
-        kwargs_plot["color"] = "red"
+        kwargs_plot["color"] = "green"
+    if "zorder" not in kwargs_plot:
+        kwargs_plot["zorder"] = 1.5
     if "label" not in kwargs_fill_between:
         kwargs_fill_between["label"] = f"Confidence Interval ({confidence}%)"
     if "color" not in kwargs_fill_between:
-        kwargs_fill_between["color"] = "blue"
+        kwargs_fill_between["color"] = "green"
     if "alpha" not in kwargs_fill_between:
         kwargs_fill_between["alpha"] = 0.2
+    if "zorder" not in kwargs_fill_between:
+        kwargs_fill_between["zorder"] = 0.5
 
     # Sort the values if they are not sorted yet.
     if np.any(np.diff(x) < 0):
@@ -122,12 +132,16 @@ def plot_fitted_curve(
         func, x, y, **kwargs_optimize_curve_fit
     )
 
-    # Create a line space for plotting the curve.
-    x_linspace = np.linspace(x[0], x[-1], 100)
-    y_fitted = func(x_linspace, *popt)
+    # Create a linear/logarithmic space for plotting the curve.
+    x_space = (
+        np.logspace(np.log10(x[0]), np.log10(x[-1]), 100)
+        if log_scale
+        else np.linspace(x[0], x[-1], 100)
+    )
+    y_fitted = func(x_space, *popt)
 
     # Plot the fitted curve.
-    ax.plot(x_linspace, y_fitted, **kwargs_plot)
+    ax.plot(x_space, y_fitted, **kwargs_plot)
 
     if not plot_confidence:
         return popt, pcov
@@ -135,65 +149,96 @@ def plot_fitted_curve(
     # Calculate confidence intervals with varying width.
     y_upper = np.full_like(y_fitted, np.nan)
     y_lower = np.full_like(y_fitted, np.nan)
-    sliding_window_half_width = (x[-1] - x[0]) * sliding_window / 2
+    full_width = (
+        np.log10(x[-1]) - np.log10(x[0]) if log_scale else x[-1] - x[0]
+    )
+    sliding_window_half_width = full_width * sliding_window / 2
+    sliding_window_left = (
+        10 ** (np.log10(x_space) - sliding_window_half_width)
+        if log_scale
+        else x_space - sliding_window_half_width
+    )
+    sliding_window_right = (
+        10 ** (np.log10(x_space) + sliding_window_half_width)
+        if log_scale
+        else x_space + sliding_window_half_width
+    )
     from_idx = 0  # inclusive
     to_idx = 0  # exclusive
-    prev_non_nan_idx = -1
+    prev_non_nan_idx_upper = -1
+    prev_non_nan_idx_lower = -1
 
-    for i, x_val in enumerate(x_linspace):
+    for i, x_val in enumerate(x_space):
         # Find the data points close to the current x_val. We do this in a way
         # such that the overall time complexity is O(n) instead if checking
         # all values at each iteration, because this would be O(n^2).
-        left_bound = x_val - sliding_window_half_width  # inclusive
-        right_bound = x_val + sliding_window_half_width  # exclusive
-        while to_idx < len(x) and x[to_idx] < right_bound:
-            to_idx += 1
+        left_bound = x_val - sliding_window_left[i]  # inclusive
+        right_bound = x_val + sliding_window_right[i]  # exclusive
         while from_idx < len(x) and x[from_idx] < left_bound:
             from_idx += 1
+        while to_idx < len(x) and x[to_idx] < right_bound:
+            to_idx += 1
 
-        if to_idx - from_idx <= 1:
-            continue
-
-        # Calculate the stddev of the residuals in the sliding window.
+        # Calculate the residuals in the sliding window.
         residuals = y[from_idx:to_idx] - func(x[from_idx:to_idx], *popt)
-        stdev = np.sqrt(np.sum(residuals**2) / len(residuals))
+        residuals_pos = residuals[residuals >= 0]
+        residuals_neg = residuals[residuals < 0]
 
-        # Calculate the upper and lower bounds using the stddev.
-        y_upper[i] = func(x_val, *popt) + times_stddev * stdev
-        y_lower[i] = func(x_val, *popt) - times_stddev * stdev
+        if len(residuals_pos) != 0:
+            # Calculate the stddev of the residuals.
+            stddev_pos = np.sqrt(np.sum(residuals_pos**2) / len(residuals_pos))
 
-        # Substitute NaNs with the interpolated average between the
-        # previous non-NaN value and this one.
-        if prev_non_nan_idx == -1:
-            y_upper[:i] = y_upper[i]
-            y_lower[:i] = y_lower[i]
-        else:
-            y_upper[prev_non_nan_idx : i + 1] = np.linspace(
-                y_upper[prev_non_nan_idx], y_upper[i], i - prev_non_nan_idx + 1
-            )
-            y_lower[prev_non_nan_idx : i + 1] = np.linspace(
-                y_lower[prev_non_nan_idx], y_lower[i], i - prev_non_nan_idx + 1
-            )
+            # Calculate the upper and lower bounds using the stddev.
+            y_upper[i] = func(x_val, *popt) + times_stddev * stddev_pos
 
-        prev_non_nan_idx = i
+            # Substitute NaNs with the interpolated average between the
+            # previous non-NaN value and this one.
+            if prev_non_nan_idx_upper == -1:
+                y_upper[:i] = y_upper[i]
+            else:
+                y_upper[prev_non_nan_idx_upper : i + 1] = np.linspace(
+                    y_upper[prev_non_nan_idx_upper],
+                    y_upper[i],
+                    i + 1 - prev_non_nan_idx_upper,
+                )
+            prev_non_nan_idx_upper = i
+
+        if len(residuals_neg) != 0:
+            # Calculate the stddev of the residuals.
+            stddev_neg = np.sqrt(np.sum(residuals_neg**2) / len(residuals_neg))
+
+            # Calculate the upper and lower bounds using the stddev.
+            y_lower[i] = func(x_val, *popt) - times_stddev * stddev_neg
+
+            # Substitute NaNs with the interpolated average between the
+            # previous non-NaN value and this one.
+            if prev_non_nan_idx_lower == -1:
+                y_lower[:i] = y_lower[i]
+            else:
+                y_lower[prev_non_nan_idx_lower : i + 1] = np.linspace(
+                    y_lower[prev_non_nan_idx_lower],
+                    y_lower[i],
+                    i + 1 - prev_non_nan_idx_lower,
+                )
+            prev_non_nan_idx_lower = i
 
     # Substitute NaNs with the last non-NaN value.
-    y_upper[prev_non_nan_idx + 1 :] = y_upper[prev_non_nan_idx]
-    y_lower[prev_non_nan_idx + 1 :] = y_lower[prev_non_nan_idx]
+    y_upper[prev_non_nan_idx_upper + 1 :] = y_upper[prev_non_nan_idx_upper]
+    y_lower[prev_non_nan_idx_lower + 1 :] = y_lower[prev_non_nan_idx_lower]
 
     # Approximate the confidence interval's bounds.
     kwargs_optimize_curve_fit["p0"] = popt
     popt_upper, _ = scipy.optimize.curve_fit(
-        func, x_linspace, y_upper, **kwargs_optimize_curve_fit
+        func, x_space, y_upper, **kwargs_optimize_curve_fit
     )
     popt_lower, _ = scipy.optimize.curve_fit(
-        func, x_linspace, y_lower, **kwargs_optimize_curve_fit
+        func, x_space, y_lower, **kwargs_optimize_curve_fit
     )
-    y_upper = func(x_linspace, *popt_upper)
-    y_lower = func(x_linspace, *popt_lower)
+    y_upper = func(x_space, *popt_upper)
+    y_lower = func(x_space, *popt_lower)
 
     # Fill the confidence interval area.
-    ax.fill_between(x_linspace, y_lower, y_upper, **kwargs_fill_between)
+    ax.fill_between(x_space, y_lower, y_upper, **kwargs_fill_between)
 
     return popt, pcov
 
