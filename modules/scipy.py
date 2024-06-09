@@ -15,7 +15,7 @@ def plot_fitted_curve(
     func: Callable[..., npt.NDArray[np.float_]],
     plot_confidence: bool = True,
     confidence: Literal["68", "95", "99.7"] = "95",
-    sliding_window: float = 0.1,
+    sliding_window: float = 0.05,
     log_scale: bool = False,
     kwargs_optimize_curve_fit: dict | None = None,
     kwargs_plot: dict | None = None,
@@ -113,7 +113,7 @@ def plot_fitted_curve(
     if "zorder" not in kwargs_plot:
         kwargs_plot["zorder"] = 1.5
     if "label" not in kwargs_fill_between:
-        kwargs_fill_between["label"] = f"Confidence Interval ({confidence}%)"
+        kwargs_fill_between["label"] = f"{confidence}% interval"
     if "color" not in kwargs_fill_between:
         kwargs_fill_between["color"] = "green"
     if "alpha" not in kwargs_fill_between:
@@ -184,17 +184,14 @@ def plot_fitted_curve(
         residuals_pos = residuals[residuals >= 0]
         residuals_neg = residuals[residuals < 0]
 
-        if len(residuals_pos) != 0:
+        if len(residuals_pos) > 1:
             # Calculate the stddev of the residuals.
             stddev_pos = np.sqrt(
                 np.sum(residuals_pos**2) / (len(residuals_pos) - 1)
             )
 
             # Calculate the upper and lower bounds using the stddev.
-            y_upper[i] = (
-                func(x_val, *popt)
-                + times_stddev * stddev_pos / np.sqrt(len(residuals_pos))
-            )  # fmt: skip
+            y_upper[i] = func(x_val, *popt) + times_stddev * stddev_pos
 
             # Substitute NaNs with the interpolated average between the
             # previous non-NaN value and this one.
@@ -208,17 +205,14 @@ def plot_fitted_curve(
                 )
             prev_non_nan_idx_upper = i
 
-        if len(residuals_neg) != 0:
+        if len(residuals_neg) > 1:
             # Calculate the stddev of the residuals.
             stddev_neg = np.sqrt(
                 np.sum(residuals_neg**2) / (len(residuals_neg) - 1)
             )
 
             # Calculate the upper and lower bounds using the stddev.
-            y_lower[i] = (
-                func(x_val, *popt)
-                - times_stddev * stddev_neg / np.sqrt(len(residuals_neg))
-            )  # fmt: skip
+            y_lower[i] = func(x_val, *popt) - times_stddev * stddev_neg
 
             # Substitute NaNs with the interpolated average between the
             # previous non-NaN value and this one.
