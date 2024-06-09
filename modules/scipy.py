@@ -186,10 +186,15 @@ def plot_fitted_curve(
 
         if len(residuals_pos) != 0:
             # Calculate the stddev of the residuals.
-            stddev_pos = np.sqrt(np.sum(residuals_pos**2) / len(residuals_pos))
+            stddev_pos = np.sqrt(
+                np.sum(residuals_pos**2) / (len(residuals_pos) - 1)
+            )
 
             # Calculate the upper and lower bounds using the stddev.
-            y_upper[i] = func(x_val, *popt) + times_stddev * stddev_pos
+            y_upper[i] = (
+                func(x_val, *popt)
+                + times_stddev * stddev_pos / np.sqrt(len(residuals_pos))
+            )  # fmt: skip
 
             # Substitute NaNs with the interpolated average between the
             # previous non-NaN value and this one.
@@ -205,10 +210,15 @@ def plot_fitted_curve(
 
         if len(residuals_neg) != 0:
             # Calculate the stddev of the residuals.
-            stddev_neg = np.sqrt(np.sum(residuals_neg**2) / len(residuals_neg))
+            stddev_neg = np.sqrt(
+                np.sum(residuals_neg**2) / (len(residuals_neg) - 1)
+            )
 
             # Calculate the upper and lower bounds using the stddev.
-            y_lower[i] = func(x_val, *popt) - times_stddev * stddev_neg
+            y_lower[i] = (
+                func(x_val, *popt)
+                - times_stddev * stddev_neg / np.sqrt(len(residuals_neg))
+            )  # fmt: skip
 
             # Substitute NaNs with the interpolated average between the
             # previous non-NaN value and this one.
