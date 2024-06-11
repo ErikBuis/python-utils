@@ -516,22 +516,24 @@ def polygon_likes_exterior_vertices(
 
     # Perform some preparatory operations for the Polygon objects.
     coords = polygons.exterior.get_coordinates()
-    coords_tensor = torch.from_numpy(coords.to_numpy(dtype=np.float32)).to(
-        device
-    )
-    V_bs_polygons = torch.from_numpy(
-        unique_consecutive(
-            coords.index.to_numpy(), axis=0, return_counts=True
-        )[1]
-    ).to(device)
-    V_bs_cumsum = cumsum_start_0(V_bs_polygons, dim=0)
+    if len(coords) != 0:
+        coords_tensor = torch.from_numpy(coords.to_numpy(dtype=np.float32)).to(
+            device
+        )
+        V_bs_polygons = torch.from_numpy(
+            unique_consecutive(
+                coords.index.to_numpy(), axis=0, return_counts=True
+            )[1]
+        ).to(device)
+        V_bs_cumsum = cumsum_start_0(V_bs_polygons, dim=0)
 
     # Retrieve the exterior coordinates depending on the type of the polygon.
     i = 0
     vertices_list = [
         (
-            coords_tensor[
-                V_bs_cumsum[i] : V_bs_cumsum[i := i + 1] - 1  # noqa: F841
+            coords_tensor[  # type: ignore
+                V_bs_cumsum[i]  # type: ignore
+                : V_bs_cumsum[i := i + 1] - 1  # noqa: F841  # type: ignore
             ]
             if isinstance(polygon, Polygon)
             else multipolygon_exterior_vertices(polygon, device)
