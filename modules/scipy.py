@@ -1,4 +1,6 @@
+import logging
 from collections.abc import Callable
+from inspect import signature
 from typing import Literal
 
 import matplotlib.axes
@@ -6,6 +8,9 @@ import numpy as np
 import numpy.typing as npt
 import scipy.optimize
 from scipy.spatial import Voronoi
+
+
+logger = logging.getLogger(__name__)
 
 
 def plot_fitted_curve(
@@ -34,9 +39,9 @@ def plot_fitted_curve(
             Shape: [P]
         func: The function to fit the data to, called as f(x, ...). It must
             take the independent variable as the first argument and a variable
-            number of parameters to fit as its remaining arguments. Note that
-            a higher number of parameters may lead to overfitting (high
-            variance), while a lower number may lead to a poor fit (high bias).
+            number of parameters C to fit as its remaining arguments. Note that
+            a high number of parameters may lead to overfitting (high variance)
+            while a low number may lead to a poor fit (high bias).
         plot_confidence: Whether to plot the confidence interval as well as
             the fitted curve.
         confidence: The confidence level in percentage.
@@ -76,6 +81,7 @@ def plot_fitted_curve(
             then this variable is a matrix filled with np.inf. Covariance
             matrices with large condition numbers (e.g. computed with
             numpy.linalg.cond) may indicate that results are unreliable.
+            Shape: [C, C]
     """
     # Find with how much we need to multiply the stddev to get the desired
     # confidence interval.
@@ -128,6 +134,14 @@ def plot_fitted_curve(
         y = y[sort_indices]
 
     # Fit a curve to the data.
+    C = len(signature(func).parameters) - 1
+    if len(x) < C:
+        logger.warning(
+            f"This function needs at least {C} data points to be able to fit a"
+            f" curve through them, but only {len(x)} were provided. The curve"
+            " will not be plotted."
+        )
+        return np.full(C, np.nan), np.full((C, C), np.nan)
     popt, pcov = scipy.optimize.curve_fit(
         func, x, y, **kwargs_optimize_curve_fit
     )
