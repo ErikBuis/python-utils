@@ -15,7 +15,10 @@ logger = logging.getLogger(__name__)
 
 
 def load_best_model(
-    trainer: pl.Trainer, model: pl.LightningModule, **kwargs: Any
+    trainer: pl.Trainer,
+    model: pl.LightningModule,
+    reuse_version: bool = False,
+    **kwargs: Any,
 ) -> pl.LightningModule:
     """Set up the best previously trained model for testing.
 
@@ -23,6 +26,10 @@ def load_best_model(
         trainer: The PyTorch Lightning trainer.
         model: An 'empty' instance of the LightningModule that has only been
             initialized.
+        reuse_version: Whether to reuse the version of the logger that was
+            used during training. This is useful to prevent TensorBoard from
+            creating a new directory for the test results.
+            Warning: This argument is not yet implemented.
         **kwargs: Additional keyword arguments needed to initialize the model,
             such as when the `save_hyperparameters()` method was never called
             or when `save_hyperparameters(ignore=[...])` was used to ignore
@@ -32,6 +39,11 @@ def load_best_model(
     Returns:
         The trained model, loaded from the checkpoint.
     """
+    if reuse_version:
+        raise NotImplementedError(
+            "The `reuse_version` argument is not yet implemented."
+        )
+
     # Unfortunately, we cannot use the `trainer.test(ckpt_path="best")` method
     # without first having called `trainer.fit()`, since the path to the best
     # model is saved in the `trainer.checkpoint_callback.best_model_path`
@@ -162,19 +174,26 @@ def load_best_model(
     trainer.checkpoint_callback.best_model_path = path
 
     # Set the logger to the version that was used during training.
-    if isinstance(trainer.logger, pl_loggers.TensorBoardLogger):
-        # TODO Loop through all logger versions and determine which one was
-        # TODO used during training. This is a bit tricky, since the logger
-        # TODO version is not saved in the checkpoint.
-        # trainer.logger = pl_loggers.TensorBoardLogger(
-        #     save_dir=TODO,
-        #     name=TODO,
-        #     version=TODO,
-        #     default_hp_metric=(
-        #         trainer.logger._default_hp_metric,
-        #     ),
-        # )
-        pass
+    if reuse_version:
+        if isinstance(trainer.logger, pl_loggers.TensorBoardLogger):
+            # TODO Loop through all logger versions and determine which one was
+            # TODO used during training. This is a bit tricky, since the logger
+            # TODO version is not saved in the checkpoint.
+            # trainer.logger = pl_loggers.TensorBoardLogger(
+            #     save_dir=TODO,
+            #     name=TODO,
+            #     version=TODO,
+            #     default_hp_metric=(
+            #         trainer.logger._default_hp_metric,
+            #     ),
+            # )
+            pass
+        else:
+            logger.warning(
+                "The `reuse_version` argument is set, but the logger used"
+                " during training is not supported yet. Thus, the logger "
+                " version will not be reused."
+            )
 
     # Return the best model.
     return best_model
