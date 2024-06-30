@@ -344,7 +344,6 @@ def lexsort(
     # If the tensor is not an integer tensor, we have to use np.lexsort().
     # Unfortunately, torch doesn't have a lexsort() equivalent, so we have to
     # convert to numpy.
-    # TODO Figure out a way to do this without converting to numpy.
     return torch.from_numpy(np.lexsort(keys.detach().cpu().numpy())).to(device)
 
 
