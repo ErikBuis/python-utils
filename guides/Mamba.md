@@ -11,6 +11,10 @@ Then, ***restart your shell***. We recommend entering `conda config --set auto_a
 
 # Usage
 Mamba commands do not differ in a significant way from their Conda equivalents. Below are a few examples of frequently used commands:
+- To create a blank environment with only Python 3.x installed, run:
+```bash
+mamba create -n your-env-name python=3.x
+```
 - To create an environment from a `environment.yml` file, run:
 ```bash
 mamba env create -f environment.yml
@@ -23,7 +27,7 @@ mamba activate your-env-name
 ```bash
 mamba deactivate
 ```
-- To install a package in an environment, run:
+- To install a package in an environment without an `environment.yml` file, run:
 ```bash
 mamba install -n your-env-name package-name
 ```
