@@ -2,6 +2,22 @@
 The Windows PowerShell is the standard way of interacting with the Windows environment using a CLI. This guide will present tips and tricks you can use when interacting with PowerShell.
 
 
+## Exit using Ctrl+D
+Sometimes, it may be cumbersome to exit the PowerShell by typing "exit" followed by Enter. Thus, you might want to be able to exit the PowerShell in the same way as the Linux shell (using Ctrl+D). To do this, first run the following command with administrator privileges:
+```powershell
+Set-ExecutionPolicy RemoteSigned
+```
+Next, open `$PROFILE` with your favourite editor, for example:
+```powershell
+code $PROFILE
+```
+Change the file to contain the following:
+```powershell
+Set-PSReadlineKeyHandler -Chord Ctrl+d -Function DeleteCharOrExit
+```
+And save the file. Reopen your PowerShell and now you should be able to press Ctrl+D to exit it!
+
+
 ## Tree
 To print a tree rooted at 'path/to/directory', you can just use:
 ```powershell
