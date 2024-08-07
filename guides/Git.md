@@ -1,6 +1,7 @@
 # Git
 Git is a version control system that is widely used in the software development industry. This file will guide you through the installation and configuration of various parts of the GitHub implementation of git.
 
+
 # Install GitHub CLI
 We recommend ***installing GitHub CLI*** so that further operations will be easier. [This](https://github.com/cli/cli?tab=readme-ov-file#installation) guide describes this process, but for convenience we have put the necessary commands for a Linux or WSL install below:
 ```bash
@@ -11,6 +12,7 @@ curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo 
 && sudo apt update \
 && sudo apt install gh -y
 ```
+
 
 # Set up an SSH key
 If you want to clone a private GitHub repository to your local machine, you first have to make GitHub recognize and trust your PC as an authorized entity. To do this, you have to ***generate an SSH keypair and add to to GitHub***. To check if you have already created an SSH key previously, enter `ls -al ~/.ssh`. If you see the entry `id_ed25519.pub`, you can skip this step. Otherwise, please follow one of the following subsections:
@@ -32,6 +34,36 @@ eval "$(ssh-agent -s)"
 ssh-add ~/.ssh/id_ed25519
 ```
 Next, go to your GitHub account, look for `Settings > SSH and GPG keys > New SSH key`, enter a descriptive name like `Your-pc-name WSL SSH key` and finally copy-paste the public key (retrievable via `cat ~/.ssh/id_ed25519.pub`) in the "key" box.
+
+## Windows SSH problems
+You might run into the error "Error: Permission denied (publickey)" when trying to clone/fetch/pull etc. on Windows. To fix this, try [this](https://stackoverflow.com/questions/48843643/using-git-with-powershell-and-ssh-key-with-passphrase) or [this](https://docs.github.com/en/authentication/troubleshooting-ssh/error-permission-denied-publickey) link. For future reference here is the StackOverflow post that solved the problem for me:
+
+> You should not use the Open SSH client that comes with Git for Windows. Instead, Windows 10 has its own implementation of Open SSH that is integrated with the system. To achieve this:
+> 
+> 1. Start the `ssh-agent` from Windows Services:
+>     - Type `Services` in the Start Menu or `Win+R` and then type `services.msc` to launch the Services window;
+>     - Find the `OpenSSH Authentication Agent` in the list and double click on it;
+>     - In the `OpenSSH Authentication Agent` Properties window that appears, choose `Automatic` from the `Startup type:` dropdown and click `Start` from `Service status:`. Make sure it now says `Service status: Running`.
+> 2. Configure Git to use the Windows 10 implementation of OpenSSH by issuing the following command in Powershell: `git config --global core.sshCommand C:/Windows/System32/OpenSSH/ssh.exe`;
+> 3. Configure SSH to automatically add the keys to the agent on startup by editing the `config` file found at `C:\Users\%YOUR_USERNAME%\.ssh\config`, and add the following lines:
+> ```
+> Host *
+>     AddKeysToAgent yes
+>     IdentitiesOnly yes
+> ```
+> You can also add the following lines if you generated an SSH key with custom name or multiple SSH keys:
+> ```
+> Host github.com
+>     HostName github.com
+>     User your_user_name
+>     IdentityFile ~/.ssh/your_file_name
+> ```
+> 4. Add your SSH key to the `ssh-agent` by issuing the `ssh-add` command and entering your passphrase:
+> ```
+> ssh-add $HOME/.ssh/your_file_name
+> ```
+> 5. Done! Now restart your Powershell and even Windows if necessary.
+
 
 # Configure GitHub for your account
 To ***configure git*** for your account, enter the following commands in the terminal:

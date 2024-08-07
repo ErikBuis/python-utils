@@ -4,14 +4,10 @@ import torch
 import torch.nn as nn
 from shapely import GeometryCollection, MultiPolygon, Polygon
 
-from utils.modules.numpy import unique_consecutive
-from utils.modules.torch import cumsum_start_0
-from utils.modules_batched.torch import (
-    pad_packed_batched,
-    replace_padding_batched,
-)
-
+from ..modules.numpy import unique_consecutive
 from ..modules.scipy import voronoi_constrain_to_rect
+from ..modules.torch import cumsum_start_0
+from ..modules_batched.torch import pad_packed_batched, replace_padding_batched
 
 
 def line_intersection_batched(
