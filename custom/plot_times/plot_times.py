@@ -43,7 +43,8 @@ def plot_times(
         ms: The values of m passed to the algorithms.
             Shape: [amount_ms].
         map_to_inputs: A function mapping a pair of (n, m) to the inputs that
-            should be passed to the algorithms.
+            should be passed to the algorithms. Should return a tuple of
+            (args, kwargs).
         algorithm1: The function representing algorithm 1. It takes the values
             returned by map_to_inputs().
         algorithm2: The function representing algorithm 2. It takes the values
