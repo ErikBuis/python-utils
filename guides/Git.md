@@ -77,24 +77,6 @@ git config --global pull.rebase false
 ```
 
 
-# Installing a git repository as a Python package
-To install a git repository as a Python package, go to the repository's page on github.com and copy the `Clone > SSH` command. This will look something like `git@github.com:user-name/repository-name.git`. Unfortunately, it is not entirely straightforward to just install using `pip install --editable`. Instead, the following steps are necessary first to get the right pip install command.
-1. Substitute the colon `:` by a slash `/`. For example, your URL will now look like: `git@github.com/user-name/repository-name.git`
-2. Add `git+ssh://` to the start of the URL. For example, your URL will now look like: `git+ssh://git@github.com/user-name/repository-name.git`
-3. Search the repository's root folder for an installation configuration file.
-   - If there is a `pyproject.toml` file, look for a `name = "<name>"` entry under the `[project]` section. Copy the `<name>` field.
-   - If there is a `setup.cfg` file, look for a `name = <name>` entry under the `[metadata]` section. Copy the `<name>` field.
-4. Add `#egg=<name>` to the end of the URL. For example, if the `<name>` field you found in step 3 was `myrepositoryname`, your URL will now look like: `git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname`
-5. Install the repository into your project by running `pip install --editable git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname`. This command will create a folder named `src` into your root directory, which will have all repositories you installed using this method in it. The names of the repositories will be the same as the ones you specified in the `#egg=<name>` field. For example, your directory structure will now look like:
-<pre>
-.
-├── … <b>file.extension</b>: Any file in your own project.
-├── …
-└── 📁 <b>src</b>
-    └── 📁 <b>myrepositoryname</b>: Code for the repository at https://github.com/user-name/repository-name.git
-</pre>
-
-
 # Extras
 The following parts of the tutorial are totally optional and only for those who want to further customize their git installation. If you are not interested in this, you are now done with the installation process. Enjoy using git!
 
@@ -114,7 +96,7 @@ alias 'gh?'='gh copilot suggest -t gh'
 ```
 Now you can enter commands like `?? Find all python files containing "import sys"` and Copilot will suggest a Bash command to perform the action.
 
-## Template pre-commit-config.yml file
+## Template `pre-commit-config.yml` file
 Here's a template `pre-commit-config.yml` file to help you get started on setting up pre-commit hooks in your git repository. To activate the pre-commit hooks, run:
 ```bash
 mamba install pre-commit
