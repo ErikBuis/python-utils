@@ -69,7 +69,7 @@ This will create a folder named `src` into your root directory, which will have 
 # Template `environment.yml` file
 For your convenience, we have provided a template `environment.yml` file below. This file contains the a lot of packages data science projects may depend on, so feel free to remove any packages you don't need for your project. You can copy this file to your repository and edit it to create your own environment with Mamba or Conda.
 ```yaml
-name: your-env-name
+name: your_env_name
 
 channels:
   - pytorch
