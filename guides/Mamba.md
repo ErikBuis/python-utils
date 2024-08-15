@@ -24,21 +24,21 @@ then you should change the execution policy using:
 ```powershell
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
-Finally, ***restart PowerShell*** one last time. We recommend entering `conda config --set auto_activate_base false` (yes, start the command with `conda`) if you do not want Mamba/Conda to activate the base environment every time you start a terminal window. Note that the `mamba activate your-env-name` and `mamba deactivate` commands do not work on Windows, thus you should use `conda` instead for these specific cases.
+Finally, ***restart PowerShell*** one last time. We recommend entering `conda config --set auto_activate_base false` (yes, start the command with `conda`) if you do not want Mamba/Conda to activate the base environment every time you start a terminal window. Note that the `mamba activate your_env_name` and `mamba deactivate` commands do not work on Windows, thus you should use `conda` instead for these specific cases.
 
 
 # Usage
 For both Conda and Mamba environments, we strongly recommend to only install packages with `mamba install` or `conda install`, never with `pip install`! This is because when packages are installed using Pip, Mamba/Conda won't track the installed packages which makes future `mamba install` or `conda install` commands malfunction (more precisely, multiple versions of a single package may be installed at the same time, a package can be overwritten or it can lose its dependencies. In other words, your environment will become unusable after this and you will need to install the whole environment from scratch again). Thus, always check if there is a way to install your package using Mamba/Conda first!
 
 Since Mamba is designed to be a drop-in replacement for Conda, the command syntax is the same in almost all common use cases. Below are a few examples of frequently used commands:
-- To create a blank environment with only Python 3.x installed, run `mamba create -n your-env-name python=3.x`.
-- To create an environment from an `environment.yml` file, run `mamba env create -f environment.yml`.
-- To activate an environment, run `mamba activate your-env-name` (or `conda activate your-env-name` on Windows).
+- To create a blank environment with only Python 3.x installed, run `mamba create -n your_env_name python=3.x`.
+- To create an environment from an `environment-dev.yml` file, run `mamba env create -f environment-dev.yml`.
+- To activate an environment, run `mamba activate your_env_name` (or `conda activate your_env_name` on Windows).
 - To deactivate an environment, run `mamba deactivate` (or `conda deactivate` on Windows).
-- To install a package in an environment without an `environment.yml` file, run `mamba install -n your-env-name package-name`.
-- To install a package in an environment with an `environment.yml` file, first add the package you want to install to the file and then run `mamba env update -f environment.yml --prune`.
-- To remove a package from an environment, run `mamba remove -n your-env-name package-name`.
-- To remove an environment, run `mamba remove -n your-env-name --all`.
+- To install a package in an environment without an `environment-dev.yml` file, run `mamba install -n your_env_name package-name`.
+- To install a package in an environment with an `environment-dev.yml` file, first add the package you want to install to the file and then run `mamba env update -f environment-dev.yml --prune`.
+- To remove a package from an environment, run `mamba remove -n your_env_name package-name`.
+- To remove an environment, run `mamba remove -n your_env_name --all`.
 - To list all environments, run `mamba env list`.
 - To list all packages in the current environment, run `mamba list`.
 
@@ -69,6 +69,17 @@ This will create a folder named `src` into your root directory, which will have 
 # Template `environment.yml` file
 For your convenience, we have provided a template `environment.yml` file below. This file contains the a lot of packages data science projects may depend on, so feel free to remove any packages you don't need for your project. You can copy this file to your repository and edit it to create your own environment with Mamba or Conda.
 ```yaml
+# To create a blank environment with only Python 3.x installed, run `mamba create -n your_env_name python=3.x`.
+# To create an environment from an `environment-dev.yml` file, run `mamba env create -f environment-dev.yml`.
+# To activate an environment, run `mamba activate your_env_name` (or `conda activate your_env_name` on Windows).
+# To deactivate an environment, run `mamba deactivate` (or `conda deactivate` on Windows).
+# To install a package in an environment without an `environment-dev.yml` file, run `mamba install -n your_env_name package-name`.
+# To install a package in an environment with an `environment-dev.yml` file, first add the package you want to install to the file and then run `mamba env update -f environment-dev.yml --prune`.
+# To remove a package from an environment, run `mamba remove -n your_env_name package-name`.
+# To remove an environment, run `mamba remove -n your_env_name --all`.
+# To list all environments, run `mamba env list`.
+# To list all packages in the current environment, run `mamba list`.
+
 name: your_env_name
 
 channels:
