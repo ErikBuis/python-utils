@@ -64,6 +64,15 @@ This will create a folder named `src` into your root directory, which will have 
 └── 📁 <b>src</b>
     └── 📁 <b>myrepositoryname</b>: Code for the repository at https://github.com/user-name/repository-name.git
 </pre>
+One more thing. If you are using VSCode, `myrepositoryname` will not be recognized as a module in your current environment. To solve this, add the following lines to your workspace settings at `.vscode/settings.json`:
+```json5
+// Add the following lines if you installed a private repository using
+// `pip install --editable git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname`.
+"python.analysis.extraPaths": [
+    "./src/myrepositoryname",
+],
+```
+Unfortunately, adding `"./src"` or even `"./src/*` does not work, so you have to settle with manually adding each entry.
 
 
 # Template `environment.yml` file
