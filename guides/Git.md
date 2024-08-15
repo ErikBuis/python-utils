@@ -100,12 +100,7 @@ Now you can enter commands like `?? Find all python files containing "import sys
 A template `.gitignore` file to help you get started with your git project has been added separately in `Gitignore_template`, which can be found in the same directory as this file.
 
 ## Template `pre-commit-config.yml` file
-Here's a template `pre-commit-config.yml` file to help you get started on setting up pre-commit hooks in your git repository. To activate the pre-commit hooks, run:
-```bash
-mamba install pre-commit
-pre-commit install
-```
-Template:
+Pre-commit hooks help you run programs such as code linters and formatters. When set up, git will run them automatically before every commit. To use this functionality, first install the `pre-commit` Python package if not already installed, then activate the pre-commit hooks by running `pre-commit install`. Here's a template `pre-commit-config.yml` file to help you get started on setting up pre-commit hooks in your git repository.
 ```yaml
 repos:
   - repo: https://github.com/pycqa/isort
@@ -140,4 +135,47 @@ repos:
           # F403: `from [module] import *` used; unable to detect undefined names
           # F405: [name] may be undefined, or defined from star imports: [module]
           - "--per-file-ignores=*/__init__.py:F401 */tier_*.py:F401,F403,F405"  # Ignoring Entire Files
+```
+If you're using VSCode, the following `settings.json` file might also be helpful. To apply these settings for your current workspace, put this file in `.vscode/settings.json`.
+```json5
+{
+    "editor.wordWrapColumn": 120,
+    "editor.rulers": [120],
+
+    /* Python settings. */
+    // Black formatter
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter",
+    },
+    "black-formatter.args": [
+        "--line-length=100",
+        "--skip-magic-trailing-comma",
+        "--preview",
+        "--enable-unstable-feature=string_processing",
+        "--enable-unstable-feature=hug_parens_with_braces_and_square_brackets",
+        "--enable-unstable-feature=wrap_long_dict_values_in_parens"
+    ],
+    // isort formatter
+    "isort.check": true,
+    "isort.severity": {
+        "I": "Information",
+        "W": "Information",
+        "E": "Information"
+    },
+    "isort.args": [
+        "--line-length=100",
+        "--profile=black",
+        "--lines-after-imports=2"
+    ],
+    // Flake8 Linter
+    "flake8.args": [
+        "--max-line-length=120",
+        // E203: Whitespace before ":"
+        "--extend-ignore=E203",  // Black disagrees with pep8 here
+        // F401: [module] imported but unused
+        // F403: `from [module] import *` used; unable to detect undefined names
+        // F405: [name] may be undefined, or defined from star imports: [module]
+        "--per-file-ignores=*/__init__.py:F401 */tier_*.py:F401,F403,F405"
+    ],
+}
 ```
