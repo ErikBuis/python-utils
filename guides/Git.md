@@ -143,18 +143,16 @@ If you're using VSCode, the following `settings.json` file might also be helpful
     "editor.rulers": [120],
 
     /* Python settings. */
-    // Black formatter
-    "[python]": {
-        "editor.defaultFormatter": "ms-python.black-formatter",
-    },
-    "black-formatter.args": [
-        "--line-length=100",
-        "--skip-magic-trailing-comma",
-        "--preview",
-        "--enable-unstable-feature=string_processing",
-        "--enable-unstable-feature=hug_parens_with_braces_and_square_brackets",
-        "--enable-unstable-feature=wrap_long_dict_values_in_parens"
-    ],
+    "python.defaultInterpreterPath": "/usr/bin/python3",
+    "python.analysis.autoFormatStrings": true,
+    "python.analysis.completeFunctionParens": true,
+    "python.analysis.typeCheckingMode": "basic",
+    // Add the following lines if you installed a private repository using
+    // `pip install --editable git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname`.
+    // "python.analysis.extraPaths": [
+    //     "./src/myrepositoryname"
+    // ],
+    
     // isort formatter
     "isort.check": true,
     "isort.severity": {
@@ -163,19 +161,33 @@ If you're using VSCode, the following `settings.json` file might also be helpful
         "E": "Information"
     },
     "isort.args": [
-        "--line-length=100",
-        "--profile=black",
-        "--lines-after-imports=2"
+        "--line-length=100",  // Same line length as Black
+        "--profile=black",  // Prevent conflicts with Black
+        "--lines-after-imports=2"  // Use 2 lines after import instead of 1
     ],
+
+    // Black formatter
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter",
+    },
+    "black-formatter.args": [
+        "--line-length=100",  // Black will only split lines that exceed this length
+        "--skip-magic-trailing-comma",  // Try to squish lists onto one line if possible
+        "--preview",  // Enable changes that will be added in a future version of Black
+        "--enable-unstable-feature=string_processing",  // Automatically split strings over multiple lines
+        "--enable-unstable-feature=hug_parens_with_braces_and_square_brackets",  // Hug all types of parens
+        "--enable-unstable-feature=wrap_long_dict_values_in_parens"  // Use indent if a dict value is too long
+    ],
+
     // Flake8 Linter
     "flake8.args": [
-        "--max-line-length=120",
+        "--max-line-length=120",  // Black only loosely adheres to line-length
         // E203: Whitespace before ":"
         "--extend-ignore=E203",  // Black disagrees with pep8 here
         // F401: [module] imported but unused
         // F403: `from [module] import *` used; unable to detect undefined names
         // F405: [name] may be undefined, or defined from star imports: [module]
-        "--per-file-ignores=*/__init__.py:F401 */tier_*.py:F401,F403,F405"
+        "--per-file-ignores=*/__init__.py:F401 */tier_*.py:F401,F403,F405"  // Ignoring Entire Files
     ],
 }
 ```
