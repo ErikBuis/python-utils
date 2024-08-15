@@ -77,6 +77,24 @@ git config --global pull.rebase false
 ```
 
 
+# Installing a git repository as a Python package
+To install a git repository as a Python package, go to the repository's page on github.com and copy the `Clone > SSH` command. This will look something like `git@github.com:user-name/repository-name.git`. Unfortunately, it is not entirely straightforward to just install using `pip install --editable`. Instead, the following steps are necessary first to get the right pip install command.
+1. Substitute the colon `:` by a slash `/`. For example, your URL will now look like: `git@github.com/user-name/repository-name.git`
+2. Add `git+ssh://` to the start of the URL. For example, your URL will now look like: `git+ssh://git@github.com/user-name/repository-name.git`
+3. Search the repository's root folder for an installation configuration file.
+   - If there is a `pyproject.toml` file, look for a `name = "<name>"` entry under the `[project]` section. Copy the `<name>` field.
+   - If there is a `setup.cfg` file, look for a `name = <name>` entry under the `[metadata]` section. Copy the `<name>` field.
+4. Add `#egg=<name>` to the end of the URL. For example, if the `<name>` field you found in step 3 was `myrepositoryname`, your URL will now look like: `git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname`
+5. Install the repository into your project by running `pip install --editable git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname`. This command will create a folder named `src` into your root directory, which will have all repositories you installed using this method in it. The names of the repositories will be the same as the ones you specified in the `#egg=<name>` field. For example, your directory structure will now look like:
+<pre>
+.
+├── … <b>file.extension</b>: Any file in your own project.
+├── …
+└── 📁 <b>src</b>
+    └── 📁 <b>myrepositoryname</b>: Code for the repository at https://github.com/user-name/repository-name.git
+</pre>
+
+
 # Extras
 The following parts of the tutorial are totally optional and only for those who want to further customize their git installation. If you are not interested in this, you are now done with the installation process. Enjoy using git!
 
@@ -95,3 +113,41 @@ alias 'git?'='gh copilot suggest -t git'
 alias 'gh?'='gh copilot suggest -t gh'
 ```
 Now you can enter commands like `?? Find all python files containing "import sys"` and Copilot will suggest a Bash command to perform the action.
+
+## Template pre-commit-config.yml file
+Here's a template `pre-commit-config.yml` file to help you get started on setting up pre-commit hooks in your git repository:
+```yaml
+repos:
+  - repo: https://github.com/pycqa/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        name: isort (python)
+        args:
+          - "--line-length=100"  # Same line length as Black
+          - "--profile=black"  # Prevent conflicts with Black
+          - "--lines-after-imports=2"  # Use 2 lines after import instead of 1
+  - repo: https://github.com/psf/black
+    rev: 24.3.0
+    hooks:
+      - id: black
+        args:
+          - --line-length=100  # Black will only split lines that exceed this length
+          - --skip-magic-trailing-comma  # Try to squish lists onto one line if possible
+          - --preview  # Enable changes that will be added in a future version of Black
+          - --enable-unstable-feature=string_processing  # Automatically split strings over multiple lines
+          - --enable-unstable-feature=hug_parens_with_braces_and_square_brackets  # Hug all types of parens
+          - --enable-unstable-feature=wrap_long_dict_values_in_parens  # Use indent if a dict value is too long
+  - repo: https://github.com/pycqa/flake8
+    rev: 6.0.0
+    hooks:
+      - id: flake8
+        args:
+          - "--max-line-length=120"  # Black only loosely adheres to line-length
+          # E203: Whitespace before ":"
+          - "--extend-ignore=E203"  # Black disagrees with pep8 here
+          # F401: [module] imported but unused
+          # F403: `from [module] import *` used; unable to detect undefined names
+          # F405: [name] may be undefined, or defined from star imports: [module]
+          - "--per-file-ignores=*/__init__.py:F401 */tier_*.py:F401,F403,F405"  # Ignoring Entire Files
+```
