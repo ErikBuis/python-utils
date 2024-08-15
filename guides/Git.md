@@ -97,7 +97,7 @@ alias 'gh?'='gh copilot suggest -t gh'
 Now you can enter commands like `?? Find all python files containing "import sys"` and Copilot will suggest a Bash command to perform the action.
 
 ## Template `.gitignore` file
-A template `.gitignore` file to help you get started with your git project has been added separately in `Gitignore.md`, which can be found in the same directory as this file.
+A template `.gitignore` file to help you get started with your git project has been added separately in `Gitignore_template`, which can be found in the same directory as this file.
 
 ## Template `pre-commit-config.yml` file
 Here's a template `pre-commit-config.yml` file to help you get started on setting up pre-commit hooks in your git repository. To activate the pre-commit hooks, run:
