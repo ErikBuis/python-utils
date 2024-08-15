@@ -115,7 +115,12 @@ alias 'gh?'='gh copilot suggest -t gh'
 Now you can enter commands like `?? Find all python files containing "import sys"` and Copilot will suggest a Bash command to perform the action.
 
 ## Template pre-commit-config.yml file
-Here's a template `pre-commit-config.yml` file to help you get started on setting up pre-commit hooks in your git repository:
+Here's a template `pre-commit-config.yml` file to help you get started on setting up pre-commit hooks in your git repository. To activate the pre-commit hooks, run:
+```bash
+mamba install pre-commit
+pre-commit install
+```
+Template:
 ```yaml
 repos:
   - repo: https://github.com/pycqa/isort
