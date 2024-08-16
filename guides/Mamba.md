@@ -44,22 +44,19 @@ Since Mamba is designed to be a drop-in replacement for Conda, the command synta
 
 
 # Installing a git repository as a Python package
-To install a git repository as a Python package, go to the repository's page on github.com and copy the `Clone > SSH` command. This will look something like `git@github.com:user-name/repository-name.git`. Unfortunately, it is not entirely straightforward to just install using something like `mamba install`. Instead, we have to install with pip. The following steps are necessary to get the correct Pip command.
+To install a git repository as a Python package, go to the repository's page on github.com and copy the `Clone > SSH` command. This will look something like `git@github.com:user-name/repository-name.git`. Unfortunately, it is not entirely straightforward to just install using something like `mamba install`. Instead, we the closest equivalent as of august 2024, which is to install with pip (see [this issue](https://github.com/conda/conda-build/issues/4251)). The following steps are necessary to get the correct Pip command.
 1. Substitute the colon `:` by a slash `/`. For example, your URI will now look like: `git@github.com/user-name/repository-name.git`
 2. Add `git+ssh://` to the start of the URL. For example, your URI will now look like: `git+ssh://git@github.com/user-name/repository-name.git`
 3. Search the repository's root folder for an installation configuration file.
    - If there is a `pyproject.toml` file, look for a `name = "<name>"` entry under the `[project]` section. Copy the `<name>` field.
    - If there is a `setup.cfg` file, look for a `name = <name>` entry under the `[metadata]` section. Copy the `<name>` field.
 4. Add `#egg=<name>` to the end of the URL. For example, if the `<name>` field you found in step 3 was `myrepositoryname`, your URI will now look like: `git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname`
-5. Install the repository into your project by running `pip install git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname` or adding the following to your environment.yml file:
-```yaml
-  - pip:
-    - git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname
-```
+5. Now it is time to install the repository. As explained above, we should prevent pip from messing with our Mamba/Conda installations. To do this, we use the flags `--no-build-isolation --no-deps --editable`. Unfortunately, the former two flags can't be specified in a yaml file (see [this issue](https://github.com/conda/conda/issues/6805)). Thus, after installing your environment using `mamba env create -f environment-dev.yml`, we have to do `pip install --no-build-isolation --no-deps --editable git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname` manually in the terminal.
+6. The disadvantage of installing with `--no-build-isolation --no-deps` is that the dependencies of these repositories will not be installed. Thus, you must add all their requirements to your own `environment-dev.yml` file manually. After doing this, your environment should finally be ready.
 
 
-# Template `environment.yml` file
-For your convenience, we have provided a template `environment.yml` file below. This file contains the a lot of packages data science projects may depend on, so feel free to remove any packages you don't need for your project. You can copy this file to your repository and edit it to create your own environment with Mamba or Conda.
+# Template `environment-dev.yml` file
+For your convenience, we have provided a template `environment-dev.yml` file below. This file contains the a lot of packages data science projects may depend on, so feel free to remove any packages you don't need for your project. You can copy this file to your repository and edit it to create your own environment with Mamba or Conda.
 ```yaml
 # To create a blank environment with only Python 3.x installed, run `mamba create -n your_env_name python=3.x`.
 # To create an environment from an `environment-dev.yml` file, run `mamba env create -f environment-dev.yml`.
@@ -72,6 +69,9 @@ For your convenience, we have provided a template `environment.yml` file below. 
 # To list all environments, run `mamba env list`.
 # To list all packages in the current environment, run `mamba list`.
 
+# ! After creating the environment, you must install the following package(s) manually. This can not be done through the environment file (see https://github.com/conda/conda/issues/6805).
+# ! `pip install --no-build-isolation --no-deps --editable git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname`
+
 name: your_env_name
 
 channels:
@@ -81,7 +81,7 @@ channels:
 
 dependencies:
   # Base Python
-  - python=3.10
+  - python=3.11
   - pip
 
   # Development tools
@@ -108,25 +108,32 @@ dependencies:
   - pillow
   - opencv
 
-  # Tabular data
+  # Database manipulation
   - pandas
   - pyarrow
+  - psycopg2
+  - redis-py
 
   # Geospatial data
   - geopandas
   - shapely
+  - geojson
+  - sqlalchemy
   - pyogrio
   - fiona
   - rasterio
   - rio-cogeo
   # - gdal (if you include this, you must specify numpy<2)
 
-  - pip:
-    # Install packages that aren't available on conda-forge
-    # - package-not-available-via-conda-forge
+  # Distributed computing
+  - boto3
+  - ray-default
+  - dagster
+  - dagster-webserver
 
-    # Install private packages (will be installed in `./src/*`)
-    # - git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname
+  - pip:
+    # Install packages that aren't available via Conda
+    # - package-not-available-via-conda
 ```
 
 
