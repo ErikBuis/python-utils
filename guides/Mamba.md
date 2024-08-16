@@ -70,7 +70,7 @@ For your convenience, we have provided a template `environment-dev.yml` file bel
 # To list all packages in the current environment, run `mamba list`.
 
 # ! After creating the environment, you must install the following package(s) manually. This can not be done through the environment file (see https://github.com/conda/conda/issues/6805).
-# ! `pip install --no-build-isolation --no-deps --editable git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname`
+# ! pip install --no-build-isolation --no-deps --editable git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname
 
 name: your_env_name
 
