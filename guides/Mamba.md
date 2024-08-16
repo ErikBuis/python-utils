@@ -51,28 +51,11 @@ To install a git repository as a Python package, go to the repository's page on 
    - If there is a `pyproject.toml` file, look for a `name = "<name>"` entry under the `[project]` section. Copy the `<name>` field.
    - If there is a `setup.cfg` file, look for a `name = <name>` entry under the `[metadata]` section. Copy the `<name>` field.
 4. Add `#egg=<name>` to the end of the URL. For example, if the `<name>` field you found in step 3 was `myrepositoryname`, your URI will now look like: `git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname`
-5. Install the repository into your project by running `pip install --editable git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname` or adding the following to your environment.yml file:
+5. Install the repository into your project by running `pip install git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname` or adding the following to your environment.yml file:
 ```yaml
   - pip:
-    - --editable git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname
+    - git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname
 ```
-This will create a folder named `src` into your root directory, which will have all repositories you installed using this method in it. The names of the repositories will be the same as the ones you specified in the `#egg=<name>` field. For example, your directory structure will now look like:
-<pre>
-.
-├── … <b>file.extension</b>: Any file in your own project.
-├── …
-└── 📁 <b>src</b>
-    └── 📁 <b>myrepositoryname</b>: Code for the repository at https://github.com/user-name/repository-name.git
-</pre>
-One more thing. If you are using VSCode, `myrepositoryname` will not be recognized as a module in your current environment. To solve this, add the following lines to your workspace settings at `.vscode/settings.json`:
-```json5
-// Add the following lines if you installed a private repository using
-// `pip install --editable git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname`.
-"python.analysis.extraPaths": [
-    "./src/myrepositoryname",
-],
-```
-Unfortunately, adding `"./src"` or even `"./src/*` does not work, so you have to settle with manually adding each entry.
 
 
 # Template `environment.yml` file
@@ -143,7 +126,7 @@ dependencies:
     # - package-not-available-via-conda-forge
 
     # Install private packages (will be installed in `./src/*`)
-    # - --editable git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname
+    # - git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname
 ```
 
 
