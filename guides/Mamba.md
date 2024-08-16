@@ -160,13 +160,13 @@ When testing stuff in IPython, it can be useful to have IPython automatically re
 ```bash
 ipython profile create
 ```
-Then, open the file `~/.ipython/profile_default/ipython_config.py` and change the line
+This will also tell you where the file was generated (on Linux, this is `~/.ipython/profile_default/ipython_config.py`). Open the file and change the line
 ```python
 # c.InteractiveShellApp.extensions = []
 ```
 to
 ```python
-c.InteractiveShellApp.extensions = ['autoreload']
+c.InteractiveShellApp.extensions = ["autoreload"]
 ```
 and the line
 ```python
@@ -174,5 +174,5 @@ and the line
 ```
 to
 ```python
-c.InteractiveShellApp.exec_lines = ['%autoreload 2']
+c.InteractiveShellApp.exec_lines = ["%autoreload 2"]
 ```
