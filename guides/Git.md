@@ -147,11 +147,6 @@ If you're using VSCode, the following `settings.json` file might also be helpful
     "python.analysis.autoFormatStrings": true,
     "python.analysis.completeFunctionParens": true,
     "python.analysis.typeCheckingMode": "basic",
-    // Add the following lines if you installed a private repository using
-    // `pip install --editable git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname`.
-    // "python.analysis.extraPaths": [
-    //     "./src/myrepositoryname"
-    // ],
     
     // isort formatter
     "isort.check": true,
