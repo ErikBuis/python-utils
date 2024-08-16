@@ -54,20 +54,18 @@ To install a git repository as a Python package, go to the repository's page on 
 5. Now it is time to install the repository. As explained above, we should prevent pip from messing with our Mamba/Conda installations. To do this, we use the flags `--no-build-isolation --no-deps --editable`. Unfortunately, the former two flags can't be specified in a yaml file (see [this issue](https://github.com/conda/conda/issues/6805)). Thus, after installing your environment using `mamba env create -f environment-dev.yml`, we have to do `pip install --no-build-isolation --no-deps --editable git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname` manually in the terminal.
 6. The disadvantage of installing with `--no-build-isolation --no-deps` is that the dependencies of these repositories will not be installed. Thus, you must add all their requirements to your own `environment-dev.yml` file manually. After doing this, your environment should finally be ready.
 7. Since we specified `--editable`, the above command will create a folder named `src` into your root directory, which will have all repositories you installed using this method in it. The names of the repositories will be the same as the ones you specified in the `#egg=<name>` field. For example, your directory structure will now look like:
-<pre>
-.
-├── … <b>file.extension</b>: Any file in your own project.
-├── …
-└── 📁 <b>src</b>
-    └── 📁 <b>myrepositoryname</b>: Code for the repository at https://github.com/user-name/repository-name.git
-</pre>
-If you are using VSCode, `myrepositoryname` will not be recognized as a module in your current environment. To solve this, add the following lines to your workspace settings at `.vscode/settings.json`:
-```json5
+    <pre>.
+    ├── … <b>file.extension</b>: Any file in your own project.
+    ├── …
+    └── 📁 <b>src</b>
+        └── 📁 <b>myrepositoryname</b>: Code for the repository at https://github.com/user-name/repository-name.git</pre>
+    If you are using VSCode, `myrepositoryname` will not be recognized as a module in your current environment. To solve this, add the following lines to your workspace settings at `.vscode/settings.json`:
+    ```json
     "python.analysis.extraPaths": [
         "./src/myrepositoryname",
     ],
-```
-Unfortunately, adding `"./src"` or even `"./src/*` does not work, so you have to settle with manually adding each entry.
+    ```
+    Unfortunately, adding `"./src"` or even `"./src/*` does not work, so you have to settle with manually adding each entry.
 
 
 # Template `environment-dev.yml` file
