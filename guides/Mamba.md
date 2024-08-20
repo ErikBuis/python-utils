@@ -32,11 +32,11 @@ For both Conda and Mamba environments, we strongly recommend to only install pac
 
 Since Mamba is designed to be a drop-in replacement for Conda, the command syntax is the same in almost all common use cases. Below are a few examples of frequently used commands:
 - To create a blank environment with only Python 3.x installed, run `mamba create -n your_env_name python=3.x`.
-- To create an environment from an `environment-dev.yml` file, run `mamba env create -f environment-dev.yml`.
+- To create an environment from an `environment-dev.yaml` file, run `mamba env create -f environment-dev.yaml`.
 - To activate an environment, run `mamba activate your_env_name` (or `conda activate your_env_name` on Windows).
 - To deactivate an environment, run `mamba deactivate` (or `conda deactivate` on Windows).
-- To install a package in an environment without an `environment-dev.yml` file, run `mamba install -n your_env_name package-name`.
-- To install a package in an environment with an `environment-dev.yml` file, first add the package you want to install to the file and then run `mamba env update -f environment-dev.yml --prune`.
+- To install a package in an environment without an `environment-dev.yaml` file, run `mamba install -n your_env_name package-name`.
+- To install a package in an environment with an `environment-dev.yaml` file, first add the package you want to install to the file and then run `mamba env update -f environment-dev.yaml --prune`.
 - To remove a package from an environment, run `mamba remove -n your_env_name package-name`.
 - To remove an environment, run `mamba remove -n your_env_name --all`.
 - To list all environments, run `mamba env list`.
@@ -51,8 +51,8 @@ To install a git repository as a Python package, go to the repository's page on 
    - If there is a `pyproject.toml` file, look for a `name = "<name>"` entry under the `[project]` section. Copy the `<name>` field.
    - If there is a `setup.cfg` file, look for a `name = <name>` entry under the `[metadata]` section. Copy the `<name>` field.
 4. Add `#egg=<name>` to the end of the URL. For example, if the `<name>` field you found in step 3 was `myrepositoryname`, your URI will now look like: `git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname`
-5. Now it is time to install the repository. As explained above, we should prevent pip from messing with our Mamba/Conda installations. To do this, we use the flags `--no-build-isolation --no-deps --editable`. Unfortunately, the former two flags can't be specified in a yaml file (see [this issue](https://github.com/conda/conda/issues/6805)). Thus, after installing your environment using `mamba env create -f environment-dev.yml`, we have to do `pip install --no-build-isolation --no-deps --editable git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname` manually in the terminal.
-6. The disadvantage of installing with `--no-build-isolation --no-deps` is that the dependencies of these repositories will not be installed. Thus, you must add all their requirements to your own `environment-dev.yml` file manually. After doing this, your environment should finally be ready.
+5. Now it is time to install the repository. As explained above, we should prevent pip from messing with our Mamba/Conda installations. To do this, we use the flags `--no-build-isolation --no-deps --editable`. Unfortunately, the former two flags can't be specified in a yaml file (see [this issue](https://github.com/conda/conda/issues/6805)). Thus, after installing your environment using `mamba env create -f environment-dev.yaml`, we have to do `pip install --no-build-isolation --no-deps --editable git+ssh://git@github.com/user-name/repository-name.git#egg=myrepositoryname` manually in the terminal.
+6. The disadvantage of installing with `--no-build-isolation --no-deps` is that the dependencies of these repositories will not be installed. Thus, you must add all their requirements to your own `environment-dev.yaml` file manually. After doing this, your environment should finally be ready.
 7. Since we specified `--editable`, the above command will create a folder named `src` into your root directory, which will have all repositories you installed using this method in it. The names of the repositories will be the same as the ones you specified in the `#egg=<name>` field. For example, your directory structure will now look like:
     <pre>.
     ├── … <b>file.extension</b>: Any file in your own project.
@@ -68,15 +68,15 @@ To install a git repository as a Python package, go to the repository's page on 
     Unfortunately, adding `"./src"` or even `"./src/*` does not work, so you have to settle with manually adding each entry.
 
 
-# Template `environment-dev.yml` file
-For your convenience, we have provided a template `environment-dev.yml` file below. This file contains the a lot of packages data science projects may depend on, so feel free to remove any packages you don't need for your project. You can copy this file to your repository and edit it to create your own environment with Mamba or Conda.
+# Template `environment-dev.yaml` file
+For your convenience, we have provided a template `environment-dev.yaml` file below. This file contains the a lot of packages data science projects may depend on, so feel free to remove any packages you don't need for your project. You can copy this file to your repository and edit it to create your own environment with Mamba or Conda.
 ```yaml
 # To create a blank environment with only Python 3.x installed, run `mamba create -n your_env_name python=3.x`.
-# To create an environment from an `environment-dev.yml` file, run `mamba env create -f environment-dev.yml`.
+# To create an environment from an `environment-dev.yaml` file, run `mamba env create -f environment-dev.yaml`.
 # To activate an environment, run `mamba activate your_env_name` (or `conda activate your_env_name` on Windows).
 # To deactivate an environment, run `mamba deactivate` (or `conda deactivate` on Windows).
-# To install a package in an environment without an `environment-dev.yml` file, run `mamba install -n your_env_name package-name`.
-# To install a package in an environment with an `environment-dev.yml` file, first add the package you want to install to the file and then run `mamba env update -f environment-dev.yml --prune`.
+# To install a package in an environment without an `environment-dev.yaml` file, run `mamba install -n your_env_name package-name`.
+# To install a package in an environment with an `environment-dev.yaml` file, first add the package you want to install to the file and then run `mamba env update -f environment-dev.yaml --prune`.
 # To remove a package from an environment, run `mamba remove -n your_env_name package-name`.
 # To remove an environment, run `mamba remove -n your_env_name --all`.
 # To list all environments, run `mamba env list`.

@@ -39,7 +39,7 @@ Next, go to your GitHub account, look for `Settings > SSH and GPG keys > New SSH
 You might run into the error "Error: Permission denied (publickey)" when trying to clone/fetch/pull etc. on Windows. To fix this, try [this](https://stackoverflow.com/questions/48843643/using-git-with-powershell-and-ssh-key-with-passphrase) or [this](https://docs.github.com/en/authentication/troubleshooting-ssh/error-permission-denied-publickey) link. For future reference here is the StackOverflow post that solved the problem for me:
 
 > You should not use the Open SSH client that comes with Git for Windows. Instead, Windows 10 has its own implementation of Open SSH that is integrated with the system. To achieve this:
-> 
+>
 > 1. Start the `ssh-agent` from Windows Services:
 >     - Type `Services` in the Start Menu or `Win+R` and then type `services.msc` to launch the Services window;
 >     - Find the `OpenSSH Authentication Agent` in the list and double click on it;
@@ -99,8 +99,8 @@ Now you can enter commands like `?? Find all python files containing "import sys
 ## Template `.gitignore` file
 A template `.gitignore` file to help you get started with your git project has been added separately in `Gitignore_template`, which can be found in the same directory as this file.
 
-## Template `pre-commit-config.yml` file
-Pre-commit hooks help you run programs such as code linters and formatters. When set up, git will run them automatically before every commit. To use this functionality, first install the `pre-commit` Python package if not already installed, then activate the pre-commit hooks by running `pre-commit install`. Here's a template `pre-commit-config.yml` file to help you get started on setting up pre-commit hooks in your git repository.
+## Template `pre-commit-config.yaml` file
+Pre-commit hooks help you run programs such as code linters and formatters. When set up, git will run them automatically before every commit. To use this functionality, first install the `pre-commit` Python package if not already installed, then activate the pre-commit hooks by running `pre-commit install`. Here's a template `pre-commit-config.yaml` file to help you get started on setting up pre-commit hooks in your git repository.
 ```yaml
 repos:
   - repo: https://github.com/pycqa/isort
@@ -147,7 +147,7 @@ If you're using VSCode, the following `settings.json` file might also be helpful
     "python.analysis.autoFormatStrings": true,
     "python.analysis.completeFunctionParens": true,
     "python.analysis.typeCheckingMode": "basic",
-    
+
     // isort formatter
     "isort.check": true,
     "isort.severity": {
