@@ -7,30 +7,6 @@ from rtree import index
 T = TypeVar("T")
 
 
-def __find_overlapping_geometries_bruteforce(
-    geometries: list[T], binary_overlap_func: Callable[[T, T], bool]
-) -> list[list[int]]:
-    """Find overlapping geometries using a brute-force approach.
-
-    Amortized complexity: O(n^2).
-
-    Args:
-        geometries: The geometries to find overlaps in.
-        binary_overlap_func: A function that returns True if two geometries overlap.
-
-    Returns:
-        For each geometry, a list of indices of the geometries that overlap with it (in no particular order).
-        The output could be seen as an adjacency list of the overlap graph.
-    """
-    overlaps = [[] for _ in geometries]
-    for i, geometry in enumerate(geometries):
-        for j, other_geometry in enumerate(geometries[i + 1 :], start=i + 1):
-            if binary_overlap_func(geometry, other_geometry):
-                overlaps[i].append(j)
-                overlaps[j].append(i)
-    return overlaps
-
-
 def find_overlapping_bboxes(bboxes: list[tuple[float, float, float, float]]) -> list[list[int]]:
     """Find overlapping bounding boxes.
 
@@ -46,17 +22,16 @@ def find_overlapping_bboxes(bboxes: list[tuple[float, float, float, float]]) -> 
             - y2: The y-coordinate of the bottom side of the bounding box.
 
     Returns:
-        For each bounding box, a list of indices of the bounding boxes that overlap with it (in no particular order).
+        For each bounding box, a list of indices of the bounding boxes that overlap with it.
+        These indices are in no particular order, and include the index of the bounding box itself.
         The output could be seen as an adjacency list of the overlap graph.
     """
-    # Create a spatial index.
     spatial_idx = index.Index()
-    for i, bbox in enumerate(bboxes):
-        spatial_idx.insert(i, bbox)
+    for u, bbox in enumerate(bboxes):
+        spatial_idx.insert(u, bbox)
 
-    # Find overlaps.
     overlaps = []
-    for i, bbox in enumerate(bboxes):
+    for u, bbox in enumerate(bboxes):
         overlaps.append(list(spatial_idx.intersection(bbox)))
     return overlaps
 
@@ -75,34 +50,40 @@ def find_overlapping_geometries(
         geometries: The geometries to find overlaps in.
         bbox_func: A function that returns the bounding box of a geometry.
         binary_overlap_func: A function that returns True if two geometries overlap.
+            The function is assumed to be symmetric, i.e.
+            binary_overlap_func(a, b) == binary_overlap_func(b, a).
 
     Returns:
-        For each geometry, a list of indices of the geometries that overlap with it (in no particular order).
+        For each geometry, a list of indices of the geometries that overlap with it.
+        These indices are in no particular order, and include the index of the geometry itself.
         The output could be seen as an adjacency list of the overlap graph.
     """
-    return [
-        group
-        for group_bboxes in find_overlapping_bboxes(
-            [bbox_func(geometry) for geometry in geometries]
-        )
-        for group in __find_overlapping_geometries_bruteforce(
-            [geometries[i] for i in group_bboxes], binary_overlap_func
-        )
-    ]
+    overlaps = find_overlapping_bboxes([bbox_func(geometry) for geometry in geometries])
+    overlaps_filtered = [[] for _ in range(len(overlaps))]
+    for u, nbrs in enumerate(overlaps):
+        overlaps_filtered[u].append(u)
+        for v in nbrs:
+            if u < v and binary_overlap_func(geometries[u], geometries[v]):
+                overlaps_filtered[u].append(v)
+                overlaps_filtered[v].append(u)
+    return overlaps_filtered
 
 
 def find_overlapping_circles(circles: list[tuple[float, float, float]]) -> list[list[int]]:
     """Find overlapping circles.
 
+    Amortized complexity in most real-world scenarios: O(n log n).
+    Worst-case complexity: O(n^2).
+
     Args:
-        circles: The circles to find overlaps in.
-            Each circle is a tuple containing:
+        circles: The circles to find overlaps in. Each circle is a tuple containing:
             - x: The x-coordinate of the center of the circle.
             - y: The y-coordinate of the center of the circle.
             - r: The radius of the circle.
 
     Returns:
-        For each circle, a list of indices of the circles that overlap with it (in no particular order).
+        For each circle, a list of indices of the circles that overlap with it.
+        These indices are in no particular order, and include the index of the circle itself.
         The output could be seen as an adjacency list of the overlap graph.
     """
     return find_overlapping_geometries(
