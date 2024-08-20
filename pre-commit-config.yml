@@ -1,0 +1,36 @@
+repos:
+  - repo: https://github.com/pycqa/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        name: isort (python)
+        args:
+          - "--line-length=79"  # Same line length as Black
+          - "--profile=black"  # Prevent conflicts with Black
+          - "--lines-after-imports=2"  # Use 2 lines after import instead of 1
+  - repo: https://github.com/psf/black
+    rev: 24.3.0
+    hooks:
+      - id: black
+        args:
+          - --line-length=79  # Black will only split lines that exceed this length
+          - --skip-magic-trailing-comma  # Try to squish lists onto one line if possible
+          - --preview  # Enable changes that will be added in a future version of Black
+          - --enable-unstable-feature=string_processing  # Automatically split strings over multiple lines
+          - --enable-unstable-feature=hug_parens_with_braces_and_square_brackets  # Hug all types of parens
+          - --enable-unstable-feature=wrap_long_dict_values_in_parens  # Use indent if a dict value is too long
+  - repo: https://github.com/pycqa/flake8
+    rev: 6.0.0
+    hooks:
+      - id: flake8
+        args:
+          - "--max-line-length=79"  # Black only loosely adheres to line-length
+          # E741: Ambiguous variable name
+          # W503: Line break before binary operator
+          # W504: Line break after binary operator
+          # E226: Missing whitespace around arithmetic operator
+          # E221: Multiple spaces before operator
+          # E222: Multiple spaces after operator
+          # E731: Do not assign a lambda expression, use a def
+          # E203: Whitespace before ":" (Black disagrees with pep8 here)
+          - "--extend-ignore=E741,W503,W504,E226,E221,E222,E731,E203"

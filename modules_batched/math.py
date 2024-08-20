@@ -1,6 +1,7 @@
 from math import pi, sqrt
-from typing import TypeVar
+from typing import TypeVar, overload
 
+import numpy.typing as npt
 import torch
 
 
@@ -51,6 +52,52 @@ def round_to_multiple_batched(x: torch.Tensor, base: NumberT) -> torch.Tensor:
         Shape: [*]
     """
     return torch.round(x / base).to(torch.int64) * base
+
+
+@overload
+def interp1d_batched(
+    x: npt.NDArray,
+    x1: float | npt.NDArray,
+    y1: float | npt.NDArray,
+    x2: float | npt.NDArray,
+    y2: float | npt.NDArray,
+) -> npt.NDArray:
+    """Return interpolated value(s) y given two points and value(s) x."""
+    ...
+
+
+@overload
+def interp1d_batched(
+    x: torch.Tensor,
+    x1: float | torch.Tensor,
+    y1: float | torch.Tensor,
+    x2: float | torch.Tensor,
+    y2: float | torch.Tensor,
+) -> torch.Tensor:
+    """Return interpolated value(s) y given two points and value(s) x."""
+    ...
+
+
+def interp1d_batched(
+    x: npt.NDArray | torch.Tensor,
+    x1: float | npt.NDArray | torch.Tensor,
+    y1: float | npt.NDArray | torch.Tensor,
+    x2: float | npt.NDArray | torch.Tensor,
+    y2: float | npt.NDArray | torch.Tensor,
+) -> npt.NDArray | torch.Tensor:
+    """Return interpolated value(s) y given two points and value(s) x.
+
+    Args:
+        x: The x-value(s) to interpolate.
+        x1: The x-value of the first point.
+        y1: The y-value of the first point.
+        x2: The x-value of the second point.
+        y2: The y-value of the second point.
+
+    Returns:
+        The interpolated value(s) y.
+    """
+    return y1 + (x - x1) * (y2 - y1) / (x2 - x1)
 
 
 def gaussian_batched(
