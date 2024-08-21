@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "python-utils"
+description = "A place to store general, reusable functions and algorithms."
+readme = "README.md"
+license = { file = "LICENCE.md" }
+requires-python = ">= 3.11"
+dynamic = ["version"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Private :: Do Not Upload",
+    "License :: OSI Approved :: Apache Software License",
+    "Intended Audience :: Developers",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "flake8",
+    "isort",
+    "pre-commit",
+    "ipython",
+    "ipykernel",
+    "pytest",
+    "tqdm",
+]
+pytorch = ["torch", "torchvision", "torchaudio"]
+pytorch3d = ["torch", "torchvision", "torchgeometry", "pytorch3d"]
+pytorch-lightning = [
+    "pytorch",
+    "torchvision",
+    "torchaudio",
+    "pytorch-lightning",
+]
+numpy = ["numpy"]
+matplotlib = ["matplotlib"]
+rtree = ["rtree"]
+scipy = ["scipy"]
+geospatial = ["shapely", "geopandas"]
+
+[project.urls]
+repository = "https://github.com/neo-bv/python-utils.git"
+issues = "https://github.com/neo-bv/python-utils/issues"
