@@ -1,7 +1,8 @@
 > Author: [Erik Buis](https://github.com/ErikBuis) \
 > Email: [ebbuis@gmail.com](mailto:ebbuis@gmail.com) \
 > Date of creation of this file: 8 March, 2024 \
-> Copyright Erik Buis (2024). See LICENCE.md for details.
+> Copyright Erik Buis (2024). See LICENCE.md for details. \
+> Background on why this code is licenced: The repository was developed by Erik during his studies/private time/programming competitions, and so it is his intellectual property. However, further modifications by NEO were desired. Since these modifications would be the intellectual property of NEO, it was decided to fork the repository here. By licensing the code under Apache 2.0, Erik grants NEO the right to use, modify, distribute, and sublicense the code. However, the license requires that any distributed version of the software (modified or not) retains the original copyright notice and license text. Further changes/augmentations in this forked version of the repository are welcome, and can be contributed by any employee of NEO. 
 
 
 # Utility functions
