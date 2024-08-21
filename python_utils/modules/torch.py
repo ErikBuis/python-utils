@@ -454,10 +454,7 @@ def unique_consecutive(
     return_counts: Literal[False] = False,
     dim: int | None = None,
 ) -> torch.Tensor:
-    # Overload for the case where:
-    # - return_inverse is False
-    # - return_counts is False
-    ...
+    ...  # fmt: skip
 
 
 @overload
@@ -467,10 +464,7 @@ def unique_consecutive(
     return_counts: Literal[False] = False,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    # Overload for the case where:
-    # - return_inverse is True
-    # - return_counts is False
-    ...
+    ...  # fmt: skip
 
 
 @overload
@@ -480,10 +474,7 @@ def unique_consecutive(
     return_counts: Literal[True] = True,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    # Overload for the case where:
-    # - return_inverse is False
-    # - return_counts is True
-    ...
+    ...  # fmt: skip
 
 
 @overload
@@ -493,10 +484,7 @@ def unique_consecutive(
     return_counts: Literal[True] = True,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    # Overload for the case where:
-    # - return_inverse is True
-    # - return_counts is True
-    ...
+    ...  # fmt: skip
 
 
 def unique_consecutive(
@@ -841,10 +829,7 @@ def unique_with_backmap(
     return_counts: Literal[False] = False,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, BackMap]:
-    # Overload for the case where:
-    # - return_inverse is False
-    # - return_counts is False
-    ...
+    ...  # fmt: skip
 
 
 @overload
@@ -854,10 +839,7 @@ def unique_with_backmap(
     return_counts: Literal[False] = False,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, BackMap, torch.Tensor]:
-    # Overload for the case where:
-    # - return_inverse is True
-    # - return_counts is False
-    ...
+    ...  # fmt: skip
 
 
 @overload
@@ -867,10 +849,7 @@ def unique_with_backmap(
     return_counts: Literal[True] = True,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, BackMap, torch.Tensor]:
-    # Overload for the case where:
-    # - return_inverse is False
-    # - return_counts is True
-    ...
+    ...  # fmt: skip
 
 
 @overload
@@ -880,10 +859,7 @@ def unique_with_backmap(
     return_counts: Literal[True] = True,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, BackMap, torch.Tensor, torch.Tensor]:
-    # Overload for the case where:
-    # - return_inverse is True
-    # - return_counts is True
-    ...
+    ...  # fmt: skip
 
 
 def unique_with_backmap(

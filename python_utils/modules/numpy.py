@@ -221,10 +221,7 @@ def unique_consecutive(
     return_counts: Literal[False] = False,
     axis: int | None = None,
 ) -> npt.NDArray:
-    # Overload for the case where:
-    # - return_inverse is False
-    # - return_counts is False
-    ...
+    ...  # fmt: skip
 
 
 @overload
@@ -234,10 +231,7 @@ def unique_consecutive(
     return_counts: Literal[False] = False,
     axis: int | None = None,
 ) -> tuple[npt.NDArray, npt.NDArray]:
-    # Overload for the case where:
-    # - return_inverse is True
-    # - return_counts is False
-    ...
+    ...  # fmt: skip
 
 
 @overload
@@ -247,10 +241,7 @@ def unique_consecutive(
     return_counts: Literal[True] = True,
     axis: int | None = None,
 ) -> tuple[npt.NDArray, npt.NDArray]:
-    # Overload for the case where:
-    # - return_inverse is False
-    # - return_counts is True
-    ...
+    ...  # fmt: skip
 
 
 @overload
@@ -260,10 +251,7 @@ def unique_consecutive(
     return_counts: Literal[True] = True,
     axis: int | None = None,
 ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
-    # Overload for the case where:
-    # - return_inverse is True
-    # - return_counts is True
-    ...
+    ...  # fmt: skip
 
 
 def unique_consecutive(
