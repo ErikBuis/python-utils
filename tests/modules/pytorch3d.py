@@ -2,7 +2,7 @@ import unittest
 
 import torch
 
-from ...modules.pytorch3d import get_matrix_rotate_vec_a_to_vec_b
+from utils.modules.pytorch3d import get_matrix_rotate_vec_a_to_vec_b
 
 
 class TestGetMatrixRotateVecAToVecB(unittest.TestCase):

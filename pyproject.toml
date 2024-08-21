@@ -7,7 +7,7 @@ name = "python-utils"
 description = "A place to store general, reusable functions and algorithms."
 readme = "README.md"
 license = { file = "LICENCE.md" }
-requires-python = ">= 3.11"
+requires-python = ">= 3.10"
 dynamic = ["version"]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -21,6 +21,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
+# Development necessities
 dev = [
     "black",
     "flake8",
@@ -31,19 +32,18 @@ dev = [
     "pytest",
     "tqdm",
 ]
+
+# Sets of libraries
 pytorch = ["torch", "torchvision", "torchaudio"]
-pytorch3d = ["torch", "torchvision", "torchgeometry", "pytorch3d"]
-pytorch-lightning = [
-    "pytorch",
-    "torchvision",
-    "torchaudio",
-    "pytorch-lightning",
-]
-numpy = ["numpy"]
-matplotlib = ["matplotlib"]
-rtree = ["rtree"]
-scipy = ["scipy"]
 geospatial = ["shapely", "geopandas"]
+
+# Individual libraries
+numpy = ["numpy"]
+scipy = ["scipy"]
+matplotlib = ["matplotlib"]
+pytorch3d = ["pytorch3d"]
+pytorch-lightning = ["pytorch-lightning"]
+rtree = ["rtree"]
 
 [project.urls]
 repository = "https://github.com/neo-bv/python-utils.git"
@@ -54,3 +54,6 @@ packages = ["utils"]
 
 [tool.setuptools.dynamic]
 version = { attr = "utils.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests/**/*.py"]

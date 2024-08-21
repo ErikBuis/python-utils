@@ -23,7 +23,19 @@ If you want to able to better recognize when a new command started (for example,
 ```powershell
 function prompt {
     $ESC = [char]27
-    "$ESC[32mPS $ESC[34m$($executionContext.SessionState.Path.CurrentLocation)$ESC[37m$('>' * ($nestedPromptLevel + 1)) $ESC[0m"
+
+    # Color codes
+    $ColorGreen = "$ESC[32m"
+    $ColorBlue = "$ESC[34m"
+    $ColorWhite = "$ESC[37m"
+    $ColorReset = "$ESC[0m"
+
+    # Conda environment
+    $condaEnv = $env:CONDA_DEFAULT_ENV
+    $condaPrompt = if ($condaEnv) { "$ColorWhite($condaEnv) " } else { "" }
+
+    # Construct the prompt
+    "$condaPrompt$ColorGreen PS $ColorBlue$($executionContext.SessionState.Path.CurrentLocation)$ColorWhite $('>' * ($nestedPromptLevel + 1)) $ColorReset"
 }
 ```
 
@@ -49,7 +61,7 @@ function Print-Tree {
     if ($Match) {
         $items = $items | Where-Object { $_.Name -match $Match }
     }
-    
+
     if ($NotMatch) {
         $items = $items | Where-Object { $_.Name -notmatch $NotMatch }
     }
@@ -61,7 +73,7 @@ function Print-Tree {
         $isLast = $i -eq $total - 1
         $marker = if ($isLast) { '└──' } else { '├──' }
         Write-Output "$Prefix$marker $($item.Name)"
-        
+
         if ($item.PSIsContainer) {
             $newPrefix = if ($isLast) { "$Prefix    " } else { "$Prefix│   " }
             Print-Tree -Path $item.FullName -Prefix $newPrefix -Match $Match -NotMatch $NotMatch
