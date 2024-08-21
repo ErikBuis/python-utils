@@ -18,6 +18,16 @@ Set-PSReadlineKeyHandler -Chord Ctrl+d -Function DeleteCharOrExit
 And save the file. Reopen your PowerShell and now you should be able to press Ctrl+D to exit it!
 
 
+## Use a Unix-like colored prompt
+If you want to able to better recognize when a new command started (for example, this could be handy if your commands have a lot of output), you can change the color of the PowerShell prompt by adding the following to your `$PROFILE`:
+```powershell
+function prompt {
+    $ESC = [char]27
+    "$ESC[32mPS $ESC[34m$($executionContext.SessionState.Path.CurrentLocation)$ESC[37m$('>' * ($nestedPromptLevel + 1)) $ESC[0m"
+}
+```
+
+
 ## Tree
 To print a tree rooted at 'path/to/directory', you can just use:
 ```powershell
