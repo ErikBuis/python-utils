@@ -48,3 +48,6 @@ geospatial = ["shapely", "geopandas"]
 [project.urls]
 repository = "https://github.com/neo-bv/python-utils.git"
 issues = "https://github.com/neo-bv/python-utils/issues"
+
+[tool.setuptools.dynamic]
+version = { attr = "__version__" }
