@@ -3,6 +3,8 @@
 > Date of creation of this file: 8 March, 2024 \
 > Copyright Erik Buis (2024). See LICENCE.md for details.
 
+> Background on why this code is licenced: The repository was developed by Erik during his studies/private time/programming competitions, and so it is his intellectual property. However, further modifications by NEO were desired. Since these modifications would be the intellectual property of NEO, it was decided to fork the repository here. By licensing the code under Apache 2.0, Erik grants NEO the right to use, modify, distribute, and sublicense the code. However, the license requires that any distributed version of the software (modified or not) retains the original copyright notice and license text. Further changes/augmentations in this forked version of the repository are welcome, and can be contributed by any employee of NEO.
+
 
 # Utility functions
 This repository contains utility functions that are meant to be fully reusable between different projects. The functions are organized by the Python module they correlate most with. Additionally, the care has been taken to separate the functionality of all files from other files, so that you can safely copy-paste a single file into your project. Despite our best efforts however, this was not viable everywhere, as some functions must call specific others to function correctly. In these cases, you may have to copy-paste the dependency files as well. However, you should note that the functions in the `modules` directory are completely independent from the rest of the files.
@@ -15,11 +17,12 @@ The repository is organized as follows:
 ├── ℹ️ <b>README.md</b>: This file.
 ├── 🛡️ <b>LICENCE.md</b>: Licence file.
 ├── 📁 <b>guides</b>: General guides for installing common software or other components often required for real-world projects.
-├── 📁 <b>modules</b>: General utility functions organized by the Python module they correlate most with. Each file is completely independent from the rest of the files, so you can safely copy-paste a single file into your project.
-├── 📁 <b>modules_batched</b>: Batched versions of general utility functions, again organized by their Python module. Note that these functions often have another dependency, in particular PyTorch.
-├── 📁 <b>custom</b>: Custom utility functions that aren't associated with a specific Python module.
-├── 📁 <b>custom_batched</b>: Batched versions of custom utility functions.
-└── 📁 <b>tests</b>: Tests for all modules, written using the unittest module from the Python standard library.
+├── 📁 <b>tests</b>: Tests for all modules, written using the unittest module from the Python standard library.
+└── 📁 <b>utils</b>: The utils package.
+    ├── 📁 <b>modules</b>: General utility functions organized by the Python module they correlate most with. Each file is completely independent from the rest of the files, so you can safely copy-paste a single file into your project.
+    ├── 📁 <b>modules_batched</b>: Batched versions of general utility functions, again organized by their Python module. Note that these functions often have another dependency, in particular PyTorch.
+    ├── 📁 <b>custom</b>: Custom utility functions that aren't associated with a specific Python module.
+    └── 📁 <b>custom_batched</b>: Batched versions of custom utility functions.
 </pre>
 
 
@@ -28,9 +31,9 @@ The `tests` directory contains unittests for all modules. The tests are written 
 
 To run the tests, run the following command from the root directory of the repository:
 ```bash
-python3 -m pytest tests/**/*.py
+python3 -m pytest
 ```
-You can also run the tests using `python3 -m unittest tests/**/*.py`, but pytest is recommended because it provides more detailed and coloured output. You may need to install pytest first using `python3 -m pip install pytest`.
+You may need to install pytest first using `python3 -m pip install pytest`.
 
 
 # Copyright

@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "python-utils"
+description = "A place to store general, reusable functions and algorithms."
+readme = "README.md"
+license = { file = "LICENCE.md" }
+requires-python = ">= 3.10"
+dynamic = ["version"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Private :: Do Not Upload",
+    "License :: OSI Approved :: Apache Software License",
+    "Intended Audience :: Developers",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+
+[project.optional-dependencies]
+# Development necessities
+dev = [
+    "black",
+    "flake8",
+    "isort",
+    "pre-commit",
+    "ipython",
+    "ipykernel",
+    "pytest",
+    "tqdm",
+]
+
+# Sets of libraries
+pytorch = ["torch", "torchvision", "torchaudio"]
+geospatial = ["shapely", "geopandas"]
+
+# Individual libraries
+numpy = ["numpy"]
+scipy = ["scipy"]
+matplotlib = ["matplotlib"]
+pytorch3d = ["pytorch3d"]
+pytorch-lightning = ["pytorch-lightning"]
+rtree = ["rtree"]
+
+[project.urls]
+repository = "https://github.com/neo-bv/python-utils.git"
+issues = "https://github.com/neo-bv/python-utils/issues"
+
+[tool.setuptools]
+packages = ["utils"]
+
+[tool.setuptools.dynamic]
+version = { attr = "utils.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests/**/*.py"]

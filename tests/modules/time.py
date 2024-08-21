@@ -1,6 +1,6 @@
 import unittest
 
-from ...modules.time import human_readable_time
+from utils.modules.time import human_readable_time
 
 
 class TestHumanReadableTime(unittest.TestCase):
