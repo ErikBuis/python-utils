@@ -14,8 +14,7 @@ def find_overlapping_bboxes(bboxes: list[tuple[float, float, float, float]]) -> 
     Worst-case complexity: O(n^2).
 
     Args:
-        bboxes: The bounding boxes to find overlaps in.
-            Each bounding box is a tuple containing:
+        bboxes: The bounding boxes to find overlaps in. Each bounding box is a tuple containing:
             - x1: The x-coordinate of the left side of the bounding box.
             - y1: The y-coordinate of the top side of the bounding box.
             - x2: The x-coordinate of the right side of the bounding box.

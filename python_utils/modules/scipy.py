@@ -301,7 +301,7 @@ def voronoi_constrain_to_rect(
             represented by the tuple (x_min, y_min, x_max, y_max).
 
     Returns:
-        A tuple containing:
+        Tuple containing:
         - The points in or on the rectangle.
             Shape: [P', 2]
         - The original vertices returned by Voronoi, plus vertices added on the
