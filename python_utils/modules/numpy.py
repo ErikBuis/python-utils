@@ -159,7 +159,7 @@ def lexsort_along(
          array([[2, 1],
                 [3, 0],
                 [0, 2],
-                [1, 3]])
+                [1, 3]]))
     """
     # We can use np.lexsort() to sort only the requested dimension.
     # First, we prepare the array for np.lexsort(). The input to this function
