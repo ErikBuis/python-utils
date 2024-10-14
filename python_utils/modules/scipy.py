@@ -17,7 +17,7 @@ def plot_fitted_curve(
     ax: matplotlib.axes.Axes,
     x: npt.ArrayLike,
     y: npt.ArrayLike,
-    func: Callable[..., npt.NDArray[np.float_]],
+    func: Callable[..., npt.NDArray[np.float64]],
     plot_confidence: bool = True,
     confidence: Literal["68", "95", "99.7"] = "95",
     sliding_window: float = 0.05,
@@ -25,7 +25,7 @@ def plot_fitted_curve(
     kwargs_optimize_curve_fit: dict | None = None,
     kwargs_plot: dict | None = None,
     kwargs_fill_between: dict | None = None,
-) -> tuple[npt.NDArray[np.float_], npt.NDArray[np.float_]]:
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     """Plot a fitted curve with varying confidence intervals.
 
     Note: The plotted data will be given labels. Make sure to call
@@ -262,10 +262,10 @@ def plot_fitted_curve(
 
 
 def voronoi_constrain_to_rect(
-    points: npt.NDArray[np.float_], rect: tuple[float, float, float, float]
+    points: npt.NDArray[np.float64], rect: tuple[float, float, float, float]
 ) -> tuple[
-    npt.NDArray[np.float_],
-    npt.NDArray[np.float_],
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
     npt.NDArray[np.int_],
     list[list[int]],
     npt.NDArray[np.int_],
