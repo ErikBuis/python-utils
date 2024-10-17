@@ -6,7 +6,8 @@ build-backend = "setuptools.build_meta"
 name = "python_utils"
 description = "A place to store general, reusable functions and algorithms."
 readme = "README.md"
-license = { file = "LICENCE.md" }
+license = { file = "LICENCE" }
+authors = [{ name = "Erik Buis" }]
 requires-python = ">= 3.10"
 dynamic = ["version"]
 classifiers = [
@@ -19,31 +20,36 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Typing :: Typed",
 ]
+dependencies = []
 
 [project.optional-dependencies]
-# Development necessities
-dev = [
-    "black",
-    "flake8",
-    "isort",
-    "pre-commit",
-    "ipython",
-    "ipykernel",
-    "pytest",
-    "tqdm",
+# Development tools
+dev = ["pre-commit", "ipython", "ipykernel", "pytest"]
+
+# Logging
+logging = ["tqdm", "loguru"]
+
+# PyTorch
+pytorch = [
+    "pytorch",
+    "torchvision",
+    "torchaudio",
+    "pytorch-cuda",
+    "lightning",
+    "tensorboard",
 ]
 
-# Sets of libraries
-pytorch = ["torch", "torchvision", "torchaudio"]
-geospatial = ["shapely", "geopandas"]
+# PyTorch3D
+pytorch3d = ["git+https://github.com/facebookresearch/pytorch3d.git@stable", "fvcore", "iopath"]
 
-# Individual libraries
-numpy = ["numpy"]
-scipy = ["scipy"]
-matplotlib = ["matplotlib"]
-pytorch3d = ["pytorch3d"]
-pytorch-lightning = ["pytorch-lightning"]
-rtree = ["rtree"]
+# Scientific
+scientific = ["numpy", "scipy", "matplotlib", "rtree"]
+
+# Database manipulation
+database = ["pandas"]
+
+# Geospatial data
+geospatial = ["geopandas", "shapely"]
 
 [project.urls]
 repository = "https://github.com/neo-bv/python_utils.git"
