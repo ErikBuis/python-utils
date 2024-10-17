@@ -42,8 +42,8 @@ THIS REPOSITORY IS LICENCED UNDER THE APACHE LICENCE 2.0.
 FOR TERMS AND CONDITIONS, SEE THE LICENCE FILE OR VISIT:
 http://www.apache.org/licenses/LICENSE-2.0
 
-The code was forked from the repository located at:
-https://github.com/ErikBuis/utils
+The code is sourced from the repository located at:
+https://github.com/ErikBuis/python-utils
 
 The copyright belongs to Erik Buis (2024).
 

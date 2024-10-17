@@ -7,9 +7,6 @@
     "python.analysis.autoFormatStrings": true,
     "python.analysis.completeFunctionParens": true,
     "python.analysis.typeCheckingMode": "basic",
-    "python.analysis.extraPaths": [
-        "./src/python-utils"
-    ],
 
     // isort formatter
     "isort.check": true,
