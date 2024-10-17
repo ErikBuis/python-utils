@@ -18,7 +18,7 @@ The repository is organized as follows:
 ├── 🛡️ <b>LICENCE.md</b>: Licence file.
 ├── 📁 <b>guides</b>: General guides for installing common software or other components often required for real-world projects.
 ├── 📁 <b>tests</b>: Tests for all modules, written using the unittest module from the Python standard library.
-└── 📁 <b>utils</b>: The utils package.
+└── 📁 <b>python_utils</b>: The python_utils package.
     ├── 📁 <b>modules</b>: General utility functions organized by the Python module they correlate most with. Each file is completely independent from the rest of the files, so you can safely copy-paste a single file into your project.
     ├── 📁 <b>modules_batched</b>: Batched versions of general utility functions, again organized by their Python module. Note that these functions often have another dependency, in particular PyTorch.
     ├── 📁 <b>custom</b>: Custom utility functions that aren't associated with a specific Python module.
@@ -43,7 +43,7 @@ FOR TERMS AND CONDITIONS, SEE THE LICENCE FILE OR VISIT:
 http://www.apache.org/licenses/LICENSE-2.0
 
 The code is sourced from the repository located at:
-https://github.com/ErikBuis/utils
+https://github.com/ErikBuis/python-utils
 
 The copyright belongs to Erik Buis (2024).
 

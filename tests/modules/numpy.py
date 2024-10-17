@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from utils.modules.numpy import lexsort_along
+from python_utils.modules.numpy import lexsort_along
 
 
 class TestLexsortAlong(unittest.TestCase):

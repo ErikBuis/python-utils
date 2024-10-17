@@ -3,7 +3,7 @@ from typing import cast
 
 import torch
 
-from utils.modules.torch import (
+from python_utils.modules.torch import (
     lexsort_along,
     swap_idcs_vals,
     swap_idcs_vals_duplicates,
