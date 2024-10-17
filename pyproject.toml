@@ -51,10 +51,6 @@ database = ["pandas"]
 # Geospatial data
 geospatial = ["geopandas", "shapely"]
 
-[project.urls]
-repository = "https://github.com/neo-bv/python_utils.git"
-issues = "https://github.com/neo-bv/python_utils/issues"
-
 [tool.setuptools]
 packages = ["python_utils"]
 
