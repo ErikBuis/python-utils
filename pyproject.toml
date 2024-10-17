@@ -40,7 +40,7 @@ pytorch = [
 ]
 
 # PyTorch3D
-pytorch3d = ["git+https://github.com/facebookresearch/pytorch3d.git@stable", "fvcore", "iopath"]
+pytorch3d = ["pytorch3d", "fvcore", "iopath"]
 
 # Scientific
 scientific = ["numpy", "scipy", "matplotlib", "rtree"]
