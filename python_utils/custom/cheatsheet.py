@@ -139,9 +139,7 @@ def bfs(adjlist: list[list[int]], start: int) -> tuple[list[float], list[int]]:
 
 def bfs_v_type(
     move: Callable[[VertexT], Iterable[VertexT]], start: VertexT
-) -> tuple[
-    defaultdict[VertexT, float], defaultdict[VertexT, VertexT | None]
-]:
+) -> tuple[defaultdict[VertexT, float], defaultdict[VertexT, VertexT | None]]:
     """Calculate the shortest distance from the start to all other vertices.
 
     If a vertex is unreachable, its distance will be set to infinity.
@@ -179,9 +177,7 @@ def bfs_v_type(
 
     dist: defaultdict[VertexT, float] = defaultdict(lambda: inf)
     dist[start] = 0
-    parent: defaultdict[VertexT, VertexT | None] = defaultdict(
-        lambda: None
-    )
+    parent: defaultdict[VertexT, VertexT | None] = defaultdict(lambda: None)
     queue: deque[VertexT] = deque((start,))
     while queue:
         u = queue.popleft()
@@ -427,11 +423,8 @@ def dijkstra(
 
 
 def dijkstra_v_type(
-    move: Callable[[VertexT], Iterable[tuple[VertexT, float]]],
-    start: VertexT,
-) -> tuple[
-    defaultdict[VertexT, float], defaultdict[VertexT, VertexT | None]
-]:
+    move: Callable[[VertexT], Iterable[tuple[VertexT, float]]], start: VertexT
+) -> tuple[defaultdict[VertexT, float], defaultdict[VertexT, VertexT | None]]:
     """Dijkstra's algorithm finds the shortest path from start to all vertices.
 
     If a vertex is unreachable, its distance will be set to infinity, and its
@@ -471,9 +464,7 @@ def dijkstra_v_type(
 
     dist: defaultdict[VertexT, float] = defaultdict(lambda: inf)
     dist[start] = 0
-    parent: defaultdict[VertexT, VertexT | None] = defaultdict(
-        lambda: None
-    )
+    parent: defaultdict[VertexT, VertexT | None] = defaultdict(lambda: None)
     # Store the distance to each vertex to ensure the closest is popped first.
     prioq: list[tuple[float, VertexT]] = []  # (dist, vertex)
     prioq = []  # (dist, vertex)
@@ -1044,30 +1035,73 @@ def depthfirst_post_order(
 # concise than a binary search implementation in Python code.
 
 
-def binary_search_discrete_func(
+def binary_search_discrete_func_left(
     f: Callable[[int], float], output: float, lower: int, upper: int
 ) -> int:
-    """Calculate the smallest input satisfying f(input) >= output.
+    """Calculate the smallest input that maps to the target output.
+
+    If multiple inputs map to the target, the leftmost one will be returned.
+    If no input maps exactly to the target, the returned input x* will be
+        rounded to the right (!) and satisfy:
+        f(x* - 1) < output < f(x*)
+
+    Making your function f cache its results is recommended, as this algorithm
+    may call it twice times for the same input (this will happen at most once).
 
     Args:
-        f: A monotonically increasing function with a discrete domain.
+        f: A discrete function that is monotonically increasing.
         output: The target output.
-        lower: An exclusive lower bound for the target input.
+        lower: An inclusive lower bound for the target input.
         upper: An inclusive upper bound for the target input.
 
     Returns:
-        The smallest input satisfying f(input) >= output.
+        The smallest input satisfying the conditions above.
     """
     while upper - lower > 1:
-        guess = (lower + upper + 1) // 2
-        if f(guess) >= output:
-            upper = guess
-        else:
+        guess = (lower + upper) // 2
+        if f(guess) < output:
             lower = guess
+        else:
+            upper = guess
+    if f(lower) >= output:
+        return lower
     return upper
 
 
-def binary_search_continuous_func(
+def binary_search_discrete_func_right(
+    f: Callable[[int], float], output: float, lower: int, upper: int
+) -> int:
+    """Calculate the largest input that maps to the target output.
+
+    If multiple inputs map to the target, the rightmost one will be returned.
+    If no input maps exactly to the target, the returned input x* will be
+        rounded to the left (!) and satisfy:
+        f(x*) < output < f(x* + 1)
+
+    Making your function f cache its results is recommended, as this algorithm
+    may call it twice times for the same input (this will happen at most once).
+
+    Args:
+        f: A discrete function that is monotonically increasing.
+        output: The target output.
+        lower: An inclusive lower bound for the target input.
+        upper: An inclusive upper bound for the target input.
+
+    Returns:
+        The largest input satisfying the conditions above.
+    """
+    while upper - lower > 1:
+        guess = (lower + upper) // 2
+        if f(guess) <= output:
+            lower = guess
+        else:
+            upper = guess
+    if f(upper) <= output:
+        return upper
+    return lower
+
+
+def binary_search_continuous_func_left(
     f: Callable[[float], float],
     output: float,
     lower: float,
@@ -1075,46 +1109,90 @@ def binary_search_continuous_func(
     abs_tol: float = 10**-6,
     rel_tol: float = 10**-6,
 ) -> float:
-    """Calculate an input satisfying:
-        f(input - abs_tol) <= output <= f(input + abs_tol) or
-        f(input - input*rel_tol) <= output <= f(input + input*rel_tol)
+    """Calculate the smallest input that maps to the target output.
+
+    If multiple inputs map to the target, the leftmost one will be returned.
+
+    The returned input x* satisfies:
+        x* - f_inv(output) <= abs_tol or (x* - f_inv(output)) / x* <= rel_tol
 
     Args:
-        f: A monotonically increasing function with a continuous domain.
+        f: A continuous function that is monotonically increasing.
         output: The target output.
-        lower: An lower bound for the target input. Whether it is inclusive or
+        lower: A lower bound for the target input. Whether it is inclusive or
             exclusive doesn't matter.
         upper: An upper bound for the target input. Whether it is inclusive or
             exclusive doesn't matter.
-        abs_tol: The absolute tolerance for the returned input.
-        rel_tol: The relative tolerance for the returned input.
+        abs_tol: The absolute tolerance for the target input.
+        rel_tol: The relative tolerance for the target input.
 
     Returns:
-        An input satisfying the conditions above.
+        The smallest input satisfying the conditions above.
     """
-    while upper - lower >= abs_tol and abs((upper - lower) / upper) >= rel_tol:
-        guess = (lower + upper) / 2
-        if f(guess) >= output:
-            upper = guess
+    while (
+        upper - lower >= abs_tol and abs(upper - lower) >= abs(upper) * rel_tol
+    ):
+        m = (lower + upper) / 2
+        if f(m) < output:
+            lower = m
         else:
-            lower = guess
+            upper = m
+    return lower
+
+
+def binary_search_continuous_func_right(
+    f: Callable[[float], float],
+    output: float,
+    lower: float,
+    upper: float,
+    abs_tol: float = 10**-6,
+    rel_tol: float = 10**-6,
+) -> float:
+    """Calculate the largest input that maps to the target output.
+
+    If multiple inputs map to the target, the rightmost one will be returned.
+
+    The returned input x* satisfies:
+        f_inv(output) - x* <= abs_tol or (f_inv(output) - x*) / x* <= rel_tol
+
+    Args:
+        f: A continuous function that is monotonically increasing.
+        output: The target output.
+        lower: A lower bound for the target input. Whether it is inclusive or
+            exclusive doesn't matter.
+        upper: An upper bound for the target input. Whether it is inclusive or
+            exclusive doesn't matter.
+        abs_tol: The absolute tolerance for the target input.
+        rel_tol: The relative tolerance for the target input.
+
+    Returns:
+        The largest input satisfying the conditions above.
+    """
+    while (
+        upper - lower >= abs_tol and abs(upper - lower) >= abs(upper) * rel_tol
+    ):
+        m = (lower + upper) / 2
+        if f(m) <= output:
+            lower = m
+        else:
+            upper = m
     return upper
 
 
-def ternary_search_discrete_func(
+def ternary_search_discrete_func_left(
     f: Callable[[int], float], lower: int, upper: int
 ) -> int:
-    """Calculate the smallest input satisfying:
-        f(input - 1) >= min(f) <= f(input + 1)
+    """Calculate the smallest input minimizing a discrete unimodal function.
+
+    If multiple minima exist, the leftmost one will be returned.
 
     Making your function f cache its results is highly recommended, as this
         algorithm may call it multiple times for the same input.
 
     Args:
-        f: A unimodal (strictly decreasing followed by strictly increasing)
-            function with a discrete domain. Note that it is allowed to be
-            constant in between the two strictly monotonic parts, in which
-            case the smallest input that is a minimum will be returned.
+        f: A discrete function that is strictly decreasing followed by
+            monotonically increasing. In other words, the left side of the
+            function can't have any plateaus!
         lower: An inclusive lower bound for the target input.
         upper: An inclusive upper bound for the target input.
 
@@ -1124,7 +1202,7 @@ def ternary_search_discrete_func(
     while upper - lower > 2:
         m1 = (2 * lower + upper) // 3
         m2 = (lower + 2 * upper) // 3
-        if f(m1) >= f(m2):
+        if f(m1) > f(m2):
             lower = m1
         else:
             upper = m2
@@ -1135,23 +1213,59 @@ def ternary_search_discrete_func(
     return upper
 
 
-def ternary_search_continuous_func(
+def ternary_search_discrete_func_right(
+    f: Callable[[int], float], lower: int, upper: int
+) -> int:
+    """Calculate the largest input minimizing a discrete unimodal function.
+
+    If multiple minima exist, the rightmost one will be returned.
+
+    Making your function f cache its results is highly recommended, as this
+        algorithm may call it multiple times for the same input.
+
+    Args:
+        f: A discrete function that is monotonically decreasing followed by
+            strictly increasing. In other words, the right side of the function
+            can't have any plateaus!
+        lower: An inclusive lower bound for the target input.
+        upper: An inclusive upper bound for the target input.
+
+    Returns:
+        The largest input satisfying the conditions above.
+    """
+    while upper - lower > 2:
+        m1 = (2 * lower + upper) // 3
+        m2 = (lower + 2 * upper) // 3
+        if f(m1) >= f(m2):
+            lower = m1
+        else:
+            upper = m2
+    if f(upper - 1) >= f(upper):
+        return upper
+    if f(lower) >= f(lower + 1):
+        return lower + 1
+    return lower
+
+
+def ternary_search_continuous_func_left(
     f: Callable[[float], float],
     lower: float,
     upper: float,
     abs_tol: float = 10**-6,
     rel_tol: float = 10**-6,
 ) -> float:
-    """Calculate the smallest input satisfying:
-        f(input - abs_tol) >= min(f) <= f(input + abs_tol) or
-        f(input - input*rel_tol) >= min(f) <= f(input + input*rel_tol)
+    """Calculate the smallest input minimizing a continuous unimodal function.
+
+    If multiple minima exist, the leftmost one will be returned.
+
+    The returned input x* satisfies:
+        x* - argmin(f) <= abs_tol or (x* - argmin(f)) / x* <= rel_tol
 
     Args:
-        f: A unimodal (strictly decreasing followed by strictly increasing)
-            function with a continuous domain. Note that it is allowed to be
-            constant in between the two strictly monotonic parts, in which
-            case the smallest input that is a minimum will be returned.
-        lower: An lower bound for the target input. Whether it is inclusive or
+        f: A continuous function that is strictly decreasing followed by
+            monotonically increasing. In other words, the left side of the
+            function can't have any plateaus!
+        lower: A lower bound for the target input. Whether it is inclusive or
             exclusive doesn't matter.
         upper: An upper bound for the target input. Whether it is inclusive or
             exclusive doesn't matter.
@@ -1161,14 +1275,56 @@ def ternary_search_continuous_func(
     Returns:
         The smallest input satisfying the conditions above.
     """
-    while upper - lower >= abs_tol and abs((upper - lower) / upper) >= rel_tol:
+    while (
+        upper - lower >= abs_tol and abs(upper - lower) >= abs(upper) * rel_tol
+    ):
+        m1 = (2 * lower + upper) / 3
+        m2 = (lower + 2 * upper) / 3
+        if f(m1) > f(m2):
+            lower = m1
+        else:
+            upper = m2
+    return lower
+
+
+def ternary_search_continuous_func_right(
+    f: Callable[[float], float],
+    lower: float,
+    upper: float,
+    abs_tol: float = 10**-6,
+    rel_tol: float = 10**-6,
+) -> float:
+    """Calculate the largest input minimizing a continuous unimodal function.
+
+    If multiple minima exist, the rightmost one will be returned.
+
+    The returned input x* satisfies:
+        argmin(f) - x* <= abs_tol or (argmin(f) - x*) / x* <= rel_tol
+
+    Args:
+        f: A continuous function that is monotonically decreasing followed by
+            strictly increasing. In other words, the right side of the function
+            can't have any plateaus!
+        lower: A lower bound for the target input. Whether it is inclusive or
+            exclusive doesn't matter.
+        upper: An upper bound for the target input. Whether it is inclusive or
+            exclusive doesn't matter.
+        abs_tol: The absolute tolerance for the returned input.
+        rel_tol: The relative tolerance for the returned input.
+
+    Returns:
+        The largest input satisfying the conditions above.
+    """
+    while (
+        upper - lower >= abs_tol and abs(upper - lower) >= abs(upper) * rel_tol
+    ):
         m1 = (2 * lower + upper) / 3
         m2 = (lower + 2 * upper) / 3
         if f(m1) >= f(m2):
             lower = m1
         else:
             upper = m2
-    return (lower + upper) / 2
+    return upper
 
 
 # ################################### MISC ####################################
@@ -1186,23 +1342,23 @@ class SegTree:
     """
 
     def __init__(
-        self, l: list[float] | None = None, length: int | None = None
+        self, lst: list[float] | None = None, length: int | None = None
     ) -> None:
         """Initialize a segment tree.
 
-        Either l or length must be given. If l is given, length is ignored, and
-        we build a segment tree with underlying list l. If no list is given,
-        length must be given, and we build a segment tree with an underlying
-        all-zeros list of that length.
+        Either lst or length must be given. If lst is given, length is ignored,
+        and we build a segment tree with underlying list lst. If no list is
+        given, length must be given, and we build a segment tree with an
+        underlying all-zeros list of that length.
 
         Args:
-            l: The list to build the segment tree from.
+            lst: The list to build the segment tree from.
             length: The length of the list to build the segment tree from.
         """
-        if l is not None:
-            self.len = len(l)
+        if lst is not None:
+            self.len = len(lst)
             self.t = [0.0] * (2 * self.len)
-            self.t[self.len :] = l
+            self.t[self.len :] = lst
             for i in reversed(range(1, self.len)):
                 self.t[i] = self.t[i * 2] + self.t[i * 2 + 1]
         elif length is not None:
@@ -1222,28 +1378,28 @@ class SegTree:
             self.t[idx // 2] = self.t[idx] + self.t[idx ^ 1]
             idx //= 2
 
-    def query(self, l: int, r: int) -> float:
-        """Get the sum of all values in the range [l, r).
+    def query(self, left: int, right: int) -> float:
+        """Get the sum of all values in the range [left, right).
 
         Args:
-            l: The left index of the range.
-            r: The right index of the range.
+            left: The left index of the range.
+            right: The right index of the range.
 
         Returns:
-            The sum of all values in the range [l, r).
+            The sum of all values in the range [left, right).
         """
         res = 0
-        l += self.len
-        r += self.len
-        while l < r:
-            if l & 1:
-                res += self.t[l]
-                l += 1
-            if r & 1:
-                r -= 1
-                res += self.t[r]
-            l //= 2
-            r //= 2
+        left += self.len
+        right += self.len
+        while left < right:
+            if left & 1:
+                res += self.t[left]
+                left += 1
+            if right & 1:
+                right -= 1
+                res += self.t[right]
+            left //= 2
+            right //= 2
         return res
 
 
