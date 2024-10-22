@@ -82,7 +82,8 @@ def calculate_metrics(
 
     # Calculate Cohen's Kappa.
     Kappa = (
-        2 * (TP * TN - FN * FP) / (TP + FN) * (FN + TN) + (TP + FP) * (FP + TN)
+        (2 * (TP * TN - FN * FP))
+        / ((TP + FN) * (FN + TN) + (TP + FP) * (FP + TN))
         if not math.isclose((TP + FN) * (FN + TN) + (TP + FP) * (FP + TN), 0)
         else math.nan
     )
