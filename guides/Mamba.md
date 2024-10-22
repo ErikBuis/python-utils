@@ -121,6 +121,11 @@ dependencies:
   - pillow
   - opencv
 
+  # Hyperparameter optimization
+  - optuna
+  - optuna-dashboard
+  - optuna-integration
+
   # Database manipulation
   - pandas
   - pyarrow
