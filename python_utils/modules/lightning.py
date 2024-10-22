@@ -5,9 +5,9 @@ from collections import defaultdict
 from glob import glob
 from typing import Any
 
-import pytorch_lightning as pl
-import pytorch_lightning.callbacks as pl_callbacks
-import pytorch_lightning.loggers as pl_loggers
+import lightning.pytorch as pl
+import lightning.pytorch.callbacks as pl_callbacks
+import lightning.pytorch.loggers as pl_loggers
 import torch
 
 
