@@ -3,7 +3,7 @@ import os
 import time
 from collections import defaultdict
 from glob import glob
-from typing import Any
+from typing import Any, TypeVar
 
 import lightning.pytorch as pl
 import lightning.pytorch.callbacks as pl_callbacks
@@ -14,12 +14,15 @@ import torch
 logger = logging.getLogger(__name__)
 
 
+LightningModuleT = TypeVar("LightningModuleT", bound=pl.LightningModule)
+
+
 def load_best_model(
     trainer: pl.Trainer,
-    model: pl.LightningModule,
+    model: LightningModuleT,
     reuse_version: bool = False,
     **kwargs: Any,
-) -> pl.LightningModule:
+) -> LightningModuleT:
     """Set up the best previously trained model for testing.
 
     Args:
