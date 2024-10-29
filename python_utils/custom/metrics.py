@@ -17,7 +17,7 @@ from .cheatsheet import (
 )
 
 
-def calculate_metrics(
+def calculate_metrics_binary(
     TP: float, FN: float, FP: float, TN: float
 ) -> dict[str, float]:
     """Calculate various metrics based on the given confusion matrix.
@@ -29,8 +29,8 @@ def calculate_metrics(
         TN: The number/proportion of true negatives.
 
     Returns:
-        Dictionary containing several metrics. Each metric is a float or NaN
-        if it is undefined.
+        Dictionary containing several metrics for a binary classifier. Each
+        metric is a float or NaN if it is undefined.
     """
     # Calculate accuracy.
     acc = (
@@ -249,7 +249,7 @@ def determine_extreme_model_metric(
         frac_labels_pos: float, frac_preds_pos: float
     ) -> float:
         return round(
-            calculate_metrics(
+            calculate_metrics_binary(
                 *confusion_matrix_func(frac_labels_pos, frac_preds_pos)
             )[metric_to_analyze],
             12,
@@ -522,7 +522,7 @@ def main(args: argparse.Namespace) -> None:
             TP, FN, FP, TN = confusion_matrix_worst_model(
                 frac_labels_pos, frac_preds_pos
             )
-            metrics = calculate_metrics(TP, FN, FP, TN)
+            metrics = calculate_metrics_binary(TP, FN, FP, TN)
             metrics_worst[i] = [
                 metrics[metric_to_analyze]
                 for metric_to_analyze in args.metrics_to_analyze
@@ -534,7 +534,7 @@ def main(args: argparse.Namespace) -> None:
             TP, FN, FP, TN = confusion_matrix_random_model(
                 frac_labels_pos, frac_preds_pos
             )
-            metrics = calculate_metrics(TP, FN, FP, TN)
+            metrics = calculate_metrics_binary(TP, FN, FP, TN)
             metrics_random[i] = [
                 metrics[metric_to_analyze]
                 for metric_to_analyze in args.metrics_to_analyze
@@ -546,7 +546,7 @@ def main(args: argparse.Namespace) -> None:
             TP, FN, FP, TN = confusion_matrix_best_model(
                 frac_labels_pos, frac_preds_pos
             )
-            metrics = calculate_metrics(TP, FN, FP, TN)
+            metrics = calculate_metrics_binary(TP, FN, FP, TN)
             metrics_best[i] = [
                 metrics[metric_to_analyze]
                 for metric_to_analyze in args.metrics_to_analyze
@@ -709,7 +709,7 @@ if __name__ == "__main__":
             "MCC",
             "Kappa",
         ],
-        choices=calculate_metrics(0, 0, 0, 0).keys(),
+        choices=calculate_metrics_binary(0, 0, 0, 0).keys(),
         help="The metric to analyze.",
     )
     parser.add_argument(
