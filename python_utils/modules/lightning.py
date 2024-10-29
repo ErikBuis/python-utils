@@ -72,12 +72,15 @@ def load_best_model(
     list_of_checkpoints = glob(f"{dirpath}/*.ckpt")
     if len(list_of_checkpoints) == 0:
         raise ValueError(
-            '`.test(ckpt_path="best")` is set but `ModelCheckpoint` has not'
-            f" saved any checkpoints to '{dirpath}'"
+            '`ckpt_path="best"` is set but `ModelCheckpoint` has not saved any'
+            f" checkpoints to '{dirpath}'"
         )
 
     # Find information about each model checkpoint.
     # We only keep one model in memory at a time to prevent running out of RAM.
+    # The outer dict has the (monitor, mode) combination as key.
+    # The inner dict has the best_model_path as key and the
+    # (best_model_score, creation_time) as value.
     map_location = trainer.strategy.root_device
     models_dict: dict[tuple[str, str], dict[str, tuple[float, float]]] = (
         defaultdict(dict)
@@ -95,79 +98,87 @@ def load_best_model(
                 )
                 break
     if not models_dict:
-        raise ValueError(
+        raise FileNotFoundError(
             "No checkpoints found with a ModelCheckpoint callback."
         )
 
-    # Determine the monitored value and mode that were used to save the models.
-    # e.g. ('loss/val', 'min') or ('accuracy/val', 'max'). There should only
+    # Determine the monitored value and mode that were used to save the models,
+    # e.g. ('loss/val', 'min') or ('acc/val', 'max'). There should only
     # be one unique combination of (monitor, mode) in the models_dict, and it
-    # should be equal to the monitor and mode of the current ModelCheckpoint.
-    # If this is not the case, we will issue a warning or error and use the
-    # most appropriate model.
-    monitor_mode = (
+    # should be equal to the monitor and mode of the given Trainer's
+    # ModelCheckpoint. If this is not the case, we will issue a warning or
+    # error and use the most appropriate model.
+    monitor_mode_trainer = (
         trainer.checkpoint_callback.monitor,
         trainer.checkpoint_callback.mode,
     )
-    if monitor_mode in models_dict:
-        candidate_models = models_dict[monitor_mode]
+    if monitor_mode_trainer in models_dict:
+        candidate_models = models_dict[monitor_mode_trainer]
         if len(models_dict) > 1:
             logger.warning(
-                "Multiple saved models found, but their monitored"
-                " monitors/modes are not compatible with each other. Using"
-                f" the Trainer's ModelCheckpoint, which is {monitor_mode!r}."
-                " The (monitor, mode) combinations found were:"
-                f" {list(models_dict.keys())!r}."
+                "Multiple saved models found, but their (monitor, mode)"
+                " combinations are not compatible with each other. The saved"
+                " (monitor, mode) combinations found are"
+                f" {list(models_dict.keys())!r}. Using the Trainer's"
+                f" ModelCheckpoint, which is {monitor_mode_trainer!r}."
             )
+        monitor_mode = monitor_mode_trainer
     else:
         if len(models_dict) == 1:
             monitor_mode, candidate_models = models_dict.popitem()
             logger.error(
                 "The saved model's (monitor, mode) combination does not match"
-                f" the Trainer's ModelCheckpoint, which is {monitor_mode!r}."
-                " The saved (monitor, mode) combination found was:"
-                f" {list(models_dict.keys())!r}."
+                " the Trainer's ModelCheckpoint. The saved (monitor, mode)"
+                f" combination found is {monitor_mode!r}, but the Trainer's"
+                f" ModelCheckpoint is {monitor_mode_trainer!r}. Using the"
+                f" saved model, which is {monitor_mode!r}."
             )
         else:
+            # Use the most recent model if none of the models are compatible.
             monitor_mode, candidate_models = max(
                 models_dict.items(),
                 key=lambda kv: max(kv[1].values(), key=lambda kv2: kv2[1])[1],
             )
             logger.error(
-                "None of the saved models' (monitor, mode) combinations match"
-                f" the Trainer's ModelCheckpoint, which is {monitor_mode!r}."
-                " The saved (monitor, mode) combination(s) found were:"
-                f" {list(models_dict.keys())!r}. Using the most recenty saved"
-                f" model, which is {monitor_mode!r}."
+                "Multiple saved models found, but none of their"
+                " (monitor, mode) combinations match the Trainer's"
+                " ModelCheckpoint. The saved (monitor, mode) combinations"
+                f" found are {list(models_dict.keys())!r}, but the Trainer's"
+                f" ModelCheckpoint is {monitor_mode_trainer!r}. Using the most"
+                f" recenty saved model, which is {monitor_mode!r}."
             )
 
     # Sort the models by their best score and creation time.
-    reverse = monitor_mode[1] == "min"
-    if reverse:
-        candidate_models = {
-            path: (score, -ctime)
-            for path, (score, ctime) in candidate_models.items()
-        }
     sorted_models = sorted(
-        candidate_models.items(), key=lambda kv: kv[1], reverse=reverse
+        candidate_models.items(),
+        key=lambda kv: (
+            -kv[1][0] if monitor_mode[1] == "min" else kv[1][0],
+            kv[1][1]
+        )
     )
 
     # Check if the best model's state_dict is compatible with the given model.
     for path, (score, ctime) in sorted_models:
-        best_model = model.__class__.load_from_checkpoint(
-            path, map_location=map_location, **kwargs
-        )
+        try:
+            best_model = model.__class__.load_from_checkpoint(
+                path, map_location=map_location, **kwargs
+            )
+        except TypeError as e:
+            logger.warning(
+                f"Could not load model from '{path}'. Error message: {e}"
+            )
+            continue
+
         if set(model.state_dict().keys()) == set(
             best_model.state_dict().keys()
         ):
             logger.info(
                 f"Found best model at '{path}' with {monitor_mode[0]}={score}."
-                " File was created on"
-                f" {time.ctime(-ctime if reverse else ctime)}."
+                f" File was created on {time.ctime(ctime)}."
             )
             break
     else:
-        raise ValueError(
+        raise FileNotFoundError(
             "No checkpoint found with a state dictionary compatible with the"
             " provided LightningModule. Note that we only searched through"
             f" models which had their (monitor, mode) set to {monitor_mode!r}."
