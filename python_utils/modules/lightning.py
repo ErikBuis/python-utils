@@ -152,7 +152,7 @@ def load_best_model(
     sorted_models = sorted(
         candidate_models.items(),
         key=lambda kv: (
-            -kv[1][0] if monitor_mode[1] == "min" else kv[1][0],
+            kv[1][0] if monitor_mode[1] == "min" else -kv[1][0],
             kv[1][1]
         )
     )
