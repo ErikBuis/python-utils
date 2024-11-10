@@ -1,6 +1,6 @@
 import torch
 from scipy.interpolate import griddata
-from scipy.spatial.qhull import QhullError
+from scipy.spatial import QhullError
 
 
 def griddata_batched(

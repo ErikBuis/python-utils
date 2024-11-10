@@ -10,6 +10,11 @@ from python_utils.modules.math import optimal_grid_layout, optimal_size
 from python_utils.modules_batched.sklearn import ransac_batched
 
 
+@unittest.skipUnless(
+    False,
+    "Running this test will open a window. It has been hardcoded to be skipped"
+    " for now. If you want to run it, change the condition to True.",
+)
 class TestRansacBatched(unittest.TestCase):
     def test_visually(self) -> None:
         # Set input parameters.

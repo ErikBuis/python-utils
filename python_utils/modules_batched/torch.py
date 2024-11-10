@@ -229,6 +229,55 @@ def max_padding_batched(
     return values.amax(dim=1)  # [B, *]
 
 
+def arange_batched(
+    starts: torch.Tensor,
+    ends: torch.Tensor | None = None,
+    steps: torch.Tensor | None = None,
+    dtype: torch.dtype | None = None,
+    device: torch.device | None = None,
+    requires_grad: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Create a batch of tensors with values in the range [start, end).
+
+    Args:
+        starts: The start value for each tensor in the batch.
+            Shape: [B]
+        ends: The end value for each tensor in the batch. If None, the end
+            value is set to the start value.
+            Shape: [B]
+        steps: The step value for each tensor in the batch. If None, the step
+            value is set to 1.
+            Shape: [B]
+        dtype: The data type of the tensor.
+        device: The device of the tensor.
+        requires_grad: Whether to require gradients for the tensor.
+
+    Returns:
+        Tuple containing:
+        - A batch of tensors with values in the range [start, end),
+            padded with zeros for heterogenous batch sizes.
+            Shape: [B, max(L_b)]
+        - The number of values of any arange sequence in the batch.
+            Shape: [B]
+    """
+    B = len(starts)
+    if ends is None:
+        ends = starts
+        starts = torch.zeros(B, dtype=dtype, device=device)
+    if steps is None:
+        steps = torch.ones(B, dtype=dtype, device=device)
+
+    L_bs = ((ends - starts) // steps).long()
+    max_L_b = L_bs.max().item()
+    aranges = torch.arange(max_L_b, dtype=dtype, device=device)  # [max(L_b)]
+    aranges = starts.unsqueeze(1) + aranges * steps.unsqueeze(1)
+    aranges[aranges >= ends.unsqueeze(1)] = 0
+    if requires_grad:
+        aranges.requires_grad_()
+
+    return aranges, L_bs
+
+
 def sample_unique_batched(
     L_bs: torch.Tensor, max_L_b: int, num_samples: int
 ) -> torch.Tensor:
@@ -255,7 +304,7 @@ def sample_unique_batched(
     # .clamp(min=num_samples) and % L_b operations are used.
     weights = mask_padding_batched(
         L_bs.clamp(min=num_samples), max_L_b
-    ).float()  # [B, max(L_b)]
+    ).double()  # [B, max(L_b)]
     return (
         torch.multinomial(weights, num_samples)  # [B, num_samples]
         % L_bs.unsqueeze(1)  # [B, num_samples]

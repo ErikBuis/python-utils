@@ -630,6 +630,9 @@ def __stringify_fast(
             plan_succeeded = False
         line_len_left = new_line_len_left
 
+        # TODO Look into this: Condition will always evaluate to False since
+        # TODO the types "Literal[False]" and "Literal[True]" have no overlap.
+        # TODO Pylance (reportUnnecessaryComparison)
         if plan_succeeded is True:
             # Second, we try plan B: try to stringify all elements by putting
             # them on a single new line. Example:

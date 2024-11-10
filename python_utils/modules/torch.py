@@ -448,7 +448,7 @@ def lexsort_along(
 
 
 @overload
-def unique_consecutive(
+def unique_consecutive(  # type: ignore
     x: torch.Tensor,
     return_inverse: Literal[False] = False,
     return_counts: Literal[False] = False,
@@ -639,7 +639,7 @@ def unique_consecutive(
 
 
 @overload
-def unique(
+def unique(  # type: ignore
     x: torch.Tensor,
     return_inverse: Literal[False] = False,
     return_counts: Literal[False] = False,
@@ -823,7 +823,7 @@ def unique(
 
 
 @overload
-def unique_with_backmap(
+def unique_with_backmap(  # type: ignore
     x: torch.Tensor,
     return_inverse: Literal[False] = False,
     return_counts: Literal[False] = False,
@@ -1050,7 +1050,7 @@ def unique_with_backmap(
 
 
 @overload
-def unique_with_backmap_naive(
+def unique_with_backmap_naive(  # type: ignore
     x: torch.Tensor,
     return_inverse: Literal[False] = False,
     return_counts: Literal[False] = False,

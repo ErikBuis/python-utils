@@ -215,7 +215,7 @@ def lexsort_along(
 
 
 @overload
-def unique_consecutive(
+def unique_consecutive(  # type: ignore
     x: npt.NDArray,
     return_inverse: Literal[False] = False,
     return_counts: Literal[False] = False,

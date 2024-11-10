@@ -7,7 +7,11 @@ from shapely import GeometryCollection, MultiPolygon, Polygon
 from ..modules.numpy import unique_consecutive
 from ..modules.scipy import voronoi_constrain_to_rect
 from ..modules.torch import cumsum_start_0
-from ..modules_batched.torch import pad_packed_batched, replace_padding_batched
+from ..modules_batched.torch import (
+    arange_batched,
+    pad_packed_batched,
+    replace_padding_batched,
+)
 
 
 def line_intersection_batched(
@@ -314,9 +318,9 @@ def cut_polygon_around_points(
             Shape: [B]
     """
     if len(points) == 1:
-        return gpd.GeoSeries([polygon])  # type: ignore
+        return gpd.GeoSeries([polygon])
 
-    (_, vertices, _, _, point_region, regions) = voronoi_constrain_to_rect(
+    _, vertices, _, _, point_region, regions = voronoi_constrain_to_rect(
         points.cpu().numpy(), polygon.bounds
     )
 
@@ -530,7 +534,7 @@ def polygon_likes_exterior_vertices(
             coords_tensor[  # type: ignore
                 V_bs_cumsum[i]  # type: ignore
                 : V_bs_cumsum[i := i + 1] - 1  # noqa: F841  # type: ignore
-            ]
+            ]  # fmt: skip
             if isinstance(polygon, Polygon)
             else multipolygon_exterior_vertices(polygon, device)
         )
@@ -563,56 +567,91 @@ def polygon_likes_exterior_vertices_naive(
     return vertices_padded, V_bs
 
 
-def generate_random_polygon() -> Polygon:
-    # Generate a random Polygon.
-    # Each Polygon has a 50% chance of having holes.
-    # The amount of vertices is between 3 and 50.
-    exterior = torch.rand(np.random.randint(3, 51), 2).tolist()
-    interiors = []
-    while np.random.rand() < 0.5:
-        interiors.append(torch.rand(np.random.randint(3, 51), 2).tolist())
-    return Polygon(exterior, interiors)
+def xiaolin_wu_anti_aliasing_batched(
+    x0: torch.Tensor, y0: torch.Tensor, x1: torch.Tensor, y1: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Xiaolin Wu's line algorithm for drawing anti-aliased lines.
 
+    Args:
+        x0: X-coordinate of the first endpoint of the line segment.
+            Shape: [B]
+        y1: Y-coordinate of the first endpoint of the line segment.
+            Shape: [B]
+        x1: X-coordinate of the second endpoint of the line segment.
+            Shape: [B]
+        y1: Y-coordinate of the second endpoint of the line segment.
+            Shape: [B]
 
-def generate_random_multipolygon() -> MultiPolygon:
-    # Generate a random MultiPolygon.
-    # Each MultiPolygon contain at least 2 Polygons. Extra Polygons are
-    # continuously added with a 50% chance, until the addition fails.
-    polygons_list = [generate_random_polygon(), generate_random_polygon()]
-    while np.random.rand() < 0.5:
-        polygons_list.append(generate_random_polygon())
-    return MultiPolygon(polygons_list)
+    Returns:
+        Tuple containing:
+        - Pixel x-coordinates, padded with zeros.
+            Shape: [B, max(S_b)]
+        - Pixel y-coordinates, padded with zeros.
+            Shape: [B, max(S_b)]
+        - Pixel values between 0 and 1, padded with zeros.
+            Shape: [B, max(S_b)]
+        - The number of pixels in each line segment.
+            Shape: [B]
+    """
+    steep = torch.abs(y1 - y0) > torch.abs(x1 - x0)  # [B]
 
+    # Swap the x and y coordinates to ensure the line is not steep.
+    x0, y0, x1, y1 = torch.where(
+        steep, torch.stack([y0, x0, y1, x1]), torch.stack([x0, y0, x1, y1])
+    )
 
-def generate_random_polygon_like() -> Polygon | MultiPolygon:
-    # Generate a random Polygon or MultiPolygon.
-    # Each has a 50% chance of occurring.
-    if np.random.rand() < 0.5:
-        return generate_random_polygon()
-    else:
-        return generate_random_multipolygon()
+    # Swap the start and end to ensure the line goes from left to right.
+    x0, y0, x1, y1 = torch.where(
+        x0 > x1, torch.stack([x1, y1, x0, y0]), torch.stack([x0, y0, x1, y1])
+    )
 
+    # Calculate the gradient of the line segments.
+    dx, dy = x1 - x0, y1 - y0  # [B], [B]
+    gradient = torch.where(dx != 0, dy / dx, 1)  # [B]
 
-def generate_random_polygons(amount: int = 64) -> gpd.GeoSeries:
-    # Generate a random GeoSeries of Polygon objects.
-    polygons_list = []
-    for _ in range(amount):
-        polygons_list.append(generate_random_polygon())
-    return gpd.GeoSeries(polygons_list)  # type: ignore
+    # Pre-process the beginning of the line segments.
+    xpxl_begin = x0.round().long()  # [B]
+    xgap_begin = 1 - (x0 + 0.5 - xpxl_begin)  # [B]
 
+    # Pre-process the end of the line segments.
+    xpxl_end = x1.round().long()  # [B]
+    xgap_end = x1 + 0.5 - xpxl_end  # [B]
 
-def generate_random_multipolygons(amount: int = 64) -> gpd.GeoSeries:
-    # Generate a random GeoSeries of MultiPolygon objects.
-    multipolygons_list = []
-    for _ in range(amount):
-        multipolygons_list.append(generate_random_multipolygon())
-    return gpd.GeoSeries(multipolygons_list)  # type: ignore
+    # Initialize the return values.
+    S_bs = 2 * (xpxl_end - xpxl_begin + 1)  # [B]
+    max_S_b = int(S_bs.max())
+    B = len(S_bs)
+    pixels_x = torch.empty((B, max_S_b), dtype=torch.int64)
+    pixels_y = torch.empty((B, max_S_b), dtype=torch.int64)
+    vals = torch.empty((B, max_S_b), dtype=torch.float64)
 
+    # Calculate values used in the main loop.
+    x, _ = arange_batched(
+        xpxl_begin, xpxl_end + 1, dtype=torch.int64
+    )  # [B, max(S_b) // 2]
+    intery = y0.unsqueeze(1) + gradient.unsqueeze(1) * (
+        x.double() - x0.unsqueeze(1)
+    )  # [B, max(S_b) // 2]
+    ipart_intery = intery.floor().long()  # [B, max(S_b) // 2]
+    fpart_intery = intery - ipart_intery  # [B, max(S_b) // 2]
+    rfpart_intery = 1 - fpart_intery  # [B, max(S_b) // 2]
 
-def generate_random_polygon_likes(amount: int = 64) -> gpd.GeoSeries:
-    # Generate a random GeoSeries of Polygon and MultiPolygon objects.
-    # Each has a 50% chance of occurring for each object.
-    polygon_likes_list = []
-    for _ in range(amount):
-        polygon_likes_list.append(generate_random_polygon_like())
-    return gpd.GeoSeries(polygon_likes_list)  # type: ignore
+    # Fill the return values.
+    pixels_x[:, ::2] = torch.where(steep.unsqueeze(1), ipart_intery, x)
+    pixels_y[:, ::2] = torch.where(steep.unsqueeze(1), x, ipart_intery)
+    pixels_x[:, 1::2] = torch.where(steep.unsqueeze(1), ipart_intery + 1, x)
+    pixels_y[:, 1::2] = torch.where(steep.unsqueeze(1), x, ipart_intery + 1)
+    vals[:, ::2] = rfpart_intery
+    vals[:, 1::2] = fpart_intery
+
+    # Handle the beginning and end of the line segments.
+    vals[:, :2] *= xgap_begin.unsqueeze(1)
+    vals[torch.arange(B), S_bs - 2] *= xgap_end
+    vals[torch.arange(B), S_bs - 1] *= xgap_end
+
+    # Pad the return values.
+    replace_padding_batched(pixels_x, S_bs, in_place=True)
+    replace_padding_batched(pixels_y, S_bs, in_place=True)
+    replace_padding_batched(vals, S_bs, in_place=True)
+
+    return pixels_x, pixels_y, vals, S_bs
