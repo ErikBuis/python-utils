@@ -152,7 +152,7 @@ def load_best_model(
     sorted_models = sorted(
         candidate_models.items(),
         key=lambda kv: (
-            -kv[1][0] if monitor_mode[1] == "min" else kv[1][0],
+            kv[1][0] if monitor_mode[1] == "min" else -kv[1][0],
             kv[1][1]
         )
     )
@@ -163,7 +163,7 @@ def load_best_model(
             best_model = model.__class__.load_from_checkpoint(
                 path, map_location=map_location, **kwargs
             )
-        except TypeError as e:
+        except (TypeError, RuntimeError) as e:
             logger.warning(
                 f"Could not load model from '{path}'. Error message: {e}"
             )
