@@ -584,11 +584,11 @@ def xiaolin_wu_anti_aliasing_batched(
 
     Returns:
         Tuple containing:
-        - Pixel x-coordinates, padded with NaN values.
+        - Pixel x-coordinates, padded with zeros.
             Shape: [B, max(S_b)]
-        - Pixel y-coordinates, padded with NaN values.
+        - Pixel y-coordinates, padded with zeros.
             Shape: [B, max(S_b)]
-        - Pixel values between 0 and 1, padded with NaN values.
+        - Pixel values between 0 and 1, padded with zeros.
             Shape: [B, max(S_b)]
         - The number of pixels in each line segment.
             Shape: [B]
@@ -650,12 +650,8 @@ def xiaolin_wu_anti_aliasing_batched(
     vals[torch.arange(B), S_bs - 1] *= xgap_end
 
     # Pad the return values.
-    replace_padding_batched(
-        pixels_x, S_bs, padding_value=torch.nan, in_place=True
-    )
-    replace_padding_batched(
-        pixels_y, S_bs, padding_value=torch.nan, in_place=True
-    )
-    replace_padding_batched(vals, S_bs, padding_value=torch.nan, in_place=True)
+    replace_padding_batched(pixels_x, S_bs, in_place=True)
+    replace_padding_batched(pixels_y, S_bs, in_place=True)
+    replace_padding_batched(vals, S_bs, in_place=True)
 
     return pixels_x, pixels_y, vals, S_bs
