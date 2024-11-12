@@ -40,13 +40,13 @@ def line_intersection_batched(
 
     Args:
         lines1: The first batch of lines. Each line is represented by a pair
-            (r, theta) in Hough space. Tuple containing:
+            (r, theta) in Hough space as a tuple containing:
             - The values of r.
                 Shape: [B]
             - The values of theta.
                 Shape: [B]
         lines2: The second batch of lines. Each line is represented by a pair
-            (r, theta) in Hough space. Tuple containing:
+            (r, theta) in Hough space as a tuple containing:
             - The values of r.
                 Shape: [B]
             - The values of theta.
@@ -83,7 +83,7 @@ def distance_line_to_point_batched(
 
     Args:
         lines: The lines to calculate the distance to. Each line is represented
-            by a pair (r, theta) in Hough space. Tuple containing:
+            by a pair (r, theta) in Hough space as a tuple containing:
             - The values of r.
                 Shape: [B]
             - The values of theta.

@@ -446,9 +446,9 @@ def update_normalized_histogram(
 
     Returns:
         Tuple containing:
-            The updated average of the histogram.
-            The updated normalized histogram.
-                Shape: [bins]
+        - The updated average of the histogram.
+        - The updated normalized histogram.
+            Shape: [bins]
     """
     new_values = np.array(new_values)
 

@@ -28,7 +28,7 @@ def ransac_batched(
 
     Args:
         lines: The lines to intersect. Each line is represented by a pair
-            (r, theta) in Hough space. Tuple containing:
+            (r, theta) in Hough space as a tuple containing:
             - The values of r.
                 Shape: [B, max(L_bs)]
             - The values of theta.
@@ -50,7 +50,7 @@ def ransac_batched(
 
     Returns:
         The best intersection point of the lines.
-        Shape: [B, 2]
+            Shape: [B, 2]
     """
     if L_bs.min() < 2:
         raise ValueError(

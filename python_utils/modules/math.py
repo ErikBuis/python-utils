@@ -361,7 +361,9 @@ def optimal_grid_layout(
         max_rows: The maximum number of rows. If None, there is no limit.
 
     Returns:
-        Tuple containing (nrows, ncols).
+        Tuple containing:
+        - The number of columns ncols.
+        - The number of rows nrows.
     """
 
     if max_cols is None:
@@ -409,7 +411,9 @@ def optimal_size(
         max_size_y: The maximum vertical length.
 
     Returns:
-        Tuple containing (size_x, size_y).
+        Tuple containing:
+        - The horizontal size size_x.
+        - The vertical size size_y.
     """
     if ratio > max_size_x / max_size_y:
         # There is space left in the y direction.
