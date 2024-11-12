@@ -82,13 +82,13 @@ def pad_sequence(
             Length: B
             Inner shape: [L_b, *]
         batch_first: Whether to return the batch dimension as the first
-            dimension. If False, the output will have shape [max(L_b), B, *].
-            If True, the output will have shape [B, max(L_b), *].
+            dimension. If False, the output will have shape [max(L_bs), B, *].
+            If True, the output will have shape [B, max(L_bs), *].
         padding_value: The value to use for padding the inner sequences.
 
     Returns:
-        Array of shape [max(L_b), B, *] if batch_first is False, otherwise
-        array of shape [B, max(L_b), *].
+        Array of shape [max(L_bs), B, *] if batch_first is False, otherwise
+        array of shape [B, max(L_bs), *].
     """
     sequences_arr = [np.array(seq) for seq in sequences]
     star_shape = sequences_arr[0].shape[1:]

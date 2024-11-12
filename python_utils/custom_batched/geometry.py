@@ -422,7 +422,7 @@ def polygons_exterior_vertices(
         Tuple containing:
         - The vertices of the polygons, padded with zeros for heterogeneous
             batch sizes.
-            Shape: [B, max(V_b), 2]
+            Shape: [B, max(V_bs), 2]
         - The number of vertices in each polygon.
             Shape: [B]
     """
@@ -465,7 +465,7 @@ def multipolygons_exterior_vertices(
         Tuple containing:
         - The vertices of the multipolygons, padded with zeros for
             heterogeneous batch sizes.
-            Shape: [B, max(V_b), 2]
+            Shape: [B, max(V_bs), 2]
         - The number of vertices in each multipolygon.
             Shape: [B]
     """
@@ -505,7 +505,7 @@ def polygon_likes_exterior_vertices(
         Tuple containing:
         - The vertices of the polygon-like objects, padded with zeros for
             heterogeneous batch sizes.
-            Shape: [B, max(V_b), 2]
+            Shape: [B, max(V_bs), 2]
         - The number of vertices in each polygon-like object.
             Shape: [B]
     """
@@ -585,11 +585,11 @@ def xiaolin_wu_anti_aliasing_batched(
     Returns:
         Tuple containing:
         - Pixel x-coordinates, padded with zeros.
-            Shape: [B, max(S_b)]
+            Shape: [B, max(S_bs)]
         - Pixel y-coordinates, padded with zeros.
-            Shape: [B, max(S_b)]
+            Shape: [B, max(S_bs)]
         - Pixel values between 0 and 1, padded with zeros.
-            Shape: [B, max(S_b)]
+            Shape: [B, max(S_bs)]
         - The number of pixels in each line segment.
             Shape: [B]
     """
@@ -628,13 +628,13 @@ def xiaolin_wu_anti_aliasing_batched(
     # Calculate values used in the main loop.
     x, _ = arange_batched(
         xpxl_begin, xpxl_end + 1, dtype=torch.int64
-    )  # [B, max(S_b) // 2]
+    )  # [B, max(S_bs) // 2]
     intery = y0.unsqueeze(1) + gradient.unsqueeze(1) * (
         x.double() - x0.unsqueeze(1)
-    )  # [B, max(S_b) // 2]
-    ipart_intery = intery.floor().long()  # [B, max(S_b) // 2]
-    fpart_intery = intery - ipart_intery  # [B, max(S_b) // 2]
-    rfpart_intery = 1 - fpart_intery  # [B, max(S_b) // 2]
+    )  # [B, max(S_bs) // 2]
+    ipart_intery = intery.floor().long()  # [B, max(S_bs) // 2]
+    fpart_intery = intery - ipart_intery  # [B, max(S_bs) // 2]
+    rfpart_intery = 1 - fpart_intery  # [B, max(S_bs) // 2]
 
     # Fill the return values.
     pixels_x[:, ::2] = torch.where(steep.unsqueeze(1), ipart_intery, x)

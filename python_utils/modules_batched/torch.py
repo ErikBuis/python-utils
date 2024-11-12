@@ -15,15 +15,15 @@ def mask_padding_batched(L_bs: torch.Tensor, max_L_b: int) -> torch.Tensor:
 
     Returns:
         A mask that indicates which values are valid in each sample.
-            Shape: [B, max(L_b)]
+            Shape: [B, max(L_bs)]
     """
     dtype = L_bs.dtype
     device = L_bs.device
 
     return (
-        torch.arange(max_L_b, dtype=dtype, device=device)  # [max(L_b)]
+        torch.arange(max_L_b, dtype=dtype, device=device)  # [max(L_bs)]
         < L_bs.unsqueeze(1)  # [B, 1]
-    )  # [B, max(L_b)]  # fmt: skip
+    )  # [B, max(L_bs)]  # fmt: skip
 
 
 def pack_padded_batched(
@@ -34,7 +34,7 @@ def pack_padded_batched(
     Args:
         values: The values to pack. The values must be padded for heterogenous
             batch sizes.
-            Shape: [B, max(L_b), *]
+            Shape: [B, max(L_bs), *]
         L_bs: The number of valid values in each sample.
             Shape: [B]
 
@@ -67,7 +67,7 @@ def pad_packed_batched(
 
     Returns:
         The values padded with zeros for heterogenous batch sizes.
-            Shape: [B, max(L_b), *]
+            Shape: [B, max(L_bs), *]
     """
     B = len(L_bs)
     dtype = values.dtype
@@ -102,7 +102,7 @@ def replace_padding_batched(
     Args:
         values: The values to pad with padding_value for heterogenous batch
             sizes. Will be modified in-place if in_place is True.
-            Shape: [B, max(L_b), *]
+            Shape: [B, max(L_bs), *]
         L_bs: The number of valid values in each sample.
             Shape: [B]
         padding_value: The value to pad the values with.
@@ -110,7 +110,7 @@ def replace_padding_batched(
 
     Returns:
         The values padded with padding_value for heterogenous batch sizes.
-            Shape: [B, max(L_b), *]
+            Shape: [B, max(L_bs), *]
     """
     max_L_b = values.shape[1]
     mask = mask_padding_batched(L_bs, max_L_b)
@@ -127,7 +127,7 @@ def mean_padding_batched(
     Args:
         values: The values to calculate the mean for. The values must be padded
             for heterogenous batch sizes.
-            Shape: [B, max(L_b), *]
+            Shape: [B, max(L_bs), *]
         L_bs: The number of valid values in each sample.
             Shape: [B]
         is_padding_zero: Whether the values are padded with zeros already.
@@ -156,7 +156,7 @@ def stddev_padding_batched(
     Args:
         values: The values to calculate the standard deviation for. The values
             must be padded for heterogenous batch sizes.
-            Shape: [B, max(L_b), *]
+            Shape: [B, max(L_bs), *]
         L_bs: The number of valid values in each sample.
             Shape: [B]
         is_padding_zero: Whether the values are padded with zeros already.
@@ -168,7 +168,7 @@ def stddev_padding_batched(
     means = mean_padding_batched(
         values, L_bs, is_padding_zero=is_padding_zero
     )  # [B, *]
-    values_centered = values - means.unsqueeze(1)  # [B, max(L_b), *]
+    values_centered = values - means.unsqueeze(1)  # [B, max(L_bs), *]
     replace_padding_batched(values_centered, L_bs, in_place=True)
     return mean_padding_batched(
         values_centered.square(), L_bs, is_padding_zero=True
@@ -183,7 +183,7 @@ def min_padding_batched(
     Args:
         values: The values to calculate the minimum for. The values must be
             padded for heterogenous batch sizes.
-            Shape: [B, max(L_b), *]
+            Shape: [B, max(L_bs), *]
         L_bs: The number of valid values in each sample.
             Shape: [B]
         is_padding_inf: Whether the values are padded with inf values already.
@@ -211,7 +211,7 @@ def max_padding_batched(
     Args:
         values: The values to calculate the maximum for. The values must be
             padded for heterogenous batch sizes.
-            Shape: [B, max(L_b), *]
+            Shape: [B, max(L_bs), *]
         L_bs: The number of valid values in each sample.
             Shape: [B]
         is_padding_minus_inf: Whether the values are padded with -inf values
@@ -256,7 +256,7 @@ def arange_batched(
         Tuple containing:
         - A batch of tensors with values in the range [start, end),
             padded with zeros for heterogenous batch sizes.
-            Shape: [B, max(L_b)]
+            Shape: [B, max(L_bs)]
         - The number of values of any arange sequence in the batch.
             Shape: [B]
     """
@@ -269,7 +269,7 @@ def arange_batched(
 
     L_bs = ((ends - starts) // steps).long()
     max_L_b = L_bs.max().item()
-    aranges = torch.arange(max_L_b, dtype=dtype, device=device)  # [max(L_b)]
+    aranges = torch.arange(max_L_b, dtype=dtype, device=device)  # [max(L_bs)]
     aranges = starts.unsqueeze(1) + aranges * steps.unsqueeze(1)
     aranges[aranges >= ends.unsqueeze(1)] = 0
     if requires_grad:
@@ -304,7 +304,7 @@ def sample_unique_batched(
     # .clamp(min=num_samples) and % L_b operations are used.
     weights = mask_padding_batched(
         L_bs.clamp(min=num_samples), max_L_b
-    ).double()  # [B, max(L_b)]
+    ).double()  # [B, max(L_bs)]
     return (
         torch.multinomial(weights, num_samples)  # [B, num_samples]
         % L_bs.unsqueeze(1)  # [B, num_samples]
@@ -363,7 +363,7 @@ def sample_unique_pairs_batched(
     # `-idcs_pairs - 1` instead of `idcs_pairs`.
     triu_idcs = torch.triu_indices(
         max_L_b, max_L_b, 1, device=device
-    )  # [2, max(P_b)]
+    )  # [2, max(P_bs)]
     triu_idcs = max_L_b - 1 - triu_idcs
     idcs_elements = triu_idcs[:, -idcs_pairs - 1]  # [2, B, num_samples]
     return idcs_elements.permute(1, 2, 0)  # [B, num_samples, 2]
