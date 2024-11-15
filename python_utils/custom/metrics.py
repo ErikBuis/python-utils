@@ -752,7 +752,7 @@ if __name__ == "__main__":
         ),
         filter={
             "": "INFO",  # Default level for external libraries.
-            __name__: "TRACE",  # All levels for the main file.
+            "__main__": "TRACE",  # All levels for the main file.
             __package__: "TRACE",  # All levels for internal modules.
         },
     )
