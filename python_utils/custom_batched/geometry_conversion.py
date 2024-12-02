@@ -7,8 +7,14 @@ import torch
 from shapely import LinearRing, MultiPolygon, Polygon
 
 from ..modules.torch import unique_consecutive
+from ..modules_batched.random import (
+    rand_float_decreasingly_likely,
+    rand_int_decreasingly_likely,
+)
 from ..modules_batched.torch import pad_packed_batched
 
+
+# ############################### TENSOR TYPES ################################
 
 LinearRingVertices = NamedTuple(
     "LinearRingVertices", [("vertices", torch.Tensor)]
@@ -324,7 +330,7 @@ Attributes:
 """
 
 
-# ########### CONVERT BETWEEN SHAPELY/GEOPANDAS OBJECTS AND TENSORS ###########
+# ################ CONVERT SHAPELY/GEOPANDAS OBJECT TO TENSOR #################
 
 
 def __count_freqs_until(
@@ -332,7 +338,7 @@ def __count_freqs_until(
     high: int,
     device: torch.device | str,
 ) -> torch.Tensor:
-    """Count the frequency of each index value with in range(0, high).
+    """Count the frequency of each integer index value in range(0, high).
 
     This differs from torch.unique_consecutive() in that it also counts the
     frequency of elements not present in x (i.e. with a frequency of 0).
@@ -373,7 +379,7 @@ def LinearRing2LinearRingVertices(
         The vertices of the LinearRing object as a LinearRingVertices object.
     """
     vertices = torch.tensor(
-        linearring.coords, dtype=torch.float32, device=device
+        linearring.coords, dtype=torch.float64, device=device
     )  # [V, 2]
     return LinearRingVertices(vertices)
 
@@ -397,12 +403,12 @@ def LinearRings2LinearRingsVertices(
     # conceivable variations of the below code were compared. This one turned
     # out to be the fastest.
     vertices_df = linearrings.get_coordinates()  # [sum(V_bs), 2]
-    vertices_packed = torch.from_numpy(
-        vertices_df.to_numpy(dtype=np.float32)
-    ).to(device=device)  # [sum(V_bs), 2]  # fmt: skip
     V_bs = __count_freqs_until(vertices_df, len(linearrings), device)  # [B]
+    vertices_packed = torch.from_numpy(
+        vertices_df.to_numpy(dtype=np.float64)
+    ).to(device=device)  # [sum(V_bs), 2]  # fmt: skip
     vertices = pad_packed_batched(
-        vertices_packed, V_bs, int(V_bs.max())
+        vertices_packed, V_bs, int(V_bs.max()) if len(V_bs) > 0 else 0
     )  # [B, max(V_bs), 2]
     return LinearRingsVertices(vertices, V_bs)
 
@@ -667,36 +673,38 @@ def MultiPolygons2MultiPolygonsVertices(
 
 
 def PolygonLike2PolygonLikeExterior(
-    polygonlike: Polygon | MultiPolygon, device: torch.device | str = "cpu"
+    polygon_like: Polygon | MultiPolygon, device: torch.device | str = "cpu"
 ) -> PolygonLikeExterior:
     """Convert a Polygon or MultiPolygon object to a PolygonLikeExterior
     object.
 
     Args:
-        polygonlike: The Polygon or MultiPolygon object.
+        polygon_like: The Polygon or MultiPolygon object.
         device: The device to use.
 
     Returns:
         The exterior of the Polygon or MultiPolygon as a PolygonLikeExterior
         object.
     """
-    if isinstance(polygonlike, Polygon):
-        (exterior,) = Polygon2PolygonExterior(polygonlike, device)
+    if isinstance(polygon_like, Polygon):
+        (exterior,) = Polygon2PolygonExterior(polygon_like, device)
+        V_ps = torch.tensor([len(exterior)], device=device)
         exterior = exterior.unsqueeze(0)
-        V_ps = torch.tensor([1], device=device)
     else:
-        exterior, V_ps = MultiPolygon2MultiPolygonExterior(polygonlike, device)
+        exterior, V_ps = MultiPolygon2MultiPolygonExterior(
+            polygon_like, device
+        )
     return PolygonLikeExterior(exterior, V_ps)
 
 
 def PolygonLikes2PolygonLikesExterior(
-    polygonlikes: gpd.GeoSeries, device: torch.device | str = "cpu"
+    polygon_likes: gpd.GeoSeries, device: torch.device | str = "cpu"
 ) -> PolygonLikesExterior:
     """Convert a batch of Polygon or MultiPolygon objects to a
     PolygonLikesExterior object.
 
     Args:
-        polygonlikes: The GeoSeries of Polygon or MultiPolygon objects.
+        polygon_likes: The GeoSeries of Polygon or MultiPolygon objects.
         device: The device to use.
 
     Returns:
@@ -704,45 +712,45 @@ def PolygonLikes2PolygonLikesExterior(
         PolygonLikesExterior object.
     """
     exterior, P_bs, V_ps = MultiPolygons2MultiPolygonsExterior(
-        polygonlikes, device
+        polygon_likes, device
     )
     return PolygonLikesExterior(exterior, P_bs, V_ps)
 
 
 def PolygonLike2PolygonLikeInteriors(
-    polygonlike: Polygon | MultiPolygon, device: torch.device | str = "cpu"
+    polygon_like: Polygon | MultiPolygon, device: torch.device | str = "cpu"
 ) -> PolygonLikeInteriors:
     """Convert a Polygon or MultiPolygon object to a PolygonLikeInteriors
     object.
 
     Args:
-        polygonlike: The Polygon or MultiPolygon object.
+        polygon_like: The Polygon or MultiPolygon object.
         device: The device to use.
 
     Returns:
         The interiors of the Polygon or MultiPolygon as a PolygonLikeInteriors
         object.
     """
-    if isinstance(polygonlike, Polygon):
-        interiors, V_is = Polygon2PolygonInteriors(polygonlike, device)
-        interiors = interiors.unsqueeze(0)
-        I_ps = torch.tensor([1], device=device)
+    if isinstance(polygon_like, Polygon):
+        interiors, V_is = Polygon2PolygonInteriors(polygon_like, device)
+        I_ps = torch.tensor([len(interiors)], device=device)
         V_is = V_is.unsqueeze(0)
+        interiors = interiors.unsqueeze(0)
     else:
         interiors, I_ps, V_is = MultiPolygon2MultiPolygonInteriors(
-            polygonlike, device
+            polygon_like, device
         )
     return PolygonLikeInteriors(interiors, I_ps, V_is)
 
 
 def PolygonLikes2PolygonLikesInteriors(
-    polygonlikes: gpd.GeoSeries, device: torch.device | str = "cpu"
+    polygon_likes: gpd.GeoSeries, device: torch.device | str = "cpu"
 ) -> PolygonLikesInteriors:
     """Convert a batch of Polygon or MultiPolygon objects to a
     PolygonLikesInteriors object.
 
     Args:
-        polygonlikes: The GeoSeries of Polygon or MultiPolygon objects.
+        polygon_likes: The GeoSeries of Polygon or MultiPolygon objects.
         device: The device to use.
 
     Returns:
@@ -750,19 +758,19 @@ def PolygonLikes2PolygonLikesInteriors(
         PolygonLikesInteriors object.
     """
     interiors, P_bs, I_ps, V_is = MultiPolygons2MultiPolygonsInteriors(
-        polygonlikes, device
+        polygon_likes, device
     )
     return PolygonLikesInteriors(interiors, P_bs, I_ps, V_is)
 
 
 def PolygonLike2PolygonLikeVertices(
-    polygonlike: Polygon | MultiPolygon, device: torch.device | str = "cpu"
+    polygon_like: Polygon | MultiPolygon, device: torch.device | str = "cpu"
 ) -> PolygonLikeVertices:
     """Convert a Polygon or MultiPolygon object to a PolygonLikeVertices
     object.
 
     Args:
-        polygonlike: The Polygon or MultiPolygon object.
+        polygon_like: The Polygon or MultiPolygon object.
         device: The device to use.
 
     Returns:
@@ -770,19 +778,19 @@ def PolygonLike2PolygonLikeVertices(
         object.
     """
     return PolygonLikeVertices(
-        PolygonLike2PolygonLikeExterior(polygonlike, device),
-        PolygonLike2PolygonLikeInteriors(polygonlike, device),
+        PolygonLike2PolygonLikeExterior(polygon_like, device),
+        PolygonLike2PolygonLikeInteriors(polygon_like, device),
     )
 
 
 def PolygonLikes2PolygonLikesVertices(
-    polygonlikes: gpd.GeoSeries, device: torch.device | str = "cpu"
+    polygon_likes: gpd.GeoSeries, device: torch.device | str = "cpu"
 ) -> PolygonLikesVertices:
     """Convert a batch of Polygon or MultiPolygon objects to a
     PolygonLikesVertices object.
 
     Args:
-        polygonlikes: The GeoSeries of Polygon or MultiPolygon objects.
+        polygon_likes: The GeoSeries of Polygon or MultiPolygon objects.
         device: The device to use.
 
     Returns:
@@ -790,9 +798,12 @@ def PolygonLikes2PolygonLikesVertices(
         PolygonLikesVertices object.
     """
     return PolygonLikesVertices(
-        PolygonLikes2PolygonLikesExterior(polygonlikes, device),
-        PolygonLikes2PolygonLikesInteriors(polygonlikes, device),
+        PolygonLikes2PolygonLikesExterior(polygon_likes, device),
+        PolygonLikes2PolygonLikesInteriors(polygon_likes, device),
     )
+
+
+# ################ CONVERT TENSOR TO SHAPELY/GEOPANDAS OBJECT #################
 
 
 def PolygonVertices2Polygon(polygon_vertices: PolygonVertices) -> Polygon:
@@ -909,13 +920,13 @@ def MultiPolygonsVertices2MultiPolygons(
 
 
 def PolygonLikeVertices2PolygonLike(
-    polygonlike_vertices: PolygonLikeVertices,
+    polygon_like_vertices: PolygonLikeVertices,
 ) -> Polygon | MultiPolygon:
     """Convert a PolygonLikeVertices object to a Polygon or MultiPolygon
     object.
 
     Args:
-        polygonlike_vertices: The PolygonLikeVertices object.
+        polygon_like_vertices: The PolygonLikeVertices object.
 
     Returns:
         The Polygon or MultiPolygon object.
@@ -923,13 +934,13 @@ def PolygonLikeVertices2PolygonLike(
     multipolygon = MultiPolygonVertices2MultiPolygon(
         MultiPolygonVertices(
             MultiPolygonExterior(
-                polygonlike_vertices.exterior.vertices,
-                polygonlike_vertices.exterior.V_ps,
+                polygon_like_vertices.exterior.vertices,
+                polygon_like_vertices.exterior.V_ps,
             ),
             MultiPolygonInteriors(
-                polygonlike_vertices.interiors.vertices,
-                polygonlike_vertices.interiors.I_ps,
-                polygonlike_vertices.interiors.V_is,
+                polygon_like_vertices.interiors.vertices,
+                polygon_like_vertices.interiors.I_ps,
+                polygon_like_vertices.interiors.V_is,
             ),
         )
     )
@@ -939,13 +950,13 @@ def PolygonLikeVertices2PolygonLike(
 
 
 def PolygonLikesVertices2PolygonLikes(
-    polygonlikes_vertices: PolygonLikesVertices,
+    polygon_likes_vertices: PolygonLikesVertices,
 ) -> gpd.GeoSeries:
     """Convert a PolygonLikesVertices object to a batch of Polygon or
     MultiPolygon objects.
 
     Args:
-        polygonlikes_vertices: The PolygonLikesVertices object.
+        polygon_likes_vertices: The PolygonLikesVertices object.
 
     Returns:
         The GeoSeries of Polygon or MultiPolygon objects.
@@ -953,15 +964,15 @@ def PolygonLikesVertices2PolygonLikes(
     multipolygons = MultiPolygonsVertices2MultiPolygons(
         MultiPolygonsVertices(
             MultiPolygonsExterior(
-                polygonlikes_vertices.exterior.vertices,
-                polygonlikes_vertices.exterior.P_bs,
-                polygonlikes_vertices.exterior.V_ps,
+                polygon_likes_vertices.exterior.vertices,
+                polygon_likes_vertices.exterior.P_bs,
+                polygon_likes_vertices.exterior.V_ps,
             ),
             MultiPolygonsInteriors(
-                polygonlikes_vertices.interiors.vertices,
-                polygonlikes_vertices.interiors.P_bs,
-                polygonlikes_vertices.interiors.I_ps,
-                polygonlikes_vertices.interiors.V_is,
+                polygon_likes_vertices.interiors.vertices,
+                polygon_likes_vertices.interiors.P_bs,
+                polygon_likes_vertices.interiors.I_ps,
+                polygon_likes_vertices.interiors.V_is,
             ),
         )
     )
@@ -969,3 +980,146 @@ def PolygonLikesVertices2PolygonLikes(
         if len(multipolygon.geoms) == 1:
             multipolygons[i] = multipolygon.geoms[0]
     return multipolygons
+
+
+# ######################## GENERATE RANDOM GEOMETRIES #########################
+
+
+def generate_random_polygon_like() -> Polygon | MultiPolygon:
+    """Generate a random valid Polygon or MultiPolygon object.
+
+    The amount of Polygons, the amount of vertices in the exteriors and
+    interiors, the amount of interiors and the coordinates of the vertices are
+    all randomly generated.
+
+    In theory, this function could generate any Polygon or MultiPolygon object.
+
+    Returns:
+        A random Polygon or MultiPolygon object.
+    """
+    scaling_factor = (
+        rand_float_decreasingly_likely(1) * 11 + 1
+    )  # in [1, inf), E(X) = 12
+
+    # Generate the exterior of the Polygon.
+    V = int(rand_int_decreasingly_likely(1)) * 7 + 3  # in [3, inf), E(X) = 10
+    vertices = (
+        torch.rand(V, 2) - 0.5
+    ) * scaling_factor  # in (-inf, inf), E(abs(X)) = 3
+    exterior = PolygonExterior(vertices)
+
+    # Generate the interiors of the Polygon.
+    I = int(rand_int_decreasingly_likely(1))  # in [0, inf), E(X) = 1
+    V_is = rand_int_decreasingly_likely(I) * 7 + 3  # in [3, inf), E(X) = 10
+    vertices = (
+        torch.rand(I, 0 if I == 0 else int(V_is.max()), 2) - 0.5
+    ) * scaling_factor  # in (-inf, inf), E(abs(X)) = 3
+    interiors = PolygonInteriors(vertices, V_is)
+
+    # Create the Polygon object.
+    polygon_invalid = PolygonVertices2Polygon(
+        PolygonVertices(exterior, interiors)
+    )
+
+    # Make the Polygon valid.
+    polygon_like = polygon_invalid.buffer(0)
+
+    if polygon_like.is_empty:
+        # If the Polygon is empty, try again. This should be very rare, as it
+        # would only happen in cases where e.g. the interior fully covers the
+        # exterior.
+        return generate_random_polygon_like()
+
+    return polygon_like
+
+
+def generate_random_polygon() -> Polygon:
+    """Generate a random valid Polygon object.
+
+    The amount of vertices in the exteriors and interiors, the amount of
+    interiors and the coordinates of the vertices are all randomly generated.
+
+    In theory, this function could generate any Polygon object.
+
+    Returns:
+        A random Polygon object.
+    """
+    polygon_like = generate_random_polygon_like()
+    if isinstance(polygon_like, Polygon):
+        return polygon_like
+    return polygon_like.geoms[0]
+
+
+def generate_random_multipolygon() -> MultiPolygon:
+    """Generate a random valid MultiPolygon object.
+
+    The amount of Polygons, the amount of vertices in the exteriors and
+    interiors, the amount of interiors and the coordinates of the vertices are
+    all randomly generated.
+
+    In theory, this function could generate any MultiPolygon object.
+
+    Returns:
+        A random MultiPolygon object.
+    """
+    polygon_like = generate_random_polygon_like()
+    if isinstance(polygon_like, MultiPolygon):
+        return polygon_like
+    return MultiPolygon([polygon_like])
+
+
+def generate_random_polygon_likes(amount: int = 64) -> gpd.GeoSeries:
+    """Generate a random GeoSeries of Polygon and MultiPolygon objects.
+
+    The amount of Polygons, the amount of vertices in the exteriors and
+    interiors, the amount of interiors and the coordinates of the vertices are
+    all randomly generated.
+
+    In theory, this function could generate any Polygon or MultiPolygon object.
+
+    Args:
+        amount: The amount of Polygon and MultiPolygon objects to generate.
+
+    Returns:
+        A random GeoSeries of Polygon and MultiPolygon objects.
+    """
+    return gpd.GeoSeries(
+        [generate_random_polygon_like() for _ in range(amount)]
+    )
+
+
+def generate_random_polygons(amount: int = 64) -> gpd.GeoSeries:
+    """Generate a random GeoSeries of Polygon objects.
+
+    The amount of vertices in the exteriors and interiors, the amount of
+    interiors and the coordinates of the vertices are all randomly generated.
+
+    In theory, this function could generate any Polygon object.
+
+    Args:
+        amount: The amount of Polygon objects to generate.
+
+    Returns:
+        A random GeoSeries of Polygon objects.
+    """
+    return gpd.GeoSeries([generate_random_polygon() for _ in range(amount)])
+
+
+def generate_random_multipolygons(amount: int = 64) -> gpd.GeoSeries:
+    """Generate a random GeoSeries of MultiPolygon objects.
+
+    The amount of Polygons, the amount of vertices in the exteriors and
+    interiors, the amount of interiors and the coordinates of the vertices are
+    all randomly generated.
+
+    In theory, this function could generate any MultiPolygon object.
+
+    Args:
+        amount: The amount of MultiPolygon objects to generate.
+
+    Returns:
+        A random GeoSeries of MultiPolygon objects.
+    """
+    return gpd.GeoSeries(
+        [generate_random_multipolygon() for _ in range(amount)]
+    )

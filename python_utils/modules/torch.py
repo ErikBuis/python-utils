@@ -22,6 +22,87 @@ default_collate_fn_map.update({type(None): collate_str_fn})
 BackMap = tuple[slice | torch.Tensor, ...]
 
 
+def interp(
+    x: torch.Tensor,
+    xp: torch.Tensor,
+    fp: torch.Tensor,
+    left: float | None = None,
+    right: float | None = None,
+    period: float | None = None,
+) -> torch.Tensor:
+    """Like numpy.interp, but for PyTorch tensors.
+
+    This function is a direct translation of numpy.interp to PyTorch tensors.
+    It performs linear interpolation on a 1D tensor.
+
+    Args:
+        x: The x-coordinates at which to evaluate the interpolated values.
+            Shape: [N]
+        xp: The x-coordinates of the data points, must be increasing.
+            Shape: [M]
+        fp: The y-coordinates of the data points, same shape as xp.
+            Shape: [M]
+        left: Value to return for x < xp[0], default is fp[0].
+        right: Value to return for x > xp[-1], default is fp[-1].
+        period: A period for the x-coordinates. This parameter allows the
+            proper interpolation of angular x-coordinates. Parameters left and
+            right are ignored if period is specified.
+
+    Returns:
+        The interpolated values for each batch.
+            Shape: [N]
+    """
+    M = len(xp)
+
+    # Handle periodic interpolation.
+    if period is not None:
+        if period <= 0:
+            raise ValueError("period must be positive.")
+
+        xp, sorted_idcs = torch.sort(xp % period)
+        fp = fp[sorted_idcs]
+
+    # Check if xp is strictly increasing.
+    if not torch.all(torch.diff(xp) > 0):
+        raise ValueError(
+            "xp must be strictly increasing along the last dimension."
+        )
+
+    # Find indices of neighbours in xp.
+    right_idx = torch.searchsorted(xp, x)  # [N]
+    left_idx = right_idx - 1  # [N]
+
+    # Clamp indices to valid range (we will handle the edges later).
+    left_idx = torch.clamp(left_idx, min=0, max=M - 1)  # [N]
+    right_idx = torch.clamp(right_idx, min=0, max=M - 1)  # [N]
+
+    # Gather neighbour values.
+    x_left = xp[left_idx]  # [N]
+    x_right = xp[right_idx]  # [N]
+    y_left = fp[left_idx]  # [N]
+    y_right = fp[right_idx]  # [N]
+
+    # Avoid division by zero for x_left == x_right.
+    denom = x_right - x_left  # [N]
+    denom[denom == 0] = 1
+    p = (x - x_left) / denom  # [N]
+
+    # Perform interpolation.
+    y = y_left + p * (y_right - y_left)  # [N]
+
+    # Handle left edge.
+    if left is None:
+        left = fp[0].item()
+    y[x < xp[[0]]] = left
+
+    # Handle right edge.
+    if right is None:
+        right = fp[-1].item()
+    y[x > xp[[-1]]] = right
+
+    return y
+
+
 def cumsum_start_0(
     t: torch.Tensor,
     dim: int | None = None,
@@ -604,7 +685,11 @@ def unique_consecutive(
     # Find the indices where the values change.
     is_change = torch.concatenate(
         [
-            torch.tensor([True], device=device),
+            (
+                torch.tensor([True], device=device)
+                if x.shape[dim] > 0
+                else torch.tensor([], dtype=torch.bool, device=device)
+            ),
             (y[:, :-1] != y[:, 1:]).any(dim=0),
         ],
         dim=0,
@@ -627,7 +712,15 @@ def unique_consecutive(
         # Find the counts for each unique element.
         counts = torch.diff(
             torch.concatenate(
-                [idcs, torch.tensor([x.shape[dim]], device=device)], dim=0
+                [
+                    idcs,
+                    (
+                        torch.tensor([x.shape[dim]], device=device)
+                        if x.shape[dim] > 0
+                        else torch.tensor([], dtype=torch.int64, device=device)
+                    ),
+                ],
+                dim=0,
             )
         )  # [N_unique]
         aux.append(counts)

@@ -1,14 +1,33 @@
 import unittest
 from typing import cast
 
+import numpy as np
 import torch
 
 from python_utils.modules.torch import (
+    interp,
     lexsort_along,
     swap_idcs_vals,
     swap_idcs_vals_duplicates,
     unique_with_backmap,
 )
+
+
+class TestInterp(unittest.TestCase):
+    def test_interp_equivalent_np(self) -> None:
+        x = torch.rand(100) * 102 - 1  # in [-1, 101)
+        xp = torch.sort(torch.rand(100)).values * 100  # in [0, 100)
+        fp = torch.rand(100)  # in [0, 1)
+        left = -1
+        right = 101
+        self.assertTrue(
+            torch.allclose(
+                interp(x, xp, fp, left, right),
+                torch.from_numpy(
+                    np.interp(x, xp, fp, left, right).astype(np.float32)
+                ),
+            )
+        )
 
 
 class TestLexsortAlong(unittest.TestCase):

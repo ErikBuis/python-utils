@@ -268,7 +268,7 @@ def arange_batched(
         steps = torch.ones(B, dtype=dtype, device=device)
 
     L_bs = ((ends - starts) // steps).long()
-    max_L_b = L_bs.max().item()
+    max_L_b = int(L_bs.max())
     aranges = torch.arange(max_L_b, dtype=dtype, device=device)  # [max(L_bs)]
     aranges = starts.unsqueeze(1) + aranges * steps.unsqueeze(1)
     aranges[aranges >= ends.unsqueeze(1)] = 0
@@ -276,6 +276,93 @@ def arange_batched(
         aranges.requires_grad_()
 
     return aranges, L_bs
+
+
+def interp_batched(
+    x: torch.Tensor,
+    xp: torch.Tensor,
+    fp: torch.Tensor,
+    left: torch.Tensor | None = None,
+    right: torch.Tensor | None = None,
+    period: torch.Tensor | None = None,
+) -> torch.Tensor:
+    """Like numpy.interp, but for PyTorch tensors and batched.
+
+    This function is a direct translation of numpy.interp to PyTorch tensors.
+    It performs linear interpolation on a batch of 1D tensors.
+
+    Args:
+        x: The x-coordinates at which to evaluate the interpolated values.
+            Shape: [B, N]
+        xp: The x-coordinates of the data points, must be increasing along the
+            last dimension.
+            Shape: [B, M]
+        fp: The y-coordinates of the data points, same shape as xp.
+            Shape: [B, M]
+        left: Value to return for x < xp[0], default is fp[:, 0].
+            Shape: [B]
+        right: Value to return for x > xp[-1], default is fp[:, -1].
+            Shape: [B]
+        period: A period for the x-coordinates. This parameter allows the
+            proper interpolation of angular x-coordinates. Parameters left and
+            right are ignored if period is specified.
+            Shape: [B]
+
+    Returns:
+        The interpolated values for each batch.
+            Shape: [B, N]
+    """
+    _, M = xp.shape
+
+    # Handle periodic interpolation.
+    if period is not None:
+        if period <= 0:
+            raise ValueError("period must be positive.")
+
+        xp, sorted_idcs = torch.sort(xp % period, dim=1)
+        fp = torch.gather(fp, 1, sorted_idcs)
+
+    # Check if xp is strictly increasing.
+    if not torch.all(torch.diff(xp, dim=1) > 0):
+        raise ValueError(
+            "xp must be strictly increasing along the last dimension."
+        )
+
+    # Find indices of neighbours in xp.
+    right_idx = torch.searchsorted(xp, x)  # [B, N]
+    left_idx = right_idx - 1  # [B, N]
+
+    # Clamp indices to valid range (we will handle the edges later).
+    left_idx = torch.clamp(left_idx, min=0, max=M - 1)  # [B, N]
+    right_idx = torch.clamp(right_idx, min=0, max=M - 1)  # [B, N]
+
+    # Gather neighbour values.
+    x_left = torch.gather(xp, 1, left_idx)  # [B, N]
+    x_right = torch.gather(xp, 1, right_idx)  # [B, N]
+    y_left = torch.gather(fp, 1, left_idx)  # [B, N]
+    y_right = torch.gather(fp, 1, right_idx)  # [B, N]
+
+    # Avoid division by zero for x_left == x_right.
+    denom = x_right - x_left  # [B, N]
+    denom[denom == 0] = 1
+    p = (x - x_left) / denom  # [B, N]
+
+    # Perform interpolation.
+    y = y_left + p * (y_right - y_left)  # [B, N]
+
+    # Handle left edge.
+    if left is None:
+        left = fp[:, 0]  # [B]
+    is_left = x < xp[:, [0]]  # [B, N]
+    y[is_left] = left.repeat_interleave(is_left.sum(dim=1)).to(y.dtype)
+
+    # Handle right edge.
+    if right is None:
+        right = fp[:, -1]  # [B]
+    is_right = x > xp[:, [-1]]  # [B, N]
+    y[is_right] = right.repeat_interleave(is_right.sum(dim=1)).to(y.dtype)
+
+    return y
 
 
 def sample_unique_batched(
