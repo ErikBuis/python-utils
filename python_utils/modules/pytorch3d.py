@@ -14,12 +14,12 @@ def transform_2D_points(
     Args:
         points: The points to transform. Should represent x and y coordinates.
             The z coordinate is assumed to be zero.
-            Shape: [B, max(P_b), 2] or [P, 2]
+            Shape: [B, max(P_bs), 2] or [P, 2]
         transform: The transformation to apply to the points.
 
     Returns:
         The transformed points. Represents x and y coordinates.
-            Shape: [B, max(P_b), 3] or [P, 3]
+            Shape: [B, max(P_bs), 3] or [P, 3]
     """
     padding_shape = points.shape[:-1] + (1,)
     device = points.device
@@ -27,10 +27,10 @@ def transform_2D_points(
     # Transform the points.
     points_3d = torch.concatenate(
         [points, torch.zeros(padding_shape, device=device)], dim=-1
-    )  # [B, max(P_b), 3] or [P, 3]
+    )  # [B, max(P_bs), 3] or [P, 3]
     return transform.transform_points(
         points_3d, eps=1e-6
-    )  # [B, max(P_b), 3] or [P, 3]
+    )  # [B, max(P_bs), 3] or [P, 3]
 
 
 def get_matrix_rotate_vec_a_to_vec_b(

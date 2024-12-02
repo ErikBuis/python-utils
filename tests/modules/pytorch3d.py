@@ -32,11 +32,11 @@ class TestGetMatrixRotateVecAToVecB(unittest.TestCase):
             rot: The rotation matrix to apply to the points.
                 Shape: [B, 3, 3]
             points: The points to transform.
-                Shape: [B, max(P_b), 3]
+                Shape: [B, max(P_bs), 3]
 
         Returns:
             The transformed points.
-                Shape: [B, max(P_b), 3]
+                Shape: [B, max(P_bs), 3]
         """
         return a.bmm(R)
 

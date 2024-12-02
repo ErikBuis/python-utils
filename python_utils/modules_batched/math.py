@@ -19,7 +19,7 @@ def floor_to_multiple_batched(x: torch.Tensor, base: NumberT) -> torch.Tensor:
 
     Returns:
         The floored tensor.
-        Shape: [*]
+            Shape: [*]
     """
     return torch.floor_divide(x, base).long() * base
 
@@ -34,7 +34,7 @@ def ceil_to_multiple_batched(x: torch.Tensor, base: NumberT) -> torch.Tensor:
 
     Returns:
         The ceiled tensor.
-        Shape: [*]
+            Shape: [*]
     """
     return torch.ceil(x / base).long() * base
 
@@ -49,7 +49,7 @@ def round_to_multiple_batched(x: torch.Tensor, base: NumberT) -> torch.Tensor:
 
     Returns:
         The rounded tensor.
-        Shape: [*]
+            Shape: [*]
     """
     return torch.round(x / base).long() * base
 

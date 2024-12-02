@@ -18,10 +18,10 @@ def find_overlapping_bboxes(
     Args:
         bboxes: The bounding boxes to find overlaps in. Each bounding box is a
             tuple containing:
-            - x1: The x-coordinate of the left side of the bounding box.
-            - y1: The y-coordinate of the top side of the bounding box.
-            - x2: The x-coordinate of the right side of the bounding box.
-            - y2: The y-coordinate of the bottom side of the bounding box.
+            - The x-coordinate of the left side of the bounding box.
+            - The y-coordinate of the top side of the bounding box.
+            - The x-coordinate of the right side of the bounding box.
+            - The y-coordinate of the bottom side of the bounding box.
 
     Returns:
         For each bounding box, a list of indices of the bounding boxes that

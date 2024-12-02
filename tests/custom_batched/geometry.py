@@ -1,69 +1,12 @@
 import unittest
 
-import geopandas as gpd
-import numpy as np
 import torch
-from shapely import MultiPolygon, Polygon
+import torch.nn as nn
 
 from python_utils.custom.geometry import xiaolin_wu_anti_aliasing
 from python_utils.custom_batched.geometry import (
     xiaolin_wu_anti_aliasing_batched,
 )
-
-
-def generate_random_polygon() -> Polygon:
-    # Generate a random Polygon.
-    # Each Polygon has a 50% chance of having holes.
-    # The amount of vertices is between 3 and 50.
-    exterior = torch.rand(np.random.randint(3, 51), 2).tolist()
-    interiors = []
-    while np.random.rand() < 0.5:
-        interiors.append(torch.rand(np.random.randint(3, 51), 2).tolist())
-    return Polygon(exterior, interiors)
-
-
-def generate_random_multipolygon() -> MultiPolygon:
-    # Generate a random MultiPolygon.
-    # Each MultiPolygon contain at least 2 Polygons. Extra Polygons are
-    # continuously added with a 50% chance, until the addition fails.
-    polygons_list = [generate_random_polygon(), generate_random_polygon()]
-    while np.random.rand() < 0.5:
-        polygons_list.append(generate_random_polygon())
-    return MultiPolygon(polygons_list)
-
-
-def generate_random_polygon_like() -> Polygon | MultiPolygon:
-    # Generate a random Polygon or MultiPolygon.
-    # Each has a 50% chance of occurring.
-    if np.random.rand() < 0.5:
-        return generate_random_polygon()
-    else:
-        return generate_random_multipolygon()
-
-
-def generate_random_polygons(amount: int = 64) -> gpd.GeoSeries:
-    # Generate a random GeoSeries of Polygon objects.
-    polygons_list = []
-    for _ in range(amount):
-        polygons_list.append(generate_random_polygon())
-    return gpd.GeoSeries(polygons_list)  # type: ignore
-
-
-def generate_random_multipolygons(amount: int = 64) -> gpd.GeoSeries:
-    # Generate a random GeoSeries of MultiPolygon objects.
-    multipolygons_list = []
-    for _ in range(amount):
-        multipolygons_list.append(generate_random_multipolygon())
-    return gpd.GeoSeries(multipolygons_list)  # type: ignore
-
-
-def generate_random_polygon_likes(amount: int = 64) -> gpd.GeoSeries:
-    # Generate a random GeoSeries of Polygon and MultiPolygon objects.
-    # Each has a 50% chance of occurring for each object.
-    polygon_likes_list = []
-    for _ in range(amount):
-        polygon_likes_list.append(generate_random_polygon_like())
-    return gpd.GeoSeries(polygon_likes_list)  # type: ignore
 
 
 class XiaolinWuAntiAliasingBatched(unittest.TestCase):
@@ -100,13 +43,13 @@ class XiaolinWuAntiAliasingBatched(unittest.TestCase):
             pixels_y_seq.append(pixels_y)
             vals_seq.append(vals)
         S_bs_seq = torch.tensor(list(map(len, vals_seq)))
-        pixels_x_seq = torch.nn.utils.rnn.pad_sequence(
+        pixels_x_seq = nn.utils.rnn.pad_sequence(
             pixels_x_seq, batch_first=True
         )
-        pixels_y_seq = torch.nn.utils.rnn.pad_sequence(
+        pixels_y_seq = nn.utils.rnn.pad_sequence(
             pixels_y_seq, batch_first=True
         )
-        vals_seq = torch.nn.utils.rnn.pad_sequence(vals_seq, batch_first=True)
+        vals_seq = nn.utils.rnn.pad_sequence(vals_seq, batch_first=True)
 
         # Get the values from the batched function.
         pixels_x_bat, pixels_y_bat, vals_bat, S_bs_bat = (

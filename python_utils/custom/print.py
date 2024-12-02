@@ -130,16 +130,16 @@ def __stringify_fast_sequence_consecutive(
     Returns:
         Tuple containing:
         - A boolean indicating whether the function managed to stringify all
-          elements on the same line. If False, the function will return early.
-          In this case, it doesn't matter what the third and fourth return
-          values are, and thus they will be set to [] and the input
-          line_len_left respectively.
+            elements on the same line. If False, the function will return
+            early. In this case, it doesn't matter what the third and fourth
+            return values are, and thus they will be set to [] and the input
+            line_len_left respectively.
         - The object as a list of strings and integers. Strings are the
-          stringified objects, integers are indices to the cached strings.
-          To reconstruct the final string, the strings must be joined in the
-          order they appear in the list.
+            stringified objects, integers are indices to the cached strings.
+            To reconstruct the final string, the strings must be joined in the
+            order they appear in the list.
         - The number of characters that can still be added to the current line
-          after the function has finished.
+            after the function has finished.
 
     Example:
     >>> cached_strs = []
@@ -304,16 +304,16 @@ def __stringify_fast_dict_consecutive(
     Returns:
         Tuple containing:
         - A boolean indicating whether the function managed to stringify all
-          elements on the same line. If False, the function will return early.
-          In this case, it doesn't matter what the third and fourth return
-          values are, and thus they will be set to [] and the input
-          line_len_left respectively.
+            elements on the same line. If False, the function will return
+            early. In this case, it doesn't matter what the third and fourth
+            return values are, and thus they will be set to [] and the input
+            line_len_left respectively.
         - The object as a list of strings and integers. Strings are the
-          stringified objects, integers are indices to the cached strings.
-          To reconstruct the final string, the strings must be joined in the
-          order they appear in the list.
+            stringified objects, integers are indices to the cached strings.
+            To reconstruct the final string, the strings must be joined in the
+            order they appear in the list.
         - The number of characters that can still be added to the current line
-          after the function has finished.
+            after the function has finished.
 
     Example:
     >>> cached_strs = []

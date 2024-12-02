@@ -825,12 +825,6 @@ class NumberSet:
         idx is the index of the number in the set as returned by bisect_left().
         If idx is not given, it will be calculated by the function.
 
-        Returns a tuple containing:
-        - The first boolean indicates whether the number is already in the set.
-        - The second boolean indicates whether the number is on a start bound.
-        - The third boolean indicates whether the number is on an end bound.
-        - The integer indicates the index returned by bisect_left().
-
         The table below provides an overview of the possible situations.
         In    | On     | On     | Bracket | Bracket | Situation
         set?  | start? | end?   | @ idx   | @ idx+1 |
@@ -843,6 +837,13 @@ class NumberSet:
         False | True   | False  | (       |         | @ Excluded start bound
         False | False  | True   | )       |         | @ Excluded end bound
         False | False  | False  |         |         | @ Outside all components
+
+        Returns:
+            Tuple containing:
+            - Boolean indicating if the number is already in the set.
+            - Boolean indicating if the number is on a start bound.
+            - Boolean indicating if the number is on an end bound.
+            - The index returned by bisect_left().
         """
         if idx is None:
             idx = bisect_left(self._boundaries, number)

@@ -26,15 +26,15 @@ def griddata_batched(
     Args:
         points: Point coordinates to interpolate between. Padded with zeros if
             the batch is heterogeneous.
-            Shape: [B, max(P_b), D]
+            Shape: [B, max(P_bs), D]
         values: Values per point coordinate. Padded with zeros if the batch is
             heterogeneous.
-            Shape: [B, max(P_b)]
+            Shape: [B, max(P_bs)]
         num_points_per_batch: The number of points to interpolate between in
             each batch.
             Shape: [B]
         xi: Points at which to interpolate data.
-            Shape: [B, max(X_b), D]
+            Shape: [B, max(X_bs), D]
         num_xi_per_batch: The number of points at which to interpolate data
             in each batch.
             Shape: [B]
@@ -60,7 +60,7 @@ def griddata_batched(
 
     Returns:
         Array of interpolated values.
-            Shape: [B, max(X_b)]
+            Shape: [B, max(X_bs)]
     """
     B, max_X_b, _ = xi.shape
     device = points.device
@@ -68,7 +68,7 @@ def griddata_batched(
     # Initialize the output array.
     values_interpolated = torch.full(
         (B, max_X_b), fill_value, device=device
-    )  # [B, max(X_b)]
+    )  # [B, max(X_bs)]
 
     # Loop over the batch and interpolate the values.
     for b in range(B):

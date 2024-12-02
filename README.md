@@ -31,9 +31,8 @@ The `tests` directory contains unittests for all modules. The tests are written 
 
 To run the tests, run the following command from the root directory of the repository:
 ```bash
-python3 -m pytest
+python -m pytest
 ```
-You may need to install pytest first using `python3 -m pip install pytest`.
 
 
 # Copyright
