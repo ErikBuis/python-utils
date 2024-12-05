@@ -6,9 +6,9 @@ from scipy.spatial import QhullError
 def griddata_batched(
     points: torch.Tensor,
     values: torch.Tensor,
-    num_points_per_batch: torch.Tensor,
+    P_bs: torch.Tensor,
     xi: torch.Tensor,
-    num_xi_per_batch: torch.Tensor,
+    X_bs: torch.Tensor,
     method: str = "linear",
     fill_value: float = torch.nan,
     rescale: bool = False,
@@ -30,13 +30,12 @@ def griddata_batched(
         values: Values per point coordinate. Padded with zeros if the batch is
             heterogeneous.
             Shape: [B, max(P_bs)]
-        num_points_per_batch: The number of points to interpolate between in
+        P_bs: The number of points to interpolate between in
             each batch.
             Shape: [B]
         xi: Points at which to interpolate data.
             Shape: [B, max(X_bs), D]
-        num_xi_per_batch: The number of points at which to interpolate data
-            in each batch.
+        X_bs: The number of points at which to interpolate data in each batch.
             Shape: [B]
         method: Method of interpolation. Must be one of "linear", "nearest",
             or "cubic".
@@ -62,24 +61,24 @@ def griddata_batched(
         Array of interpolated values.
             Shape: [B, max(X_bs)]
     """
-    B, max_X_b, _ = xi.shape
+    B, max_X_bs, _ = xi.shape
     device = points.device
 
     # Initialize the output array.
     values_interpolated = torch.full(
-        (B, max_X_b), fill_value, device=device
+        (B, max_X_bs), fill_value, device=device
     )  # [B, max(X_bs)]
 
     # Loop over the batch and interpolate the values.
     for b in range(B):
-        if num_points_per_batch[b] == 0:
+        if P_bs[b] == 0:
             continue  # no points to interpolate between
         try:
-            values_interpolated[b, : num_xi_per_batch[b]] = torch.from_numpy(
+            values_interpolated[b, : X_bs[b]] = torch.from_numpy(
                 griddata(
-                    points[b, : num_points_per_batch[b]],
-                    values[b, : num_points_per_batch[b]],
-                    xi[b, : num_xi_per_batch[b]],
+                    points[b, : P_bs[b]],
+                    values[b, : P_bs[b]],
+                    xi[b, : X_bs[b]],
                     method=method,
                     fill_value=fill_value,
                     rescale=rescale,

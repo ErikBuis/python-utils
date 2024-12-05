@@ -40,24 +40,24 @@ def pack_padded_batched(
 
     Returns:
         The packed values.
-            Shape: [sum(L_b), *]
+            Shape: [sum(L_bs), *]
     """
-    max_L_b = values.shape[1]
-    mask = mask_padding_batched(L_bs, max_L_b)
+    max_L_bs = values.shape[1]
+    mask = mask_padding_batched(L_bs, max_L_bs)
     return values[mask]
 
 
 def pad_packed_batched(
     values: torch.Tensor,
     L_bs: torch.Tensor,
-    max_L_b: int,
+    max_L_bs: int,
     padding_value: Any | None = 0,
 ) -> torch.Tensor:
     """Pad a batch of packed values to create a tensor with a fixed size.
 
     Args:
         values: The values to pad with zeros for heterogenous batch sizes.
-            Shape: [sum(L_b), *]
+            Shape: [sum(L_bs), *]
         L_bs: The number of valid values in each sample.
             Shape: [B]
         max_L_b: The maximum number of values of any element in the batch.
@@ -73,7 +73,7 @@ def pad_packed_batched(
     dtype = values.dtype
     device = values.device
 
-    padded_shape = (B, max_L_b, *values.shape[1:])
+    padded_shape = (B, max_L_bs, *values.shape[1:])
     if padding_value is None:
         values_padded = torch.empty(padded_shape, dtype=dtype, device=device)
     elif padding_value == 0:
@@ -85,7 +85,7 @@ def pad_packed_batched(
             padded_shape, padding_value, dtype=dtype, device=device
         )
 
-    mask = mask_padding_batched(L_bs, max_L_b)
+    mask = mask_padding_batched(L_bs, max_L_bs)
     values_padded[mask] = values
 
     return values_padded
@@ -112,8 +112,8 @@ def replace_padding_batched(
         The values padded with padding_value for heterogenous batch sizes.
             Shape: [B, max(L_bs), *]
     """
-    max_L_b = values.shape[1]
-    mask = mask_padding_batched(L_bs, max_L_b)
+    max_L_bs = values.shape[1]
+    mask = mask_padding_batched(L_bs, max_L_bs)
     values_padded = values if in_place else values.clone()
     values_padded[~mask] = padding_value
     return values_padded
