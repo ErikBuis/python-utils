@@ -6,9 +6,40 @@ from pytorch3d.structures import Pointclouds
 from pytorch3d.transforms import Rotate, Transform3d, Translate
 
 
-def transform_2D_points(
-    points: torch.Tensor, transform: Transform3d
-) -> torch.Tensor:
+def points_2D_to_3D(points: torch.Tensor) -> torch.Tensor:
+    """Convert a batch of 2D points to 3D points.
+
+    Args:
+        points: The points to convert. Should represent x and y coordinates.
+            The z coordinate will be set to zero.
+            Shape: [..., 2]
+
+    Returns:
+        The converted points. Represents x, y, and z coordinates.
+            Shape: [..., 3]
+    """
+    return torch.concatenate(
+        [points, torch.zeros(points.shape[:-1] + (1,), dtype=points.dtype, device=points.device)],
+        dim=-1,
+    )  # [..., 3]
+
+
+def points_3D_to_2D(points: torch.Tensor) -> torch.Tensor:
+    """Convert a batch of 3D points to 2D points.
+
+    Args:
+        points: The points to convert. Should represent x, y, and z coordinates.
+            The z coordinate is assumed to be zero.
+            Shape: [..., 3]
+
+    Returns:
+        The converted points. Represents x and y coordinates.
+            Shape: [..., 2]
+    """
+    return points[..., :2]  # [..., 2]
+
+
+def transform_points_from_2D(points: torch.Tensor, transform: Transform3d) -> torch.Tensor:
     """Transform a batch of 2D points with a transformation.
 
     Args:
@@ -21,16 +52,47 @@ def transform_2D_points(
         The transformed points. Represents x and y coordinates.
             Shape: [B, max(P_bs), 3] or [P, 3]
     """
-    padding_shape = points.shape[:-1] + (1,)
-    device = points.device
+    # Transform the points to 3D.
+    points_3d = points_2D_to_3D(points)  # [B, max(P_bs), 3] or [P, 3]
+    return transform.transform_points(points_3d, eps=1e-6)  # [B, max(P_bs), 3] or [P, 3]
 
+
+def transform_points_to_2D(points: torch.Tensor, transform: Transform3d) -> torch.Tensor:
+    """Transform a batch of 3D points with a transformation.
+
+    Args:
+        points: The points to transform. Should represent x, y, and z coordinates.
+            The z coordinate is assumed to be zero.
+            Shape: [B, max(P_bs), 3] or [P, 3]
+        transform: The transformation to apply to the points.
+
+    Returns:
+        The transformed points. Represents x and y coordinates.
+            Shape: [B, max(P_bs), 2] or [P, 2]
+    """
     # Transform the points.
-    points_3d = torch.concatenate(
-        [points, torch.zeros(padding_shape, device=device)], dim=-1
-    )  # [B, max(P_bs), 3] or [P, 3]
-    return transform.transform_points(
-        points_3d, eps=1e-6
-    )  # [B, max(P_bs), 3] or [P, 3]
+    points = transform.transform_points(points, eps=1e-6)  # [B, max(P_bs), 3] or [P, 3]
+    return points_3D_to_2D(points)  # [B, max(P_bs), 2] or [P, 2]
+
+
+def transform_points_from_2D_to_2D(
+    points: torch.Tensor, transform: Transform3d
+) -> torch.Tensor:
+    """Transform a batch of 2D points with a transformation.
+
+    Args:
+        points: The points to transform. Should represent x and y coordinates.
+            The z coordinate is assumed to be zero.
+            Shape: [B, max(P_bs), 2] or [P, 2]
+        transform: The transformation to apply to the points.
+
+    Returns:
+        The transformed points. Represents x and y coordinates.
+            Shape: [B, max(P_bs), 2] or [P, 2]
+    """
+    # Transform the points to 3D.
+    points_3d = points_2D_to_3D(points)  # [B, max(P_bs), 3] or [P, 3]
+    return points_3D_to_2D(transform.transform_points(points_3d, eps=1e-6))  # [B, max(P_bs), 2]
 
 
 def get_matrix_rotate_vec_a_to_vec_b(
@@ -75,7 +137,7 @@ def get_matrix_rotate_vec_a_to_vec_b(
         torch.stack([-u[:, 1], u[:, 0], zeros]),
     ])  # [3, 3, B]
     v_x = v_x.permute(2, 1, 0)  # [B, 3, 3]
-    I = torch.eye(3, dtype=dtype, device=device_)  # [3, 3]
+    I = torch.eye(3, dtype=dtype, device=device_)  # [3, 3]  # noqa: E741
     return torch.where(
         # Test whether the vectors are opposites.
         (from_n + to_n).abs() > 1e-7,
@@ -121,19 +183,14 @@ class ProjectToSurface(Transform3d):
             device: The device to store the transformation matrix on.
         """
         # Initialize the transformation.
-        device_ = (
-            torch.device(device) if device is not None else surface.device
-        )
+        device_ = torch.device(device) if device is not None else surface.device
         super().__init__(dtype=dtype, device=device_)
 
         # Perform error handling.
         if surface.ndim == 1:
             self.surface = surface.unsqueeze(0)  # [1, 4]
         if surface.shape[-1] != 4 or surface.ndim > 2:
-            raise ValueError(
-                "surface must have shape [4] or [B, 4], but got"
-                f" {surface.shape}"
-            )
+            raise ValueError(f"surface must have shape [4] or [B, 4], but got {surface.shape}")
         surface = surface.to(device_, dtype)
 
         # Create the projection matrix.
@@ -163,9 +220,7 @@ class ProjectToSurface(Transform3d):
         """
         Return the inverse of self._matrix.
         """
-        raise RuntimeError(
-            "The inverse of a projection matrix is not defined."
-        )
+        raise RuntimeError("The inverse of a projection matrix is not defined.")
 
 
 class SurfaceToSurface(Transform3d):
@@ -219,9 +274,7 @@ class SurfaceToSurface(Transform3d):
             device: The device to store the transformation matrix on.
         """
         # Initialize the transformation.
-        device_ = (
-            torch.device(device) if device is not None else from_surface.device
-        )
+        device_ = torch.device(device) if device is not None else from_surface.device
         super().__init__(dtype=dtype, device=device_)
 
         # Perform error handling.
@@ -229,16 +282,14 @@ class SurfaceToSurface(Transform3d):
             from_surface = from_surface.unsqueeze(0)  # [1, 4]
         if from_surface.shape[-1] != 4 or from_surface.ndim > 2:
             raise ValueError(
-                "from_surface must have shape [4] or [B, 4], but got"
-                f" {from_surface.shape}"
+                f"from_surface must have shape [4] or [B, 4], but got {from_surface.shape}"
             )
         from_surface = from_surface.to(device_, dtype)
         if to_surface.ndim == 1:
             to_surface = to_surface.unsqueeze(0)  # [1, 4]
         if to_surface.shape[-1] != 4 or to_surface.ndim > 2:
             raise ValueError(
-                "to_surface must have shape [4] or [B, 4], but got"
-                f" {to_surface.shape}"
+                f"to_surface must have shape [4] or [B, 4], but got {to_surface.shape}"
             )
         to_surface = to_surface.to(device_, dtype)
         if from_surface.shape[0] == 1 and to_surface.shape[0] != 1:
@@ -262,24 +313,18 @@ class SurfaceToSurface(Transform3d):
         # First translate the points from from_surface to the origin.
         # from_v is the point on from_surface closest to the origin.
         from_v = -from_n * from_d.unsqueeze(-1)  # [B, 3]
-        matrix1 = Translate(
-            -from_v, dtype=dtype, device=device_
-        ).get_matrix()  # [B, 4, 4]
+        matrix1 = Translate(-from_v, dtype=dtype, device=device_).get_matrix()  # [B, 4, 4]
 
         # Then rotate the points from from_n to to_n.
         rot = get_matrix_rotate_vec_a_to_vec_b(
             from_n, to_n, dtype=dtype, device=device_
         )  # [B, 3, 3]
-        matrix2 = Rotate(
-            rot, dtype=dtype, device=device_
-        ).get_matrix()  # [B, 4, 4]
+        matrix2 = Rotate(rot, dtype=dtype, device=device_).get_matrix()  # [B, 4, 4]
 
         # Finally, translate the points from the origin to to_surface.
         # to_v is the point on to_surface closest to the origin.
         to_v = -to_n * to_d.unsqueeze(-1)  # [B, 3]
-        matrix3 = Translate(
-            to_v, dtype=dtype, device=device_
-        ).get_matrix()  # [B, 4, 4]
+        matrix3 = Translate(to_v, dtype=dtype, device=device_).get_matrix()  # [B, 4, 4]
 
         self._matrix = matrix1.bmm(matrix2).bmm(matrix3)  # [B, 4, 4]
 
@@ -305,9 +350,7 @@ def estimate_normals(
         and pointclouds.shape[1] <= 1
         or torch.any(pointclouds.num_points_per_cloud() <= 1)  # type: ignore
     ):
-        raise ValueError(
-            "The number of points in a point cloud must be at least two."
-        )
+        raise ValueError("The number of points in a point cloud must be at least two.")
 
     if isinstance(pointclouds, torch.Tensor):
         return estimate_pointcloud_normals(

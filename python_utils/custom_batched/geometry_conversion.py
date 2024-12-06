@@ -241,7 +241,7 @@ Attributes:
 """
 
 PolygonLikesExterior = NamedTuple(
-    "PolygonLikeExteriors",
+    "PolygonLikesExterior",
     [
         ("vertices", torch.Tensor),
         ("P_bs", torch.Tensor),

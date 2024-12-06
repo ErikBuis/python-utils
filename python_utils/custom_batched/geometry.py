@@ -390,11 +390,11 @@ def xiaolin_wu_anti_aliasing_batched(
 
     # Initialize the return values.
     S_bs = 2 * (xpxl_end - xpxl_begin + 1)  # [B]
-    max_S_b = int(S_bs.max())
+    max_S_bs = int(S_bs.max())
     B = len(S_bs)
-    pixels_x = torch.empty((B, max_S_b), dtype=torch.int64)
-    pixels_y = torch.empty((B, max_S_b), dtype=torch.int64)
-    vals = torch.empty((B, max_S_b), dtype=torch.float64)
+    pixels_x = torch.empty((B, max_S_bs), dtype=torch.int64)
+    pixels_y = torch.empty((B, max_S_bs), dtype=torch.int64)
+    vals = torch.empty((B, max_S_bs), dtype=torch.float64)
 
     # Calculate values used in the main loop.
     x, _ = arange_batched(

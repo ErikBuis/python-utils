@@ -19,13 +19,13 @@ class TestRansacBatched(unittest.TestCase):
     def test_visually(self) -> None:
         # Set input parameters.
         B = 12
-        max_L_b = 10
+        max_L_bs = 10
         max_r = 20
 
         # Generate random lines.
-        rs = torch.rand(B, max_L_b) * max_r
-        thetas = torch.rand(B, max_L_b) * 2 * torch.pi
-        L_bs = torch.randint(2, max_L_b + 1, (B,))
+        rs = torch.rand(B, max_L_bs) * max_r
+        thetas = torch.rand(B, max_L_bs) * 2 * torch.pi
+        L_bs = torch.randint(2, max_L_bs + 1, (B,))
         lines = (rs, thetas)
         max_view = max_r * 2
         max_t = ceil(max_view * sqrt(2))
