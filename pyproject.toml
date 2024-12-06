@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "python_utils"
 description = "A place to store general, reusable functions and algorithms."
 readme = "README.md"
-license = { file = "LICENCE" }
+license = { file = "LICENCE.md" }
 authors = [{ name = "Erik Buis" }]
 requires-python = ">= 3.10"
 dynamic = ["version"]

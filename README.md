@@ -1,9 +1,6 @@
 > Author: [Erik Buis](https://github.com/ErikBuis) \
 > Email: [ebbuis@gmail.com](mailto:ebbuis@gmail.com) \
-> Date of creation of this file: 8 March, 2024 \
-> Copyright Erik Buis (2024). See LICENCE.md for details.
-
-> Background on why this code is licenced: The repository was developed by Erik during his studies/private time/programming competitions, and so it is his intellectual property. However, further modifications by NEO were desired. Since these modifications would be the intellectual property of NEO, it was decided to fork the repository here. By licensing the code under Apache 2.0, Erik grants NEO the right to use, modify, distribute, and sublicense the code. However, the license requires that any distributed version of the software (modified or not) retains the original copyright notice and license text. Further changes/augmentations in this forked version of the repository are welcome, and can be contributed by any employee of NEO.
+> Date of creation of this file: 8 March, 2024
 
 
 # Utility functions
@@ -16,6 +13,8 @@ The repository is organized as follows:
 .
 ├── ℹ️ <b>README.md</b>: This file.
 ├── 🛡️ <b>LICENCE.md</b>: Licence file.
+├── ❗️ <b>environment-dev.yaml</b>: Conda/Mamba environment configuration.
+├── ❗️ <b>.pre-commit-config.yaml</b>: Git pre-commit configuration file.
 ├── 📁 <b>guides</b>: General guides for installing common software or other components often required for real-world projects.
 ├── 📁 <b>tests</b>: Tests for all modules, written using the unittest module from the Python standard library.
 └── 📁 <b>python_utils</b>: The python_utils package.

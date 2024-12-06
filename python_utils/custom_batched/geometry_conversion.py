@@ -6,7 +6,7 @@ import pandas as pd
 import torch
 from shapely import LinearRing, MultiPolygon, Polygon
 
-from ..modules.torch import unique_consecutive
+from ..modules.torch import count_freqs_until
 from ..modules_batched.random import (
     rand_float_decreasingly_likely,
     rand_int_decreasingly_likely,
@@ -360,10 +360,7 @@ def __count_freqs_until(
             Shape: [high]
     """
     index = torch.from_numpy(obj_with_index.index.to_numpy()).to(device=device)
-    freqs = torch.zeros(high, dtype=torch.int64, device=device)
-    unique, counts = unique_consecutive(index, return_counts=True, dim=0)
-    freqs[unique] = counts
-    return freqs
+    return count_freqs_until(index, high)
 
 
 def LinearRing2LinearRingVertices(
@@ -1009,7 +1006,9 @@ def generate_random_polygon_like() -> Polygon | MultiPolygon:
     exterior = PolygonExterior(vertices)
 
     # Generate the interiors of the Polygon.
-    I = int(rand_int_decreasingly_likely(1))  # in [0, inf), E(X) = 1
+    I = int(
+        rand_int_decreasingly_likely(1)
+    )  # in [0, inf), E(X) = 1  # noqa: E741
     V_is = rand_int_decreasingly_likely(I) * 7 + 3  # in [3, inf), E(X) = 10
     vertices = (
         torch.rand(I, 0 if I == 0 else int(V_is.max()), 2) - 0.5

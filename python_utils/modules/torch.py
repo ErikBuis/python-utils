@@ -18,9 +18,6 @@ from torch.utils.data.dataloader import default_collate
 # make torch's default collate function replace it with another sample.
 default_collate_fn_map.update({type(None): collate_str_fn})
 
-# Indexing object for the output of unique_with_backmap().
-BackMap = tuple[slice | torch.Tensor, ...]
-
 
 def interp(
     x: torch.Tensor,
@@ -113,7 +110,7 @@ def cumsum_start_0(
 
     Args:
         a: Input tensor.
-            Shape: [N_1, ..., N_dim, ..., N_D]
+            Shape: [N_0, ..., N_dim, ..., N_{D-1}]
         dim: Dimension along which the cumulative sum is computed. The default
             (None) is to compute the cumsum over the flattened tensor.
         dtype: Type of the returned tensor and of the accumulator in which the
@@ -122,13 +119,13 @@ def cumsum_start_0(
         out: Alternative output tensor in which to place the result. It must
             have the same shape and buffer length as the expected output but
             the type will be cast if necessary.
-            Shape: [N_1, ..., N_dim + 1, ..., N_D]
+            Shape: [N_0, ..., N_dim + 1, ..., N_{D-1}]
 
     Returns:
         A new tensor holding the result returned unless out is specified, in
         which case a reference to out is returned. The result has the same
         size as a except along the requested dimension.
-            Shape: [N_1, ..., N_dim + 1, ..., N_D]
+            Shape: [N_0, ..., N_dim + 1, ..., N_{D-1}]
     """
     device = t.device
 
@@ -213,7 +210,7 @@ def swap_idcs_vals(x: torch.Tensor) -> torch.Tensor:
     """Swap the indices and values of a 1D tensor.
 
     The input tensor is assumed to contain exactly all integers from 0 to
-    len(x) - 1, in any order.
+    x.shape[0] - 1, in any order.
 
     Warning: This function does not explicitly check if the input tensor
     contains no duplicates. If x contains duplicates, no error will be raised
@@ -236,7 +233,7 @@ def swap_idcs_vals(x: torch.Tensor) -> torch.Tensor:
         raise ValueError("x must be 1D.")
 
     x_swapped = torch.empty_like(x)
-    x_swapped.scatter_(0, x, torch.arange(len(x), device=x.device))
+    x_swapped.scatter_(0, x, torch.arange(x.shape[0], device=x.device))
     return x_swapped
 
 
@@ -273,74 +270,6 @@ def swap_idcs_vals_duplicates(x: torch.Tensor) -> torch.Tensor:
     return torch.sort(x).indices
 
 
-def multidim_indexing(
-    vals: torch.Tensor, idcs: torch.Tensor, dim: int
-) -> torch.Tensor:
-    """Perform multidimensional indexing on a tensor.
-
-    This function is useful if you have the result of e.g. torch.argsort(vals)
-    and you want to find the sorted values.
-
-    Args:
-        vals: The tensor to index.
-            Shape: [N_1, ..., N_dim, ..., N_D]
-        idcs: The indices to use for indexing.
-            Shape: [N_1, ..., N_dim, ..., N_D]
-        dim: The dimension to index along.
-
-    Returns:
-        The indexed tensor.
-            Shape: [N_1, ..., N_dim, ..., N_D]
-
-    Example:
-        # >>> vals = torch.tensor([[[5, 6, 2, 8, 3],
-        # >>>                       [2, 2, 0, 8, 7],
-        # >>>                       [4, 5, 4, 1, 3],
-        # >>>                       [5, 5, 4, 4, 4]],
-        # >>>                      [[2, 4, 4, 3, 5],
-        # >>>                       [2, 7, 6, 1, 2],
-        # >>>                       [3, 1, 7, 3, 5],
-        # >>>                       [0, 0, 6, 2, 8]],
-        # >>>                      [[0, 0, 7, 0, 1],
-        # >>>                       [6, 3, 1, 3, 8],
-        # >>>                       [3, 5, 0, 0, 6],
-        # >>>                       [7, 4, 0, 7, 6]]])
-        >>> idcs = torch.argsort(vals, dim=2)
-        >>> multidim_indexing(vals, idcs, dim=2)
-        tensor([[[2, 2, 0, 1, 3],
-                 [4, 5, 2, 4, 3],
-                 [5, 5, 4, 8, 4],
-                 [5, 6, 4, 8, 7]],
-                [[0, 0, 4, 1, 2],
-                 [2, 1, 6, 2, 5],
-                 [2, 4, 6, 3, 5],
-                 [3, 7, 7, 3, 8]],
-                [[0, 0, 0, 0, 1],
-                 [3, 3, 0, 0, 6],
-                 [6, 4, 1, 3, 6],
-                 [7, 5, 7, 7, 8]]])
-    """
-    # The code below is equivalent to the following for ndim=4 and dim=1:
-    # >>> vals[
-    # >>>     torch.arange(vals.shape[0]).reshape(-1, 1, 1, 1),
-    # >>>     idcs,
-    # >>>     torch.arange(vals.shape[2]).reshape(1, 1, -1, 1),
-    # >>>     torch.arange(vals.shape[3]).reshape(1, 1, 1, -1),
-    # >>> ]
-    return vals[
-        tuple(
-            (
-                torch.arange(vals.shape[d]).reshape(
-                    [1 if d != dim else -1 for d in range(vals.ndim)]
-                )
-                if d != dim
-                else idcs
-            )
-            for d in range(vals.ndim)
-        )
-    ]
-
-
 def lexsort(
     keys: torch.Tensor | tuple[torch.Tensor, ...], dim: int = -1
 ) -> torch.Tensor:
@@ -357,8 +286,8 @@ def lexsort(
     second last row etc.
 
     Args:
-        keys: Tensor of shape [K, N_1, ..., N_dim, ..., N_D] or a tuple
-            containing K [N_1, ..., N_dim, ..., N_D]-shaped sequences. K
+        keys: Tensor of shape [K, N_0, ..., N_dim, ..., N_{D-1}] or a tuple
+            containing K [N_0, ..., N_dim, ..., N_{D-1}]-shaped sequences. K
             refers to the amount of elements in the tuples. The last element
             is the primary sort key.
         dim: Dimension to be indirectly sorted. By default, sort over the last
@@ -366,7 +295,7 @@ def lexsort(
 
     Returns:
         Tensor of indices that sort the keys along the specified axis.
-            Shape: [N_1, ..., N_dim, ..., N_D]
+            Shape: [N_0, ..., N_dim, ..., N_{D-1}]
 
     Examples:
         >>> lexsort((torch.tensor([ 1, 17, 18]),
@@ -388,7 +317,7 @@ def lexsort(
         keys = torch.stack(keys, dim=0)
 
     K = len(keys)
-    ndim = len(keys.shape)
+    D = len(keys.shape)
     device = keys.device
 
     # If the tensor is an integer tensor, first try sorting by representing
@@ -398,8 +327,8 @@ def lexsort(
         # This method can't be used if the largest t-value would cause integer
         # overflow. Thus, we have to check if the maximum t-value would be
         # outside the int64 range.
-        dims_not_zero = tuple(range(1, ndim))
-        dims_expanded = tuple(1 if d != 0 else K for d in range(ndim))
+        dims_not_zero = tuple(range(1, D))
+        dims_expanded = tuple(1 if d != 0 else K for d in range(D))
         mins = torch.amin(keys, dim=dims_not_zero)  # [K]
         maxs = torch.amax(keys, dim=dims_not_zero)  # [K]
         extents = maxs - mins + 1  # [K]
@@ -417,7 +346,7 @@ def lexsort(
                 (keys - mins.reshape(dims_expanded))
                 * extents_cumprod.reshape(dims_expanded),
                 dim=0,
-            )  # [N_1, ..., N_dim, ..., N_D]
+            )  # [N_0, ..., N_dim, ..., N_{D-1}]
 
             # Sort the t-values.
             return torch.argsort(t_values, dim=dim)
@@ -425,13 +354,15 @@ def lexsort(
     # If the tensor is not an integer tensor, we have to use np.lexsort().
     # Unfortunately, torch doesn't have a lexsort() equivalent, so we have to
     # convert to numpy.
-    return torch.from_numpy(np.lexsort(keys.detach().cpu().numpy())).to(device)
+    return torch.from_numpy(
+        np.lexsort(keys.detach().cpu().numpy(), axis=dim)
+    ).to(device)
 
 
 def lexsort_along(
     x: torch.Tensor, dim: int = -1
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Sort a tensor along a specific dimension, taking all others as constant.
+    """Sort a tensor along dim, taking all others as constant tuples.
 
     This is like torch.sort(), but it doesn't sort along the other dimensions.
     As such, the other dimensions are treated as tuples. This function is
@@ -440,7 +371,6 @@ def lexsort_along(
     >>>     sorted(
     >>>         x.unbind(dim),
     >>>         key=lambda t: t.tolist(),
-    >>>         reverse=descending,
     >>>     ),
     >>>     dim=dim,
     >>> )
@@ -449,35 +379,44 @@ def lexsort_along(
     preserved.
 
     Args:
-        x: The tensor to sort.
-            Shape: [N_1, ..., N_dim, ..., N_D]
+        x: The input tensor.
+            Shape: [N_0, ..., N_dim, ..., N_{D-1}]
         dim: The dimension to sort along.
 
     Returns:
         Tuple containing:
         - Sorted version of x.
-            Shape: [N_1, ..., N_dim, ..., N_D]
-        - The indices where the elements in the original input ended up in the
-            returned sorted values.
+            Shape: [N_0, ..., N_dim, ..., N_{D-1}]
+        - The backmap tensor, which contains the indices of the sorted values
+            in the original input.
+            The sorted version of x can be retrieved as follows:
+            >>> x_sorted = x.index_select(dim, backmap)
             Shape: [N_dim]
 
     Examples:
-        >>> x = torch.tensor([[2, 1], [3, 0], [1, 2], [1, 3]])
-        >>> lexsort_along(x, dim=0)
-        (tensor([[1, 2],
-                 [1, 3],
-                 [2, 1],
-                 [3, 0]]),
-         tensor([2, 3, 0, 1]))
-        >>> torch.sort(x, dim=0)
-        (tensor([[1, 0],
-                 [1, 1],
-                 [2, 2],
-                 [3, 3]]),
-         tensor([[2, 1],
-                 [3, 0],
-                 [0, 2],
-                 [1, 3]])
+        >>> x = torch.tensor([
+        >>>     [2, 1],
+        >>>     [3, 0],
+        >>>     [1, 2],
+        >>>     [1, 3],
+        >>> ])
+        >>> dim = 0
+
+        >>> x_sorted, backmap = lexsort_along(x, dim=dim)
+        >>> x_sorted
+        tensor([[1, 2],
+                [1, 3],
+                [2, 1],
+                [3, 0]])
+        >>> backmap
+        tensor([2, 3, 0, 1]))
+
+        >>> # Get the lexicographically sorted version of x:
+        >>> x.index_select(dim, backmap)
+        tensor([[1, 2],
+                [1, 3],
+                [2, 1],
+                [3, 0]])
     """
     # We can use lexsort() to sort only the requested dimension.
     # First, we prepare the tensor for lexsort(). The input to this function
@@ -509,23 +448,27 @@ def lexsort_along(
     # lexsort() will return tensor([1, 0, 2]). I thouroughly tested what the
     # absolute fastest way is to perform this operation, and it turns out that
     # the following is the best way to do it:
+    N_dim = x.shape[dim]
+
     if x.ndim == 1:
         y = x.unsqueeze(0)  # [1, N_dim]
     else:
-        y = x.movedim(dim, -1)  # [N_1, ..., N_dim-1, N_dim+1, ..., N_D, N_dim]
+        y = x.movedim(
+            dim, -1
+        )  # [N_0, ..., N_{dim-1}, N_{dim+1}, ..., N_{D-1}, N_dim]
         y = y.reshape(
-            -1, y.shape[-1]
-        )  # [N_1 * ... * N_dim-1 * N_dim+1 * ... * N_D, N_dim]
-    y = y.flip(dims=(0,))  # [N_1 * ... * N_dim-1 * N_dim+1 * ... * N_D, N_dim]
-    idcs = lexsort(y)  # [N_dim]
+            -1, N_dim
+        )  # [N_0 * ... * N_{dim-1} * N_{dim+1} * ... * N_{D-1}, N_dim]
+    y = y.flip(
+        dims=(0,)
+    )  # [N_0 * ... * N_{dim-1} * N_{dim+1} * ... * N_{D-1}, N_dim]
+    backmap = lexsort(y, dim=-1)  # [N_dim]
 
-    # Now we have to convert the output back to a tensor. This is a bit tricky,
-    # because we must be able to select indices from any given dimension. To do
-    # this, we perform:
-    x_sorted = x.index_select(dim, idcs)  # [N_1, ..., N_dim, ..., N_D]
+    # Sort the tensor along the given dimension.
+    x_sorted = x.index_select(dim, backmap)  # [N_0, ..., N_dim, ..., N_{D-1}]
 
-    # Finally, we return the sorted tensor and the indices.
-    return x_sorted, idcs
+    # Finally, we return the sorted tensor and the backmap.
+    return x_sorted, backmap
 
 
 @overload
@@ -535,7 +478,7 @@ def unique_consecutive(  # type: ignore
     return_counts: Literal[False] = False,
     dim: int | None = None,
 ) -> torch.Tensor:
-    ...  # fmt: skip
+    pass
 
 
 @overload
@@ -545,7 +488,7 @@ def unique_consecutive(
     return_counts: Literal[False] = False,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    ...  # fmt: skip
+    pass
 
 
 @overload
@@ -555,7 +498,7 @@ def unique_consecutive(
     return_counts: Literal[True] = True,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    ...  # fmt: skip
+    pass
 
 
 @overload
@@ -565,7 +508,7 @@ def unique_consecutive(
     return_counts: Literal[True] = True,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    ...  # fmt: skip
+    pass
 
 
 def unique_consecutive(
@@ -584,10 +527,12 @@ def unique_consecutive(
     taking all the other dimensions as constant tuples.
 
     Args:
-        x: The input tensor. Must be sorted along the given dimension.
-            Shape: [N_1, ..., N_dim, ..., N_D]
-        return_inverse: Whether to also return the indices for where elements
-            in the original input ended up in the returned unique list.
+        x: The input tensor. If it contains equal values, they must be
+            consecutive along the given dimension.
+            Shape: [N_0, ..., N_dim, ..., N_{D-1}]
+        return_inverse: Whether to also return the inverse mapping tensor.
+            This can be used to reconstruct the original tensor from the
+            unique tensor.
         return_counts: Whether to also return the counts for each unique
             element.
         dim: The dimension to operate upon. If None, the unique of the
@@ -598,13 +543,15 @@ def unique_consecutive(
     Returns:
         Tuple containing:
         - The unique elements.
-            Shape: [N_1, ..., N_dim-1, N_unique, N_dim+1, ..., N_D]
-        - (optional) if return_inverse is True, the indices where elements
+            Shape: [N_0, ..., N_{dim-1}, U, N_{dim+1}, ..., N_{D-1}]
+        - (Optional) If return_inverse is True, the indices where elements
             in the original input ended up in the returned unique values.
+            The original tensor can be reconstructed as follows:
+            >>> x_reconstructed = uniques.index_select(dim, inverse)
             Shape: [N_dim]
-        - (optional) if return_counts is True, the counts for each unique
+        - (Optional) If return_counts is True, the counts for each unique
             element.
-            Shape: [N_unique]
+            Shape: [U]
 
     Examples:
         >>> # 1D example: -----------------------------------------------------
@@ -615,11 +562,15 @@ def unique_consecutive(
         >>>     x, return_inverse=True, return_counts=True, dim=dim
         >>> )
         >>> uniques
-        tensor([9, 10])
+        tensor([ 9, 10])
         >>> inverse
         tensor([0, 0, 0, 0, 1, 1])
         >>> counts
         tensor([4, 2])
+
+        >>> # Reconstruct the original tensor:
+        >>> uniques.index_select(dim, inverse)
+        tensor([ 9,  9,  9,  9, 10, 10])
 
         >>> # 2D example: -----------------------------------------------------
         >>> x = torch.tensor([
@@ -634,19 +585,34 @@ def unique_consecutive(
         >>>     x, return_inverse=True, return_counts=True, dim=dim
         >>> )
         >>> uniques
-        tensor([[7, 9, 10],
-                [8, 10, 9],
-                [9, 8, 7],
-                [9, 7, 7]])
+        tensor([[ 7,  9, 10],
+                [ 8, 10,  9],
+                [ 9,  8,  7],
+                [ 9,  7,  7]])
         >>> inverse
-        tensor([1, 2, 0, 1])
+        tensor([0, 1, 1, 2])
         >>> counts
         tensor([1, 2, 1])
 
+        >>> # Reconstruct the original tensor:
+        >>> uniques.index_select(dim, inverse)
+        tensor([[ 7,  9,  9, 10],
+                [ 8, 10, 10,  9],
+                [ 9,  8,  8,  7],
+                [ 9,  7,  7,  7]])
+
         >>> # 3D example: -----------------------------------------------------
         >>> x = torch.tensor([
-        >>>     [[0, 1, 2, 2], [4, 6, 5, 5], [9, 8, 7, 7]],
-        >>>     [[4, 2, 8, 8], [3, 3, 7, 7], [0, 2, 1, 1]],
+        >>>     [
+        >>>         [0, 1, 2, 2],
+        >>>         [4, 6, 5, 5],
+        >>>         [9, 8, 7, 7],
+        >>>     ],
+        >>>     [
+        >>>         [4, 2, 8, 8],
+        >>>         [3, 3, 7, 7],
+        >>>         [0, 2, 1, 1]
+        >>>     ],
         >>> ])
         >>> dim = 2
 
@@ -661,9 +627,18 @@ def unique_consecutive(
                  [3, 3, 7],
                  [0, 2, 1]]])
         >>> inverse
-        tensor([0, 2, 1, 2])
+        tensor([0, 1, 2, 2])
         >>> counts
         tensor([1, 1, 2])
+
+        >>> # Reconstruct the original tensor:
+        >>> uniques.index_select(dim, inverse)
+        tensor([[[0, 1, 2, 2],
+                 [4, 6, 5, 5],
+                 [9, 8, 7, 7]],
+                [[4, 2, 8, 8],
+                 [3, 3, 7, 7],
+                 [0, 2, 1, 1]])
     """
     if dim is None:
         raise NotImplementedError(
@@ -671,35 +646,37 @@ def unique_consecutive(
             " explicitly."
         )
 
-    device = x.device
+    N_dim = x.shape[dim]
 
     # Flatten all dimensions except the one we want to operate on.
     if x.ndim == 1:
         y = x.unsqueeze(0)  # [1, N_dim]
     else:
-        y = x.movedim(dim, -1)  # [N_1, ..., N_dim-1, N_dim+1, ..., N_D, N_dim]
+        y = x.movedim(
+            dim, -1
+        )  # [N_0, ..., N_{dim-1}, N_{dim+1}, ..., N_{D-1}, N_dim]
         y = y.reshape(
-            -1, y.shape[-1]
-        )  # [N_1 * ... * N_dim-1 * N_dim+1 * ... * N_D, N_dim]
+            -1, N_dim
+        )  # [N_0 * ... * N_{dim-1} * N_{dim+1} * ... * N_{D-1}, N_dim]
 
     # Find the indices where the values change.
     is_change = torch.concatenate(
         [
             (
-                torch.tensor([True], device=device)
-                if x.shape[dim] > 0
-                else torch.tensor([], dtype=torch.bool, device=device)
-            ),
-            (y[:, :-1] != y[:, 1:]).any(dim=0),
+                torch.ones((1,), dtype=torch.bool, device=x.device)
+                if N_dim > 0
+                else torch.empty((0,), dtype=torch.bool, device=x.device)
+            ),  # [1] or [0]
+            (y[:, :-1] != y[:, 1:]).any(dim=0),  # [N_dim - 1] or [0]
         ],
         dim=0,
     )  # [N_dim]
 
     # Find the unique values.
-    idcs = is_change.nonzero(as_tuple=True)[0]  # [N_unique]
-    unique = x.index_select(
+    idcs = is_change.nonzero(as_tuple=True)[0]  # [U]
+    uniques = x.index_select(
         dim, idcs
-    )  # [N_1, ..., N_dim-1, N_unique, N_dim+1, ..., N_D]
+    )  # [N_0, ..., N_{dim-1}, U, N_{dim+1}, ..., N_{D-1}]
 
     # Calculate auxiliary values.
     aux = []
@@ -713,78 +690,122 @@ def unique_consecutive(
         counts = torch.diff(
             torch.concatenate(
                 [
-                    idcs,
+                    idcs,  # [U]
                     (
-                        torch.tensor([x.shape[dim]], device=device)
+                        torch.full(
+                            (1,),
+                            x.shape[dim],
+                            dtype=torch.int64,
+                            device=x.device,
+                        )
                         if x.shape[dim] > 0
-                        else torch.tensor([], dtype=torch.int64, device=device)
-                    ),
+                        else torch.empty(
+                            (0,), dtype=torch.int64, device=x.device
+                        )
+                    ),  # [1] or [0]
                 ],
                 dim=0,
             )
-        )  # [N_unique]
+        )  # [U]
         aux.append(counts)
 
     if aux:
-        return unique, *aux
+        return uniques, *aux
     else:
-        return unique
+        return uniques
 
 
 @overload
 def unique(  # type: ignore
     x: torch.Tensor,
+    return_backmap: Literal[False] = False,
     return_inverse: Literal[False] = False,
     return_counts: Literal[False] = False,
     dim: int | None = None,
 ) -> torch.Tensor:
-    # Overload for the case where:
-    # - return_inverse is False
-    # - return_counts is False
-    ...
+    pass
 
 
 @overload
 def unique(
     x: torch.Tensor,
+    return_backmap: Literal[True] = True,
+    return_inverse: Literal[False] = False,
+    return_counts: Literal[False] = False,
+    dim: int | None = None,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    pass
+
+
+@overload
+def unique(
+    x: torch.Tensor,
+    return_backmap: Literal[False] = False,
     return_inverse: Literal[True] = True,
     return_counts: Literal[False] = False,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    # Overload for the case where:
-    # - return_inverse is True
-    # - return_counts is False
-    ...
+    pass
 
 
 @overload
 def unique(
     x: torch.Tensor,
+    return_backmap: Literal[False] = False,
     return_inverse: Literal[False] = False,
     return_counts: Literal[True] = True,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    # Overload for the case where:
-    # - return_inverse is False
-    # - return_counts is True
-    ...
+    pass
 
 
 @overload
 def unique(
     x: torch.Tensor,
+    return_backmap: Literal[True] = True,
+    return_inverse: Literal[True] = True,
+    return_counts: Literal[False] = False,
+    dim: int | None = None,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    pass
+
+
+@overload
+def unique(
+    x: torch.Tensor,
+    return_backmap: Literal[True] = True,
+    return_inverse: Literal[False] = False,
+    return_counts: Literal[True] = True,
+    dim: int | None = None,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    pass
+
+
+@overload
+def unique(
+    x: torch.Tensor,
+    return_backmap: Literal[False] = False,
     return_inverse: Literal[True] = True,
     return_counts: Literal[True] = True,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    # Overload for the case where:
-    # - return_inverse is True
-    # - return_counts is True
-    ...
+    pass
+
+
+@overload
+def unique(
+    x: torch.Tensor,
+    return_backmap: Literal[True] = True,
+    return_inverse: Literal[True] = True,
+    return_counts: Literal[True] = True,
+    dim: int | None = None,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    pass
 
 
 def unique(
     x: torch.Tensor,
+    return_backmap: bool = False,
     return_inverse: bool = False,
     return_counts: bool = False,
     dim: int | None = None,
@@ -792,6 +813,7 @@ def unique(
     torch.Tensor
     | tuple[torch.Tensor, torch.Tensor]
     | tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    | tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
 ):
     """Like torch.unique, but WAY more efficient.
 
@@ -800,10 +822,13 @@ def unique(
 
     Args:
         x: The input tensor.
-            Shape: [N_1, ..., N_dim, ..., N_D]
-        return_inverse: Whether to also return the indices for where elements
-            in the original input ended up in the returned unique list.
-        return_counts: Whether to also return the counts for each unique
+            Shape: [N_0, ..., N_dim, ..., N_{D-1}]
+        return_backmap: Whether to also return the backmap tensor.
+            This can be used to sort the original tensor.
+        return_inverse: Whether to also return the inverse mapping tensor.
+            This can be used to reconstruct the original tensor from the
+            unique tensor.
+        return_counts: Whether to also return the counts of each unique
             element.
         dim: The dimension to operate upon. If None, the unique of the
             flattened input is returned. Otherwise, each of the tensors
@@ -812,29 +837,51 @@ def unique(
 
     Returns:
         Tuple containing:
-        - The unique elements.
-            Shape: [N_1, ..., N_dim-1, N_unique, N_dim+1, ..., N_D]
-        - (optional) if return_inverse is True, the indices where elements
-            in the original input ended up in the returned unique values.
+        - The unique elements, guaranteed to be sorted along the given
+            dimension.
+            Shape: [N_0, ..., N_{dim-1}, U, N_{dim+1}, ..., N_{D-1}]
+        - (Optional) If return_backmap is True, the backmap tensor, which
+            contains the indices of the unique values in the original input.
+            The sorted version of x can be retrieved as follows:
+            >>> x_sorted = x.index_select(dim, backmap)
             Shape: [N_dim]
-        - (optional) if return_counts is True, the counts for each unique
+        - (Optional) If return_inverse is True, the indices where elements
+            in the original input ended up in the returned unique values.
+            The original tensor can be reconstructed as follows:
+            >>> x_reconstructed = uniques.index_select(dim, inverse)
+            Shape: [N_dim]
+        - (Optional) If return_counts is True, the counts for each unique
             element.
-            Shape: [N_unique]
+            Shape: [U]
 
     Examples:
         >>> # 1D example: -----------------------------------------------------
         >>> x = torch.tensor([9, 10, 9, 9, 10, 9])
         >>> dim = 0
 
-        >>> uniques, inverse, counts = unique(
-        >>>     x, return_inverse=True, return_counts=True, dim=dim
+        >>> uniques, backmap, inverse, counts = unique(
+        >>>     x,
+        >>>     return_backmap=True,
+        >>>     return_inverse=True,
+        >>>     return_counts=True,
+        >>>     dim=dim,
         >>> )
         >>> uniques
-        tensor([9, 10])
+        tensor([ 9, 10])
+        >>> backmap
+        tensor([0, 2, 3, 5, 1, 4])
         >>> inverse
         tensor([0, 1, 0, 0, 1, 0])
         >>> counts
         tensor([4, 2])
+
+        >>> # Get the lexicographically sorted version of x:
+        >>> x.index_select(dim, backmap)
+        tensor([ 9,  9,  9,  9, 10, 10])
+
+        >>> # Reconstruct the original tensor:
+        >>> uniques.index_select(dim, inverse)
+        tensor([ 9, 10,  9,  9, 10,  9])
 
         >>> # 2D example: -----------------------------------------------------
         >>> x = torch.tensor([
@@ -845,234 +892,60 @@ def unique(
         >>> ])
         >>> dim = 1
 
-        >>> uniques, inverse, counts = unique_with_backmap(
-        >>>     x, return_inverse=True, return_counts=True, dim=dim
+        >>> uniques, backmap, inverse, counts = unique(
+        >>>     x,
+        >>>     return_backmap=True,
+        >>>     return_inverse=True,
+        >>>     return_counts=True,
+        >>>     dim=dim,
         >>> )
         >>> uniques
-        tensor([[7, 9, 10],
-                [8, 10, 9],
-                [9, 8, 7],
-                [9, 7, 7]])
-        >>> inverse
-        tensor([1, 2, 0, 1])
-        >>> counts
-        tensor([1, 2, 1])
-
-        >>> # 3D example: -----------------------------------------------------
-        >>> x = torch.tensor([
-        >>>     [[0, 2, 1, 2], [4, 5, 6, 5], [9, 7, 8, 7]],
-        >>>     [[4, 8, 2, 8], [3, 7, 3, 7], [0, 1, 2, 1]],
-        >>> ])
-        >>> dim = 2
-
-        >>> uniques, inverse, counts = unique_with_backmap(
-        >>>     x, return_inverse=True, return_counts=True, dim=dim
-        >>> )
-        >>> uniques
-        tensor([[[0, 1, 2],
-                 [4, 6, 5],
-                 [9, 8, 7]],
-                [[4, 2, 8],
-                 [3, 3, 7],
-                 [0, 2, 1]]])
-        >>> inverse
-        tensor([0, 2, 1, 2])
-        >>> counts
-        tensor([1, 1, 2])
-    """
-    if dim is None:
-        raise NotImplementedError(
-            "dim=None is not implemented yet. Please specify a dimension"
-            " explicitly."
-        )
-
-    # Sort along the given dimension, taking all the other dimensions as
-    # constant tuples. Torch's sort() doesn't work here since it will
-    # sort the other dimensions as well.
-    x_sorted, backmap_along_dim = lexsort_along(x, dim=dim)
-
-    out = unique_consecutive(
-        x_sorted,
-        return_inverse=return_inverse,  # type: ignore
-        return_counts=return_counts,  # type: ignore
-        dim=dim,
-    )
-    if isinstance(out, tuple):
-        unique, *aux = out
-    else:
-        unique = out
-        aux = []
-
-    if return_inverse:
-        # The backmap wasn't taken into account by unique_consecutive(), so we
-        # have to do it ourselves.
-        backmap_along_dim_inv = swap_idcs_vals(backmap_along_dim)
-        aux[0] = aux[0][backmap_along_dim_inv]
-
-    if aux:
-        return unique, *aux
-    else:
-        return unique
-
-
-@overload
-def unique_with_backmap(  # type: ignore
-    x: torch.Tensor,
-    return_inverse: Literal[False] = False,
-    return_counts: Literal[False] = False,
-    dim: int | None = None,
-) -> tuple[torch.Tensor, BackMap]:
-    ...  # fmt: skip
-
-
-@overload
-def unique_with_backmap(
-    x: torch.Tensor,
-    return_inverse: Literal[True] = True,
-    return_counts: Literal[False] = False,
-    dim: int | None = None,
-) -> tuple[torch.Tensor, BackMap, torch.Tensor]:
-    ...  # fmt: skip
-
-
-@overload
-def unique_with_backmap(
-    x: torch.Tensor,
-    return_inverse: Literal[False] = False,
-    return_counts: Literal[True] = True,
-    dim: int | None = None,
-) -> tuple[torch.Tensor, BackMap, torch.Tensor]:
-    ...  # fmt: skip
-
-
-@overload
-def unique_with_backmap(
-    x: torch.Tensor,
-    return_inverse: Literal[True] = True,
-    return_counts: Literal[True] = True,
-    dim: int | None = None,
-) -> tuple[torch.Tensor, BackMap, torch.Tensor, torch.Tensor]:
-    ...  # fmt: skip
-
-
-def unique_with_backmap(
-    x: torch.Tensor,
-    return_inverse: bool = False,
-    return_counts: bool = False,
-    dim: int | None = None,
-) -> (
-    tuple[torch.Tensor, BackMap]
-    | tuple[torch.Tensor, BackMap, torch.Tensor]
-    | tuple[torch.Tensor, BackMap, torch.Tensor, torch.Tensor]
-):
-    """Like torch.unique, but also returns a back map.
-
-    The returned unique elements are retrieved along the requested dimension,
-    taking all the other dimensions as constant tuples.
-
-    Args:
-        x: The input tensor.
-            Shape: [N_1, ..., N_dim, ..., N_D]
-        return_inverse: Whether to also return the indices for where elements
-            in the original input ended up in the returned unique list.
-        return_counts: Whether to also return the counts for each unique
-            element.
-        dim: The dimension to operate upon. If None, the unique of the
-            flattened input is returned. Otherwise, each of the tensors
-            indexed by the given dimension is treated as one of the elements
-            to apply the unique operation upon. See examples for more details.
-
-    Returns:
-        Tuple containing:
-        - The unique elements.
-            Shape: [N_1, ..., N_dim-1, N_unique, N_dim+1, ..., N_D]
-        - The back map as an indexing object, which maps the original input
-            to the unique values. The first counts[0] indices in backmap[dim]
-            correspond to the first unique value, the next counts[1] indices
-            correspond to the second unique value, etc.
-            Note: The element at index dim is always a Tensor.
-            Length: D
-            Shape of inner tensors: [N_dim]
-        - (optional) if return_inverse is True, the indices where elements
-            in the original input ended up in the returned unique values.
-            Shape: [N_dim]
-        - (optional) if return_counts is True, the counts for each unique
-            element.
-            Shape: [N_unique]
-
-    Examples:
-        >>> # 1D example: -----------------------------------------------------
-        >>> x = torch.tensor([9, 10, 9, 9, 10, 9])
-        >>> dim = 0
-
-        >>> uniques, backmap, inverse, counts = unique_with_backmap(
-        >>>     x, return_inverse=True, return_counts=True, dim=dim
-        >>> )
-        >>> uniques
-        tensor([9, 10])
+        tensor([[ 7,  9, 10],
+                [ 8, 10,  9],
+                [ 9,  8,  7],
+                [ 9,  7,  7]])
         >>> backmap
-        (torch.tensor([0, 2, 3, 5, 1, 4]),)
-        >>> inverse
-        tensor([0, 1, 0, 0, 1, 0])
-        >>> counts
-        tensor([4, 2])
-
-        >>> # Get the lexicographically sorted version of x:
-        >>> x[backmap]
-        tensor([9, 9, 9, 9, 10, 10])
-
-        >>> # Get all indices of the i'th unique value:
-        >>> cumcounts = cumsum_start_0(counts)
-        >>> get_idcs = lambda i: backmap[dim][cumcounts[i] : cumcounts[i + 1]]
-        >>> get_idcs(1)
-        tensor([1, 4])
-
-        >>> # 2D example: -----------------------------------------------------
-        >>> x = torch.tensor([
-        >>>     [9, 10, 7, 9],
-        >>>     [10, 9, 8, 10],
-        >>>     [8, 7, 9, 8],
-        >>>     [7, 7, 9, 7],
-        >>> ])
-        >>> dim = 1
-
-        >>> uniques, backmap, inverse, counts = unique_with_backmap(
-        >>>     x, return_inverse=True, return_counts=True, dim=dim
-        >>> )
-        >>> uniques
-        tensor([[7, 9, 10],
-                [8, 10, 9],
-                [9, 8, 7],
-                [9, 7, 7]])
-        >>> backmap
-        (slice(None, None, None), tensor([2, 0, 3, 1]))
+        tensor([2, 0, 3, 1])
         >>> inverse
         tensor([1, 2, 0, 1])
         >>> counts
         tensor([1, 2, 1])
 
         >>> # Get the lexicographically sorted version of x:
-        >>> x[backmap]
-        tensor([[7, 9, 9, 10],
-                [8, 10, 10, 9],
-                [9, 8, 8, 7],
-                [9, 7, 7, 7]])
+        >>> x.index_select(dim, backmap)
+        tensor([[ 7,  9,  9, 10],
+                [ 8, 10, 10,  9],
+                [ 9,  8,  8,  7],
+                [ 9,  7,  7,  7]])
 
-        >>> # Get all indices of the i'th unique value:
-        >>> cumcounts = cumsum_start_0(counts)
-        >>> get_idcs = lambda i: backmap[dim][cumcounts[i] : cumcounts[i + 1]]
-        >>> get_idcs(1)
-        tensor([0, 3])
+        >>> # Reconstruct the original tensor:
+        >>> uniques.index_select(dim, inverse)
+        tensor([[ 9, 10,  7,  9],
+                [10,  9,  8, 10],
+                [ 8,  7,  9,  8],
+                [ 7,  7,  9,  7]])
 
         >>> # 3D example: -----------------------------------------------------
         >>> x = torch.tensor([
-        >>>     [[0, 2, 1, 2], [4, 5, 6, 5], [9, 7, 8, 7]],
-        >>>     [[4, 8, 2, 8], [3, 7, 3, 7], [0, 1, 2, 1]],
+        >>>     [
+        >>>         [0, 2, 1, 2],
+        >>>         [4, 5, 6, 5],
+        >>>         [9, 7, 8, 7],
+        >>>     ],
+        >>>     [
+        >>>         [4, 8, 2, 8],
+        >>>         [3, 7, 3, 7],
+        >>>         [0, 1, 2, 1],
+        >>>     ],
         >>> ])
         >>> dim = 2
 
-        >>> uniques, backmap, inverse, counts = unique_with_backmap(
-        >>>     x, return_inverse=True, return_counts=True, dim=dim
+        >>> uniques, backmap, inverse, counts = unique(
+        >>>     x,
+        >>>     return_backmap=True,
+        >>>     return_inverse=True,
+        >>>     return_counts=True,
+        >>>     dim=dim,
         >>> )
         >>> uniques
         tensor([[[0, 1, 2],
@@ -1082,16 +955,14 @@ def unique_with_backmap(
                  [3, 3, 7],
                  [0, 2, 1]]])
         >>> backmap
-        (slice(None, None, None),
-         slice(None, None, None),
-         tensor([0, 2, 1, 3]))
+        tensor([0, 2, 1, 3])
         >>> inverse
         tensor([0, 2, 1, 2])
         >>> counts
         tensor([1, 1, 2])
 
         >>> # Get the lexicographically sorted version of x:
-        >>> x[backmap]
+        >>> x.index_select(dim, backmap)
         tensor([[[0, 1, 2, 2],
                  [4, 6, 5, 5],
                  [9, 8, 7, 7]],
@@ -1099,11 +970,14 @@ def unique_with_backmap(
                  [3, 3, 7, 7],
                  [0, 2, 1, 1]]])
 
-        >>> # Get all indices of the i'th unique value:
-        >>> cumcounts = cumsum_start_0(counts)
-        >>> get_idcs = lambda i: backmap[dim][cumcounts[i] : cumcounts[i + 1]]
-        >>> get_idcs(1)
-        tensor([2])
+        >>> # Reconstruct the original tensor:
+        >>> uniques.index_select(dim, inverse)
+        tensor([[[0, 2, 1, 2],
+                 [4, 5, 6, 5],
+                 [9, 7, 8, 7]],
+                [[4, 8, 2, 8],
+                 [3, 7, 3, 7],
+                 [0, 1, 2, 1]])
     """
     if dim is None:
         raise NotImplementedError(
@@ -1114,7 +988,9 @@ def unique_with_backmap(
     # Sort along the given dimension, taking all the other dimensions as
     # constant tuples. Torch's sort() doesn't work here since it will
     # sort the other dimensions as well.
-    x_sorted, backmap_along_dim = lexsort_along(x, dim=dim)
+    x_sorted, backmap = lexsort_along(
+        x, dim=dim
+    )  # [N_0, ..., N_dim, ..., N_{D-1}], [N_dim]
 
     out = unique_consecutive(
         x_sorted,
@@ -1122,115 +998,47 @@ def unique_with_backmap(
         return_counts=return_counts,  # type: ignore
         dim=dim,
     )
-    if isinstance(out, tuple):
-        unique, *aux = out
-    else:
-        unique = out
-        aux = []
 
+    aux = []
+    if return_backmap:
+        aux.append(backmap)
     if return_inverse:
         # The backmap wasn't taken into account by unique_consecutive(), so we
         # have to do it ourselves.
-        backmap_along_dim_inv = swap_idcs_vals(backmap_along_dim)
-        aux[0] = aux[0][backmap_along_dim_inv]
+        backmap_inv = swap_idcs_vals(backmap)  # [N_dim]
+        aux.append(out[1][backmap_inv])
+    if return_counts:
+        aux.append(out[-1])
 
-    backmap = tuple(
-        slice(None) if d != dim else backmap_along_dim
-        for d in range(len(x.shape))
-    )
-
-    return unique, backmap, *aux
-
-
-@overload
-def unique_with_backmap_naive(  # type: ignore
-    x: torch.Tensor,
-    return_inverse: Literal[False] = False,
-    return_counts: Literal[False] = False,
-    dim: int | None = None,
-) -> tuple[torch.Tensor, BackMap]:
-    # Overload for the case where:
-    # - return_inverse is False
-    # - return_counts is False
-    ...
+    if aux:
+        return out[0], *aux
+    return out
 
 
-@overload
-def unique_with_backmap_naive(
-    x: torch.Tensor,
-    return_inverse: Literal[True] = True,
-    return_counts: Literal[False] = False,
-    dim: int | None = None,
-) -> tuple[torch.Tensor, BackMap, torch.Tensor]:
-    # Overload for the case where:
-    # - return_inverse is True
-    # - return_counts is False
-    ...
+def count_freqs_until(x: torch.Tensor, high: int) -> torch.Tensor:
+    """Count the frequency of each integer value in range(0, high).
 
+    This differs from torch.unique_consecutive() in that it also counts the
+    frequency of elements not present in x (i.e. with a frequency of 0).
 
-@overload
-def unique_with_backmap_naive(
-    x: torch.Tensor,
-    return_inverse: Literal[False] = False,
-    return_counts: Literal[True] = True,
-    dim: int | None = None,
-) -> tuple[torch.Tensor, BackMap, torch.Tensor]:
-    # Overload for the case where:
-    # - return_inverse is False
-    # - return_counts is True
-    ...
+    Warning: This function assumes that x is sorted.
 
+    Warning: If x contains values outside the range(0, high), the function will
+    crash with an index out of bounds error.
 
-@overload
-def unique_with_backmap_naive(
-    x: torch.Tensor,
-    return_inverse: Literal[True] = True,
-    return_counts: Literal[True] = True,
-    dim: int | None = None,
-) -> tuple[torch.Tensor, BackMap, torch.Tensor, torch.Tensor]:
-    # Overload for the case where:
-    # - return_inverse is True
-    # - return_counts is True
-    ...
+    Args:
+        x: The tensor for which to count the frequency of each element.
+            Shape: [N]
+        high: The value until which to count the frequency of each element.
 
-
-def unique_with_backmap_naive(
-    x: torch.Tensor,
-    return_inverse: bool = False,
-    return_counts: bool = False,
-    dim: int | None = None,
-) -> (
-    tuple[torch.Tensor, BackMap]
-    | tuple[torch.Tensor, BackMap, torch.Tensor]
-    | tuple[torch.Tensor, BackMap, torch.Tensor, torch.Tensor]
-):
-    if dim is None:
-        raise NotImplementedError(
-            "dim=None is not implemented yet. Please specify a dimension"
-            " explicitly."
-        )
-
-    out = unique(
-        x,
-        return_inverse=True,
-        return_counts=return_counts,  # type: ignore
-        dim=dim,
-    )
-    if isinstance(out, tuple):
-        unique_, *aux = out
-    else:
-        unique_ = out
-        aux = []
-    backmap_along_dim = swap_idcs_vals_duplicates(aux[0])
-
-    backmap = tuple(
-        slice(None) if d != dim else backmap_along_dim
-        for d in range(len(x.shape))
-    )
-
-    if return_inverse:
-        return unique_, backmap, *aux
-    return unique_, backmap, *aux[1:]
+    Returns:
+        The frequency of each element in x in range(0, high).
+            Shape: [high]
+    """
+    freqs = torch.zeros(high, dtype=torch.int64, device=x.device)
+    unique, counts = unique_consecutive(x, return_counts=True, dim=0)
+    freqs[unique] = counts
+    return freqs
 
 
 def collate_replace_corrupted(

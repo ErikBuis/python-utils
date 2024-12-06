@@ -24,7 +24,7 @@ def cumsum_start_0(
 
     Args:
         a: Input array.
-            Shape: [N_1, ..., N_axis, ..., N_D]
+            Shape: [N_0, ..., N_axis, ..., N_{D-1}]
         axis: Axis along which the cumulative sum is computed. The default
             (None) is to compute the cumsum over the flattened array.
         dtype: Type of the returned array and of the accumulator in which the
@@ -33,13 +33,13 @@ def cumsum_start_0(
         out: Alternative output array in which to place the result. It must
             have the same shape and buffer length as the expected output but
             the type will be cast if necessary.
-            Shape: [N_1, ..., N_axis + 1, ..., N_D]
+            Shape: [N_0, ..., N_axis + 1, ..., N_{D-1}]
 
     Returns:
         A new array holding the result returned unless out is specified, in
         which case a reference to out is returned. The result has the same
         size as a except along the requested axis.
-            Shape: [N_1, ..., N_axis + 1, ..., N_D]
+            Shape: [N_0, ..., N_axis + 1, ..., N_{D-1}]
     """
     a = np.array(a)
 
@@ -132,13 +132,13 @@ def lexsort_along(
 
     Args:
         x: The array to sort.
-            Shape: [N_1, ..., N_axis, ..., N_D]
+            Shape: [N_0, ..., N_axis, ..., N_{D-1}]
         axis: The dimension to sort along.
 
     Returns:
         Tuple containing:
         - Sorted version of x.
-            Shape: [N_1, ..., N_axis, ..., N_D]
+            Shape: [N_0, ..., N_axis, ..., N_{D-1}]
         - The indices where the elements in the original input ended up in the
             returned sorted values.
             Shape: [N_axis]
@@ -196,19 +196,19 @@ def lexsort_along(
     else:
         y = np.moveaxis(
             x, axis, -1
-        )  # [N_1, ..., N_axis-1, N_axis+1, ..., N_D, N_axis]
+        )  # [N_0, ..., N_{axis-1}, N_{axis+1}, ..., N_{D-1}, N_axis]
         y = y.reshape(
             -1, y.shape[-1]
-        )  # [N_1 * ... * N_axis-1 * N_axis+1 * ... * N_D, N_axis]
+        )  # [N_0 * ... * N_{axis-1} * N_{axis+1} * ... * N_{D-1}, N_axis]
     y = np.flip(
         y, axis=(0,)
-    )  # [N_1 * ... * N_axis-1 * N_axis+1 * ... * N_D, N_axis]
+    )  # [N_0 * ... * N_{axis-1} * N_{axis+1} * ... * N_{D-1}, N_axis]
     idcs = np.lexsort(y)  # [N_axis]
 
     # Now we have to convert the output back to a array. This is a bit tricky,
     # because we must be able to select indices from any given dimension. To do
     # this, we perform:
-    x_sorted = x.take(idcs, axis)  # [N_1, ..., N_axis, ..., N_D]
+    x_sorted = x.take(idcs, axis)  # [N_0, ..., N_axis, ..., N_{D-1}]
 
     # Finally, we return the sorted array and the indices.
     return x_sorted, idcs
@@ -271,7 +271,7 @@ def unique_consecutive(
 
     Args:
         x: The input array. Must be sorted along the given dimension.
-            Shape: [N_1, ..., N_axis, ..., N_D]
+            Shape: [N_0, ..., N_axis, ..., N_{D-1}]
         return_inverse: Whether to also return the indices for where elements
             in the original input ended up in the returned unique list.
         return_counts: Whether to also return the counts for each unique
@@ -284,7 +284,7 @@ def unique_consecutive(
     Returns:
         Tuple containing:
         - The unique elements.
-            Shape: [N_1, ..., N_axis-1, N_unique, N_axis+1, ..., N_D]
+            Shape: [N_0, ..., N_{axis-1}, N_unique, N_{axis+1}, ..., N_{D-1}]
         - (optional) if return_inverse is True, the indices where elements
             in the original input ended up in the returned unique values.
             Shape: [N_axis]
@@ -363,10 +363,10 @@ def unique_consecutive(
     else:
         y = np.moveaxis(
             x, axis, -1
-        )  # [N_1, ..., N_axis-1, N_axis+1, ..., N_D, N_axis]
+        )  # [N_0, ..., N_{axis-1}, N_{axis+1}, ..., N_{D-1}, N_axis]
         y = y.reshape(
             -1, y.shape[-1]
-        )  # [N_1 * ... * N_axis-1 * N_axis+1 * ... * N_D, N_axis]
+        )  # [N_0 * ... * N_{axis-1} * N_{axis+1} * ... * N_{D-1}, N_axis]
 
     # Find the indices where the values change.
     is_change = np.concatenate(
@@ -377,7 +377,7 @@ def unique_consecutive(
     idcs = is_change.nonzero()[0]  # [N_unique]
     unique = x.take(
         idcs, axis
-    )  # [N_1, ..., N_axis-1, N_unique, N_axis+1, ..., N_D]
+    )  # [N_0, ..., N_{axis-1}, N_unique, N_{axis+1}, ..., N_{D-1}]
 
     # Calculate auxiliary values.
     aux = []
