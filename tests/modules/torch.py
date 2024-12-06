@@ -1,5 +1,4 @@
 import unittest
-from typing import cast
 
 import numpy as np
 import torch
@@ -9,7 +8,7 @@ from python_utils.modules.torch import (
     lexsort_along,
     swap_idcs_vals,
     swap_idcs_vals_duplicates,
-    unique_with_backmap,
+    unique,
 )
 
 
@@ -145,25 +144,20 @@ class TestSwapIdcsValsDuplicates(unittest.TestCase):
         )
 
 
-class TestUniqueWithBackmap(unittest.TestCase):
-    def test_unique_with_backmap_1D_dim0(self) -> None:
+class TestUnique(unittest.TestCase):
+    def test_unique_1D_dim0(self) -> None:
         # Should be the same as dim=None in the 1D case.
         x = torch.tensor([9, 10, 9, 9, 10, 9])
         dim = 0
-        uniques, backmap, inverse, counts = unique_with_backmap(
-            x, return_inverse=True, return_counts=True, dim=dim
+        uniques, backmap, inverse, counts = unique(
+            x,
+            return_backmap=True,
+            return_inverse=True,
+            return_counts=True,
+            dim=dim,
         )
-        backmap_along_dim = cast(torch.Tensor, backmap[dim])
         self.assertTrue(torch.equal(uniques, torch.tensor([9, 10])))
-        for d in range(len(x.shape)):
-            if d == dim:
-                self.assertTrue(
-                    torch.equal(
-                        backmap_along_dim, torch.tensor([0, 2, 3, 5, 1, 4])
-                    )
-                )
-            else:
-                self.assertEqual(backmap[d], slice(None))
+        self.assertTrue(torch.equal(backmap, torch.tensor([0, 2, 3, 5, 1, 4])))
         self.assertTrue(torch.equal(inverse, torch.tensor([0, 1, 0, 0, 1, 0])))
         self.assertTrue(torch.equal(counts, torch.tensor([4, 2])))
 
@@ -172,75 +166,75 @@ class TestUniqueWithBackmap(unittest.TestCase):
         )
 
         self.assertTrue(
-            torch.equal(
-                backmap_along_dim[: counts[0]], torch.tensor([0, 2, 3, 5])
-            )
+            torch.equal(backmap[: counts[0]], torch.tensor([0, 2, 3, 5]))
         )
 
         cumcounts = counts.cumsum(dim=0)
-        get_idcs = lambda i: backmap_along_dim[cumcounts[i - 1] : cumcounts[i]]
+        get_idcs = lambda i: backmap[
+            cumcounts[i - 1] : cumcounts[i]
+        ]  # noqa: E731
         self.assertTrue(torch.equal(get_idcs(1), torch.tensor([1, 4])))
 
-    def test_unique_with_backmap_1D_dimNone(self) -> None:
+    def test_unique_1D_dimNone(self) -> None:
         # Not implemented, skip this test for now.
         return
 
-    def test_unique_with_backmap_2D_dim1(self) -> None:
+    def test_unique_2D_dim1(self) -> None:
         x = torch.tensor(
             [[9, 10, 7, 9], [10, 9, 8, 10], [8, 7, 9, 8], [7, 7, 9, 7]]
         )
         dim = 1
-        uniques, backmap, inverse, counts = unique_with_backmap(
-            x, return_inverse=True, return_counts=True, dim=dim
+        uniques, backmap, inverse, counts = unique(
+            x,
+            return_backmap=True,
+            return_inverse=True,
+            return_counts=True,
+            dim=dim,
         )
-        backmap_along_dim = cast(torch.Tensor, backmap[dim])
         self.assertTrue(
             torch.equal(
                 uniques,
                 torch.tensor([[7, 9, 10], [8, 10, 9], [9, 8, 7], [9, 7, 7]]),
             )
         )
-        for d in range(len(x.shape)):
-            if d == dim:
-                self.assertTrue(
-                    torch.equal(backmap_along_dim, torch.tensor([2, 0, 3, 1]))
-                )
-            else:
-                self.assertEqual(backmap[d], slice(None))
+        self.assertTrue(torch.equal(backmap, torch.tensor([2, 0, 3, 1])))
         self.assertTrue(torch.equal(inverse, torch.tensor([1, 2, 0, 1])))
         self.assertTrue(torch.equal(counts, torch.tensor([1, 2, 1])))
 
         self.assertTrue(
             torch.equal(
-                x[backmap],
+                x[:, backmap],
                 torch.tensor(
                     [[7, 9, 9, 10], [8, 10, 10, 9], [9, 8, 8, 7], [9, 7, 7, 7]]
                 ),
             )
         )
 
-        self.assertTrue(
-            torch.equal(backmap_along_dim[: counts[0]], torch.tensor([2]))
-        )
+        self.assertTrue(torch.equal(backmap[: counts[0]], torch.tensor([2])))
 
         cumcounts = counts.cumsum(dim=0)
-        get_idcs = lambda i: backmap_along_dim[cumcounts[i - 1] : cumcounts[i]]
+        get_idcs = lambda i: backmap[
+            cumcounts[i - 1] : cumcounts[i]
+        ]  # noqa: E731
         self.assertTrue(torch.equal(get_idcs(1), torch.tensor([0, 3])))
 
-    def test_unique_with_backmap_2D_dimNone(self) -> None:
+    def test_unique_2D_dimNone(self) -> None:
         # Not implenmented, skip this test for now.
         return
 
-    def test_unique_with_backmap_3D_dim2(self) -> None:
+    def test_unique_3D_dim2(self) -> None:
         x = torch.tensor([
             [[0, 2, 1, 2], [4, 5, 6, 5], [9, 7, 8, 7]],
             [[4, 8, 2, 8], [3, 7, 3, 7], [0, 1, 2, 1]],
         ])
         dim = 2
-        uniques, backmap, inverse, counts = unique_with_backmap(
-            x, return_inverse=True, return_counts=True, dim=dim
+        uniques, backmap, inverse, counts = unique(
+            x,
+            return_backmap=True,
+            return_inverse=True,
+            return_counts=True,
+            dim=dim,
         )
-        backmap_along_dim = cast(torch.Tensor, backmap[dim])
         self.assertTrue(
             torch.equal(
                 uniques,
@@ -250,19 +244,13 @@ class TestUniqueWithBackmap(unittest.TestCase):
                 ]),
             )
         )
-        for d in range(len(x.shape)):
-            if d == dim:
-                self.assertTrue(
-                    torch.equal(backmap_along_dim, torch.tensor([0, 2, 1, 3]))
-                )
-            else:
-                self.assertEqual(backmap[d], slice(None))
+        self.assertTrue(torch.equal(backmap, torch.tensor([0, 2, 1, 3])))
         self.assertTrue(torch.equal(inverse, torch.tensor([0, 2, 1, 2])))
         self.assertTrue(torch.equal(counts, torch.tensor([1, 1, 2])))
 
         self.assertTrue(
             torch.equal(
-                x[backmap],
+                x[:, :, backmap],
                 torch.tensor([
                     [[0, 1, 2, 2], [4, 6, 5, 5], [9, 8, 7, 7]],
                     [[4, 2, 8, 8], [3, 3, 7, 7], [0, 2, 1, 1]],
@@ -270,10 +258,10 @@ class TestUniqueWithBackmap(unittest.TestCase):
             )
         )
 
-        self.assertTrue(
-            torch.equal(backmap_along_dim[: counts[0]], torch.tensor([0]))
-        )
+        self.assertTrue(torch.equal(backmap[: counts[0]], torch.tensor([0])))
 
         cumcounts = counts.cumsum(dim=0)
-        get_idcs = lambda i: backmap_along_dim[cumcounts[i - 1] : cumcounts[i]]
+        get_idcs = lambda i: backmap[
+            cumcounts[i - 1] : cumcounts[i]
+        ]  # noqa: E731
         self.assertTrue(torch.equal(get_idcs(1), torch.tensor([2])))

@@ -1,7 +1,9 @@
 from functools import lru_cache
-from typing import Any
+from typing import Any, Literal, overload
 
 import torch
+
+from ..modules.torch import count_freqs_until, lexsort
 
 
 @lru_cache(maxsize=8)
@@ -260,6 +262,9 @@ def arange_batched(
         - The number of values of any arange sequence in the batch.
             Shape: [B]
     """
+    dtype = dtype if dtype is not None else starts.dtype
+    device = device if device is not None else starts.device
+
     B = len(starts)
     if ends is None:
         ends = starts
@@ -454,3 +459,757 @@ def sample_unique_pairs_batched(
     triu_idcs = max_L_b - 1 - triu_idcs
     idcs_elements = triu_idcs[:, -idcs_pairs - 1]  # [2, B, num_samples]
     return idcs_elements.permute(1, 2, 0)  # [B, num_samples, 2]
+
+
+def swap_idcs_vals_batched(x: torch.Tensor) -> torch.Tensor:
+    """Swap the indices and values of a batched of 1D tensors.
+
+    Each row in the input tensor is assumed to contain exactly all integers
+    from 0 to x.shape[1] - 1, in any order.
+
+    Warning: This function does not explicitly check if the input tensor
+    contains no duplicates. If x contains duplicates, no error will be raised
+    and undefined behaviour will occur!
+
+    Args:
+        x: The tensor to swap.
+            Shape: [B, N]
+
+    Returns:
+        The swapped tensor.
+            Shape: [B, N]
+
+    Examples:
+        >>> x = torch.tensor([
+        >>>     [2, 3, 0, 4, 1],
+        >>>     [1, 3, 2, 0, 4],
+        >>> ])
+        >>> swap_idcs_vals_batched(x)
+        tensor([[2, 4, 0, 1, 3],
+                [3, 0, 2, 1, 4]])
+    """
+    if len(x.shape) != 2:
+        raise ValueError("x must be a batch of 1D tensors.")
+
+    x_swapped = torch.empty_like(x)
+    x_swapped.scatter_(
+        1, x, torch.arange(x.shape[1], device=x.device).repeat(x.shape[0], 1)
+    )
+    return x_swapped
+
+
+def index_select_batched(
+    values: torch.Tensor, dim: int, idcs: torch.Tensor
+) -> torch.Tensor:
+    """Select values from a batch of tensors using the given indices.
+
+    Note that dim refers to the index of the dimension to sort along AFTER the
+    batch dimension. So e.g. if x has shape [B, N_0, N_1, N_2], then dim=0
+    refers to N_0, dim=1 refers to N_1, etc.
+
+    Args:
+        values: The values to select from.
+            Shape: [B, N_0, ..., N_dim, ..., N_{D-1}]
+        dim: The dimension to select along.
+        idcs: The indices to select.
+            Shape: [B, N_select]
+
+    Returns:
+        The selected values.
+            Shape: [B, N_0, ..., N_{dim-1}, N_select, N_{dim+1}, ..., N_{D-1}]
+    """
+    idcs_reshape = [1] * values.ndim
+    idcs_reshape[0] = idcs.shape[0]
+    idcs_reshape[dim + 1] = idcs.shape[1]
+    idcs_expand = list(values.shape)
+    idcs_expand[dim + 1] = idcs.shape[1]
+    return torch.gather(
+        values, dim + 1, idcs.reshape(idcs_reshape).expand(idcs_expand)
+    )
+
+
+def lexsort_along_batched(
+    x: torch.Tensor, dim: int = -1
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Sort a batched tensor along dim, taking all others as constant tuples.
+
+    Note that dim refers to the index of the dimension to sort along AFTER the
+    batch dimension. So e.g. if x has shape [B, N_0, N_1, N_2], then dim=0
+    refers to N_0, dim=1 refers to N_1, etc.
+
+    This is like a batched version of torch.sort(), but it doesn't sort along
+    the other dimensions. As such, the other dimensions are treated as tuples.
+    This function is roughly equivalent to the following Python code, but it
+    is much faster.
+    >>> torch.stack([
+    >>>     torch.stack(
+    >>>         sorted(
+    >>>             x_b.unbind(dim),
+    >>>             key=lambda t: t.tolist(),
+    >>>         ),
+    >>>         dim=dim,
+    >>>     )
+    >>>     for x_b in x.unbind(0)
+    >>> ])
+
+    The sort is always stable, meaning that the order of equal elements is
+    preserved.
+
+    Args:
+        x: The input tensor.
+            Shape: [B, N_0, ..., N_dim, ..., N_{D-1}]
+        dim: The dimension to sort along.
+
+    Returns:
+        Tuple containing:
+        - Sorted version of x.
+            Shape: [B, N_0, ..., N_dim, ..., N_{D-1}]
+        - The backmap tensor, which contains the indices of the sorted values
+            in the original input.
+            The sorted version of x can be retrieved as follows:
+            >>> x_sorted = index_select_batched(x, dim, backmap)
+            Shape: [B, N_dim]
+
+    Examples:
+        >>> x = torch.tensor([
+        >>>     [
+        >>>         [2, 1],
+        >>>         [3, 0],
+        >>>         [1, 2],
+        >>>         [1, 3],
+        >>>     ],
+        >>>     [
+        >>>         [1, 2],
+        >>>         [1, 5],
+        >>>         [3, 4],
+        >>>         [2, 1],
+        >>>     ],
+        >>> ])
+        >>> dim = 0
+
+        >>> x_sorted, backmap = lexsort_along_batched(x, dim=dim)
+        >>> x_sorted
+        tensor([[[1, 2],
+                 [1, 3],
+                 [2, 1],
+                 [3, 0]],
+                [[1, 2],
+                 [1, 5],
+                 [2, 1],
+                 [3, 4]]])
+        >>> backmap
+        tensor([[2, 3, 0, 1],
+                [0, 1, 3, 2]])
+
+    >>> # Get the lexicographically sorted version of x:
+    >>> index_select_batched(x, dim, backmap)
+    tensor([[[1, 2],
+             [1, 3],
+             [2, 1],
+             [3, 0]],
+            [[1, 2],
+             [1, 5],
+             [2, 1],
+             [3, 4]]])
+    """
+    # We can use lexsort() to sort only the requested dimension.
+    # First, we prepare the tensor for lexsort(). The input to this function
+    # must be a tuple of array-like objects, that are evaluated from last to
+    # first. This is quite confusing, so I'll put an example here. If we have:
+    # >>> x = tensor([[[15, 13],
+    # >>>              [11,  4],
+    # >>>              [16,  2]],
+    # >>>             [[ 7, 21],
+    # >>>              [ 3, 20],
+    # >>>              [ 8, 22]],
+    # >>>             [[19, 14],
+    # >>>              [ 5, 12],
+    # >>>              [ 6,  0]],
+    # >>>             [[23,  1],
+    # >>>              [10, 17],
+    # >>>              [ 9, 18]]])
+    # And dim=1, then the input to lexsort() must be:
+    # >>> lexsort(tensor([[ 1, 17, 18],
+    # >>>                 [23, 10,  9],
+    # >>>                 [14, 12,  0],
+    # >>>                 [19,  5,  6],
+    # >>>                 [21, 20, 22],
+    # >>>                 [ 7,  3,  8],
+    # >>>                 [13,  4,  2],
+    # >>>                 [15, 11, 16]]))
+    # Note that the first row is evaluated last and the last row is evaluated
+    # first. We can now see that the sorting order will be 11 < 15 < 16, so
+    # lexsort() will return tensor([1, 0, 2]). I thouroughly tested what the
+    # absolute fastest way is to perform this operation, and it turns out that
+    # the following is the best way to do it:
+    B, N_dim = x.shape[0], x.shape[dim + 1]
+
+    if x.ndim == 2:
+        y = x.unsqueeze(1)  # [B, 1, N_dim]
+    else:
+        y = x.movedim(
+            dim + 1, -1
+        )  # [B, N_0, ..., N_{dim-1}, N_{dim+1}, ..., N_{D-1}, N_dim]
+        y = y.reshape(
+            B, -1, N_dim
+        )  # [B, N_0 * ... * N_{dim-1} * N_{dim+1} * ... * N_{D-1}, N_dim]
+    y = y.movedim(
+        0, 1
+    )  # [N_0 * ... * N_{dim-1} * N_{dim+1} * ... * N_{D-1}, B, N_dim]
+    y = y.flip(
+        dims=(0,)
+    )  # [N_0 * ... * N_{dim-1} * N_{dim+1} * ... * N_{D-1}, B, N_dim]
+    backmap = lexsort(y, dim=-1)  # [B, N_dim]
+
+    # Sort the tensor along the given dimension.
+    x_sorted = index_select_batched(
+        x, dim, backmap
+    )  # [B, N_0, ..., N_dim, ..., N_{D-1}]
+
+    # Finally, we return the sorted tensor and the backmap.
+    return x_sorted, backmap
+
+
+@overload
+def unique_consecutive_batched(  # type: ignore
+    x: torch.Tensor,
+    return_inverse: Literal[False] = False,
+    return_counts: Literal[False] = False,
+    dim: int | None = None,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    ...  # fmt: skip
+
+
+@overload
+def unique_consecutive_batched(
+    x: torch.Tensor,
+    return_inverse: Literal[True] = True,
+    return_counts: Literal[False] = False,
+    dim: int | None = None,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ...  # fmt: skip
+
+
+@overload
+def unique_consecutive_batched(
+    x: torch.Tensor,
+    return_inverse: Literal[False] = False,
+    return_counts: Literal[True] = True,
+    dim: int | None = None,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ...  # fmt: skip
+
+
+@overload
+def unique_consecutive_batched(
+    x: torch.Tensor,
+    return_inverse: Literal[True] = True,
+    return_counts: Literal[True] = True,
+    dim: int | None = None,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    ...  # fmt: skip
+
+
+def unique_consecutive_batched(
+    x: torch.Tensor,
+    return_inverse: bool = False,
+    return_counts: bool = False,
+    dim: int | None = None,
+) -> (
+    tuple[torch.Tensor, torch.Tensor]
+    | tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    | tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+):
+    """A batched version of torch.unique_consecutive, but WAY more effiecient.
+
+    Note that dim refers to the index of the dimension to sort along AFTER the
+    batch dimension. So e.g. if x has shape [B, N_0, N_1, N_2], then dim=0
+    refers to N_0, dim=1 refers to N_1, etc.
+
+    The returned unique elements are retrieved along the requested dimension,
+    taking all the other dimensions apart from the batch dimension as constant
+    tuples.
+
+    Args:
+        x: The input tensor. If it contains equal values, they must be
+            consecutive along the given dimension.
+            Shape: [B, N_0, ..., N_dim, ..., N_{D-1}]
+        return_inverse: Whether to also return the inverse mapping tensor.
+            This can be used to reconstruct the original tensor from the
+            unique tensor.
+        return_counts: Whether to also return the counts for each unique
+            element.
+        dim: The dimension to operate upon. If None, the unique of the
+            flattened input is returned. Otherwise, each of the tensors
+            indexed by the given dimension is treated as one of the elements
+            to apply the unique operation upon. See examples for more details.
+
+    Returns:
+        Tuple containing:
+        - The unique elements.
+            Shape: [B, N_0, ..., N_{dim-1}, max(U_bs), N_{dim+1}, ..., N_{D-1}]
+        - The amount of unique elements per batch element.
+            Shape: [B]
+        - (Optional) If return_inverse is True, the indices where elements
+            in the original input ended up in the returned unique values.
+            The original tensor can be reconstructed as follows:
+            >>> x_reconstructed = index_select_batched(uniques, dim, inverse)
+            Shape: [B, N_dim]
+        - (Optional) If return_counts is True, the counts for each unique
+            element.
+            Shape: [B, max(U_bs)]
+
+    Examples:
+        >>> # 1D example: -----------------------------------------------------
+        >>> x = torch.tensor([
+        >>>     [9, 9, 9, 9, 10, 10],
+        >>>     [8, 8, 7, 7, 9, 9],
+        >>> ])
+        >>> dim = 0
+
+        >>> uniques, U_bs, inverse, counts = unique_consecutive_batched(
+        >>>     x, return_inverse=True, return_counts=True, dim=dim
+        >>> )
+        >>> uniques
+        tensor([[ 9, 10,  0],
+                [ 8,  7,  9]])
+        >>> U_bs
+        tensor([2, 3])
+        >>> inverse
+        tensor([[0, 0, 0, 0, 1, 1],
+                [0, 0, 1, 1, 2, 2]])
+        >>> counts
+        tensor([[4, 2, 0],
+                [2, 2, 2]])
+
+        >>> # Reconstruct the original tensor:
+        >>> index_select_batched(uniques, dim, inverse)
+        tensor([[ 9,  9,  9,  9, 10, 10],
+                [ 8,  8,  7,  7,  9,  9]])
+
+        >>> # 2D example: -----------------------------------------------------
+        >>> x = torch.tensor([
+        >>>     [
+        >>>         [7,  9,  9, 10],
+        >>>         [8, 10, 10,  9],
+        >>>         [9,  8,  8,  7],
+        >>>         [9,  7,  7,  7],
+        >>>     ],
+        >>>     [
+        >>>         [7,  7,  7,  7],
+        >>>         [7,  7,  7, 10],
+        >>>         [9,  9,  9,  8],
+        >>>         [8,  8,  8,  8],
+        >>>     ],
+        >>> ])
+        >>> dim = 1
+
+        >>> uniques, U_bs, inverse, counts = unique_consecutive_batched(
+        >>>     x, return_inverse=True, return_counts=True, dim=dim
+        >>> )
+        >>> uniques
+        tensor([[[ 7,  9, 10],
+                 [ 8, 10,  9],
+                 [ 9,  8,  7],
+                 [ 9,  7,  7]],
+                [[ 7,  7,  0],
+                 [ 7, 10,  0],
+                 [ 9,  8,  0],
+                 [ 8,  8,  0]]])
+        >>> U_bs
+        tensor([3, 2])
+        >>> inverse
+        tensor([[0, 1, 1, 2],
+                [0, 0, 0, 1]])
+        >>> counts
+        tensor([[1, 2, 1],
+                [3, 1, 0]])
+
+        >>> # Reconstruct the original tensor:
+        >>> index_select_batched(uniques, dim, inverse)
+        tensor([[[ 7,  9,  9, 10],
+                 [ 8, 10, 10,  9],
+                 [ 9,  8,  8,  7],
+                 [ 9,  7,  7,  7]],
+                [[ 7,  7,  7,  7],
+                 [ 7,  7,  7, 10],
+                 [ 9,  9,  9,  8],
+                 [ 8,  8,  8,  8]]])
+    """
+    if dim is None:
+        raise NotImplementedError(
+            "dim=None is not implemented yet. Please specify a dimension"
+            " explicitly."
+        )
+
+    B, N_dim = x.shape[0], x.shape[dim + 1]
+
+    # Flatten all dimensions except the one we want to operate on.
+    if x.ndim == 2:
+        y = x.unsqueeze(1)  # [B, 1, N_dim]
+    else:
+        y = x.movedim(
+            dim + 1, -1
+        )  # [B, N_0, ..., N_{dim-1}, N_{dim+1}, ..., N_{D-1}, N_dim]
+        y = y.reshape(
+            B, -1, N_dim
+        )  # [B, N_0 * ... * N_{dim-1} * N_{dim+1} * ... * N_{D-1}, N_dim]
+
+    # Find the indices where the values change.
+    is_change = torch.concatenate(
+        [
+            (
+                torch.ones((B, 1), dtype=torch.bool, device=x.device)
+                if N_dim > 0
+                else torch.empty((B, 0), dtype=torch.bool, device=x.device)
+            ),  # [B, 1] or [B, 0]
+            (y[:, :, :-1] != y[:, :, 1:]).any(
+                dim=1
+            ),  # [B, N_dim - 1] or [B, 0]
+        ],
+        dim=1,
+    )  # [B, N_dim]
+
+    # Find the unique values.
+    batch_idcs, dim_idcs = is_change.nonzero(
+        as_tuple=True
+    )  # [sum(U_bs)], [sum(U_bs)]
+    U_bs = count_freqs_until(batch_idcs, B)  # [B]
+    max_U_bs = int(U_bs.max())
+    dim_idcs_padded = pad_packed_batched(
+        dim_idcs, U_bs, max_U_bs
+    )  # [B, max(U_bs)]
+    uniques = index_select_batched(
+        x, dim, dim_idcs_padded
+    )  # [B, N_0, ..., N_{dim-1}, max(U_bs), N_{dim+1}..., N_{D-1}]
+    uniques = uniques.movedim(
+        dim + 1, 1
+    )  # [B, max(U_bs), N_0, ..., N_{dim-1}, N_{dim+1}, ..., N_{D-1}]
+    replace_padding_batched(uniques, U_bs, in_place=True)
+    uniques = uniques.movedim(
+        1, dim + 1
+    )  # [B, N_0, ..., N_{dim-1}, max(U_bs), N_{dim+1}, ..., N_{D-1}]
+
+    # Calculate auxiliary values.
+    aux = []
+    if return_inverse:
+        # Find the indices where the elements in the original input ended up
+        # in the returned unique values.
+        inverse = is_change.cumsum(dim=1) - 1  # [B, N_dim]
+        aux.append(inverse)
+    if return_counts:
+        # Find the counts for each unique element.
+        counts = torch.diff(
+            torch.concatenate(
+                [
+                    replace_padding_batched(
+                        dim_idcs_padded, U_bs, padding_value=N_dim
+                    ),  # [B, max(U_bs)]
+                    (
+                        torch.full(
+                            (B, 1), N_dim, dtype=torch.int64, device=x.device
+                        )
+                        if N_dim > 0
+                        else torch.empty(
+                            (B, 0), dtype=torch.int64, device=x.device
+                        )
+                    ),  # [B, 1] or [B, 0]
+                ],
+                dim=1,
+            ),  # [B, max(U_bs) + 1]
+            dim=1,
+        )  # [B, max(U_bs)]
+        aux.append(counts)
+
+    return uniques, U_bs, *aux
+
+
+@overload
+def unique_batched(  # type: ignore
+    x: torch.Tensor,
+    return_backmap: Literal[False] = False,
+    return_inverse: Literal[False] = False,
+    return_counts: Literal[False] = False,
+    dim: int | None = None,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    pass
+
+
+@overload
+def unique_batched(
+    x: torch.Tensor,
+    return_backmap: Literal[True] = True,
+    return_inverse: Literal[False] = False,
+    return_counts: Literal[False] = False,
+    dim: int | None = None,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    pass
+
+
+@overload
+def unique_batched(
+    x: torch.Tensor,
+    return_backmap: Literal[False] = False,
+    return_inverse: Literal[True] = True,
+    return_counts: Literal[False] = False,
+    dim: int | None = None,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    pass
+
+
+@overload
+def unique_batched(
+    x: torch.Tensor,
+    return_backmap: Literal[False] = False,
+    return_inverse: Literal[False] = False,
+    return_counts: Literal[True] = True,
+    dim: int | None = None,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    pass
+
+
+@overload
+def unique_batched(
+    x: torch.Tensor,
+    return_backmap: Literal[True] = True,
+    return_inverse: Literal[True] = True,
+    return_counts: Literal[False] = False,
+    dim: int | None = None,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    pass
+
+
+@overload
+def unique_batched(
+    x: torch.Tensor,
+    return_backmap: Literal[True] = True,
+    return_inverse: Literal[False] = False,
+    return_counts: Literal[True] = True,
+    dim: int | None = None,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    pass
+
+
+@overload
+def unique_batched(
+    x: torch.Tensor,
+    return_backmap: Literal[False] = False,
+    return_inverse: Literal[True] = True,
+    return_counts: Literal[True] = True,
+    dim: int | None = None,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    pass
+
+
+@overload
+def unique_batched(
+    x: torch.Tensor,
+    return_backmap: Literal[True] = True,
+    return_inverse: Literal[True] = True,
+    return_counts: Literal[True] = True,
+    dim: int | None = None,
+) -> tuple[
+    torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor
+]:
+    pass
+
+
+def unique_batched(
+    x: torch.Tensor,
+    return_backmap: bool = False,
+    return_inverse: bool = False,
+    return_counts: bool = False,
+    dim: int | None = None,
+) -> (
+    tuple[torch.Tensor, torch.Tensor]
+    | tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    | tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+    | tuple[
+        torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor
+    ]
+):
+    """A batched version of torch.unique, but WAY more efficient.
+
+    Note that dim refers to the index of the dimension to sort along AFTER the
+    batch dimension. So e.g. if x has shape [B, N_0, N_1, N_2], then dim=0
+    refers to N_0, dim=1 refers to N_1, etc.
+
+    The returned unique elements are retrieved along the requested dimension,
+    taking all the other dimensions apart from the batch dimension as constant
+    tuples.
+
+    Args:
+        x: The input tensor.
+            Shape: [B, N_0, ..., N_dim, ..., N_{D-1}]
+        return_backmap: Whether to also return the backmap tensor.
+            This can be used to sort the original tensor.
+        return_inverse: Whether to also return the inverse mapping tensor.
+            This can be used to reconstruct the original tensor from the
+            unique tensor.
+        return_counts: Whether to also return the counts of each unique
+            element.
+        dim: The dimension to operate upon. If None, the unique of the
+            flattened input is returned. Otherwise, each of the tensors
+            indexed by the given dimension is treated as one of the elements
+            to apply the unique operation upon. See examples for more details.
+
+    Returns:
+        Tuple containing:
+        - The unique elements, guaranteed to be sorted along the given
+            dimension.
+            Shape: [B, N_0, ..., N_{dim-1}, max(U_bs), N_{dim+1}, ..., N_{D-1}]
+        - The amount of unique values per batch element.
+            Shape: [B]
+        - (Optional) If return_backmap is True, the backmap tensor, which
+            contains the indices of the unique values in the original input.
+            The sorted version of x can be retrieved as follows:
+            >>> x_sorted = index_select_batched(x, dim, backmap)
+            Shape: [B, N_dim]
+        - (Optional) If return_inverse is True, the indices where elements
+            in the original input ended up in the returned unique values.
+            The original tensor can be reconstructed as follows:
+            >>> x_reconstructed = index_select_batched(uniques, dim, inverse)
+            Shape: [B, N_dim]
+        - (Optional) If return_counts is True, the counts for each unique
+            element.
+            Shape: [B, max(U_bs)]
+
+    Examples:
+        >>> # 1D example: -----------------------------------------------------
+        >>> x = torch.tensor([
+        >>>     [9, 10, 9, 9, 10, 9],
+        >>>     [8, 7, 9, 9, 8, 7],
+        >>> ])
+        >>> dim = 0
+
+        >>> uniques, U_bs, backmap, inverse, counts = unique_batched(
+        >>>     x,
+        >>>     return_backmap=True,
+        >>>     return_inverse=True,
+        >>>     return_counts=True,
+        >>>     dim=dim,
+        >>> )
+        >>> uniques
+        tensor([[ 9, 10,  0],
+                [ 7,  8,  9]])
+        >>> U_bs
+        tensor([2, 3])
+        >>> backmap
+        tensor([[0, 2, 3, 5, 1, 4],
+                [1, 5, 0, 4, 2, 3]])
+        >>> inverse
+        tensor([[0, 1, 0, 0, 1, 0],
+                [1, 0, 2, 2, 1, 0]])
+        >>> counts
+        tensor([[4, 2, 0],
+                [2, 2, 2]])
+
+        >>> # Get the lexicographically sorted version of x:
+        >>> index_select_batched(x, dim, backmap)
+        tensor([[ 9,  9,  9,  9, 10, 10],
+                [ 7,  7,  8,  8,  9,  9]])
+
+        >>> # Reconstruct the original tensor:
+        >>> index_select_batched(uniques, dim, inverse)
+        tensor([[ 9, 10,  9,  9, 10,  9],
+                [ 8,  7,  9,  9,  8,  7]])
+
+        >>> # 2D example: -----------------------------------------------------
+        >>> x = torch.tensor([
+        >>>     [
+        >>>         [9, 10, 7, 9],
+        >>>         [10, 9, 8, 10],
+        >>>         [8, 7, 9, 8],
+        >>>         [7, 7, 9, 7],
+        >>>     ],
+        >>>     [
+        >>>         [7, 7, 7, 7],
+        >>>         [7, 10, 7, 7],
+        >>>         [9, 8, 9, 9],
+        >>>         [8, 8, 8, 8],
+        >>>     ],
+        >>> ])
+        >>> dim = 1
+
+        >>> uniques, U_bs, backmap, inverse, counts = unique_batched(
+        >>>     x,
+        >>>     return_backmap=True,
+        >>>     return_inverse=True,
+        >>>     return_counts=True,
+        >>>     dim=dim,
+        >>> )
+        >>> uniques
+        tensor([[[ 7,  9, 10],
+                 [ 8, 10,  9],
+                 [ 9,  8,  7],
+                 [ 9,  7,  7]],
+                [[ 7,  7,  0],
+                 [ 7, 10,  0],
+                 [ 9,  8,  0],
+                 [ 8,  8,  0]]])
+        >>> U_bs
+        tensor([3, 2])
+        >>> backmap
+        tensor([[2, 0, 3, 1],
+                [0, 2, 3, 1]])
+        >>> inverse
+        tensor([[1, 2, 0, 1],
+                [0, 1, 0, 0]])
+        >>> counts
+        tensor([[1, 2, 1],
+                [3, 1, 0]])
+
+        >>> # Get the lexicographically sorted version of x:
+        >>> index_select_batched(x, dim, backmap)
+        tensor([[[ 7,  9,  9, 10],
+                 [ 8, 10, 10,  9],
+                 [ 9,  8,  8,  7],
+                 [ 9,  7,  7,  7]],
+                [[ 7,  7,  7,  7],
+                 [ 7,  7,  7, 10],
+                 [ 9,  9,  9,  8],
+                 [ 8,  8,  8,  8]]])
+
+        >>> # Reconstruct the original tensor:
+        >>> index_select_batched(uniques, dim, inverse)
+        tensor([[[ 9, 10,  7,  9],
+                 [10,  9,  8, 10],
+                 [ 8,  7,  9,  8],
+                 [ 7,  7,  9,  7]],
+                [[ 7,  7,  7,  7],
+                 [ 7, 10,  7,  7],
+                 [ 9,  8,  9,  9],
+                 [ 8,  8,  8,  8]]])
+    """
+    if dim is None:
+        raise NotImplementedError(
+            "dim=None is not implemented yet. Please specify a dimension"
+            " explicitly."
+        )
+
+    # Sort along the given dimension, taking all the other dimensions as
+    # constant tuples. Torch's sort() doesn't work here since it will
+    # sort the other dimensions as well.
+    x_sorted, backmap = lexsort_along_batched(
+        x, dim=dim
+    )  # [B, N_0, ..., N_dim, ..., N_{D-1}], [B, N_dim]
+
+    out = unique_consecutive_batched(
+        x_sorted,
+        return_inverse=return_inverse,  # type: ignore
+        return_counts=return_counts,  # type: ignore
+        dim=dim,
+    )
+
+    aux = []
+    if return_backmap:
+        aux.append(backmap)
+    if return_inverse:
+        # The backmap wasn't taken into account by unique_consecutive(), so we
+        # have to do it ourselves.
+        backmap_inv = swap_idcs_vals_batched(backmap)  # [B, N_dim]
+        aux.append(out[2].gather(1, backmap_inv))
+    if return_counts:
+        aux.append(out[-1])
+
+    return out[0], out[1], *aux
