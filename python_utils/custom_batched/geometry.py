@@ -355,11 +355,11 @@ def xiaolin_wu_anti_aliasing_batched(
 
     Returns:
         Tuple containing:
-        - Pixel x-coordinates, padded with zeros.
+        - Pixel x-coordinates. Padded with zeros.
             Shape: [B, max(S_bs)]
-        - Pixel y-coordinates, padded with zeros.
+        - Pixel y-coordinates. Padded with zeros.
             Shape: [B, max(S_bs)]
-        - Pixel values between 0 and 1, padded with zeros.
+        - Pixel values between 0 and 1. Padded with zeros.
             Shape: [B, max(S_bs)]
         - The number of pixels in each line segment.
             Shape: [B]

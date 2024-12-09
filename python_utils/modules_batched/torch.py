@@ -17,6 +17,7 @@ def mask_padding_batched(L_bs: torch.Tensor, max_L_b: int) -> torch.Tensor:
 
     Returns:
         A mask that indicates which values are valid in each sample.
+            mask[b, i] is True if i < L_bs[b] and False otherwise.
             Shape: [B, max(L_bs)]
     """
     dtype = L_bs.dtype
@@ -34,8 +35,7 @@ def pack_padded_batched(
     """Pack a batch of padded values into a single tensor.
 
     Args:
-        values: The values to pack. The values must be padded for heterogenous
-            batch sizes.
+        values: The values to pack. Padding does not matter.
             Shape: [B, max(L_bs), *]
         L_bs: The number of valid values in each sample.
             Shape: [B]
@@ -58,7 +58,7 @@ def pad_packed_batched(
     """Pad a batch of packed values to create a tensor with a fixed size.
 
     Args:
-        values: The values to pad with zeros for heterogenous batch sizes.
+        values: The values to pad.
             Shape: [sum(L_bs), *]
         L_bs: The number of valid values in each sample.
             Shape: [B]
@@ -68,7 +68,7 @@ def pad_packed_batched(
             a specific value.
 
     Returns:
-        The values padded with zeros for heterogenous batch sizes.
+        The padded values.
             Shape: [B, max(L_bs), *]
     """
     B = len(L_bs)
@@ -93,17 +93,36 @@ def pad_packed_batched(
     return values_padded
 
 
+@overload
+def replace_padding_batched(  # type: ignore
+    values: torch.Tensor,
+    L_bs: torch.Tensor,
+    padding_value: Any = 0,
+    in_place: Literal[False] = False,
+) -> torch.Tensor:
+    pass
+
+
+@overload
+def replace_padding_batched(
+    values: torch.Tensor,
+    L_bs: torch.Tensor,
+    padding_value: Any = 0,
+    in_place: Literal[True] = True,
+) -> None:
+    pass
+
+
 def replace_padding_batched(
     values: torch.Tensor,
     L_bs: torch.Tensor,
     padding_value: Any = 0,
     in_place: bool = False,
-) -> torch.Tensor:
+) -> torch.Tensor | None:
     """Pad the values with padding_value to create a tensor with a fixed size.
 
     Args:
-        values: The values to pad with padding_value for heterogenous batch
-            sizes. Will be modified in-place if in_place is True.
+        values: The values to pad.
             Shape: [B, max(L_bs), *]
         L_bs: The number of valid values in each sample.
             Shape: [B]
@@ -111,7 +130,7 @@ def replace_padding_batched(
         in_place: Whether to perform the operation in-place.
 
     Returns:
-        The values padded with padding_value for heterogenous batch sizes.
+        The padded values. If in_place is True, this is None.
             Shape: [B, max(L_bs), *]
     """
     max_L_bs = values.shape[1]
@@ -127,12 +146,14 @@ def mean_padding_batched(
     """Calculate the mean per dimension for each sample in the batch.
 
     Args:
-        values: The values to calculate the mean for. The values must be padded
-            for heterogenous batch sizes.
+        values: The values to calculate the mean for. If the values are not yet
+            padded with zeros, is_padding_zero must be set to False.
             Shape: [B, max(L_bs), *]
         L_bs: The number of valid values in each sample.
             Shape: [B]
         is_padding_zero: Whether the values are padded with zeros already.
+            Setting this to True when the values are already padded with zeros
+            can speed up the calculation.
 
     Returns:
         The mean value per dimension for each sample.
@@ -156,12 +177,15 @@ def stddev_padding_batched(
         sqrt(sum((x_i - mean(x))^2) / n)
 
     Args:
-        values: The values to calculate the standard deviation for. The values
-            must be padded for heterogenous batch sizes.
+        values: The values to calculate the standard deviation for. If the
+            values are not yet padded with zeros, is_padding_zero must be set
+            to False.
             Shape: [B, max(L_bs), *]
         L_bs: The number of valid values in each sample.
             Shape: [B]
         is_padding_zero: Whether the values are padded with zeros already.
+            Setting this to True when the values are already padded with zeros
+            can speed up the calculation.
 
     Returns:
         The standard deviation per dimension for each sample.
@@ -171,9 +195,8 @@ def stddev_padding_batched(
         values, L_bs, is_padding_zero=is_padding_zero
     )  # [B, *]
     values_centered = values - means.unsqueeze(1)  # [B, max(L_bs), *]
-    replace_padding_batched(values_centered, L_bs, in_place=True)
     return mean_padding_batched(
-        values_centered.square(), L_bs, is_padding_zero=True
+        values_centered.square(), L_bs
     ).sqrt()  # [B, *]
 
 
@@ -183,13 +206,14 @@ def min_padding_batched(
     """Calculate the minimum per dimension for each sample in the batch.
 
     Args:
-        values: The values to calculate the minimum for. The values must be
-            padded for heterogenous batch sizes.
+        values: The values to calculate the minimum for. If the values are not
+            yet padded with inf values, is_padding_inf must be set to False.
             Shape: [B, max(L_bs), *]
         L_bs: The number of valid values in each sample.
             Shape: [B]
         is_padding_inf: Whether the values are padded with inf values already.
-            already.
+            Setting this to True when the values are already padded with inf
+            values can speed up the calculation.
 
     Returns:
         The minimum value per dimension for each sample.
@@ -211,13 +235,15 @@ def max_padding_batched(
     """Calculate the maximum per dimension for each sample in the batch.
 
     Args:
-        values: The values to calculate the maximum for. The values must be
-            padded for heterogenous batch sizes.
+        values: The values to calculate the maximum for. If the values are not
+            yet padded with -inf values, is_padding_minus_inf must be set to
+            False.
             Shape: [B, max(L_bs), *]
         L_bs: The number of valid values in each sample.
             Shape: [B]
         is_padding_minus_inf: Whether the values are padded with -inf values
-            already.
+            already. Setting this to True when the values are already padded
+            with -inf values can speed up the calculation.
 
     Returns:
         The maximum value per dimension for each sample.
@@ -256,8 +282,8 @@ def arange_batched(
 
     Returns:
         Tuple containing:
-        - A batch of tensors with values in the range [start, end),
-            padded with zeros for heterogenous batch sizes.
+        - A batch of tensors with values in the range [start, end).
+            Padded with zeros.
             Shape: [B, max(L_bs)]
         - The number of values of any arange sequence in the batch.
             Shape: [B]
@@ -756,7 +782,7 @@ def unique_consecutive_batched(
             >>> x_reconstructed = index_select_batched(uniques, dim, inverse)
             Shape: [B, N_dim]
         - (Optional) If return_counts is True, the counts for each unique
-            element.
+            element. Padded with zeros.
             Shape: [B, max(U_bs)]
 
     Examples:
@@ -902,9 +928,7 @@ def unique_consecutive_batched(
         counts = torch.diff(
             torch.concatenate(
                 [
-                    replace_padding_batched(
-                        dim_idcs_padded, U_bs, padding_value=N_dim
-                    ),  # [B, max(U_bs)]
+                    dim_idcs_padded,  # [B, max(U_bs)]
                     (
                         torch.full(
                             (B, 1), N_dim, dtype=torch.int64, device=x.device
@@ -919,6 +943,7 @@ def unique_consecutive_batched(
             ),  # [B, max(U_bs) + 1]
             dim=1,
         )  # [B, max(U_bs)]
+        replace_padding_batched(counts, U_bs, in_place=True)
         aux.append(counts)
 
     return uniques, U_bs, *aux
@@ -1071,7 +1096,7 @@ def unique_batched(
             >>> x_reconstructed = index_select_batched(uniques, dim, inverse)
             Shape: [B, N_dim]
         - (Optional) If return_counts is True, the counts for each unique
-            element.
+            element. Padded with zeros.
             Shape: [B, max(U_bs)]
 
     Examples:

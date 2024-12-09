@@ -693,12 +693,9 @@ def unique_consecutive(
                     idcs,  # [U]
                     (
                         torch.full(
-                            (1,),
-                            x.shape[dim],
-                            dtype=torch.int64,
-                            device=x.device,
+                            (1,), N_dim, dtype=torch.int64, device=x.device
                         )
-                        if x.shape[dim] > 0
+                        if N_dim > 0
                         else torch.empty(
                             (0,), dtype=torch.int64, device=x.device
                         )

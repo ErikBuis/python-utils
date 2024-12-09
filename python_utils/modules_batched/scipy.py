@@ -24,16 +24,14 @@ def griddata_batched(
     implement this method here.
 
     Args:
-        points: Point coordinates to interpolate between. Padded with zeros if
-            the batch is heterogeneous.
+        points: Point coordinates to interpolate between. Padded does not
+            matter.
             Shape: [B, max(P_bs), D]
-        values: Values per point coordinate. Padded with zeros if the batch is
-            heterogeneous.
+        values: Values per point coordinate. Padding does not matter.
             Shape: [B, max(P_bs)]
-        P_bs: The number of points to interpolate between in
-            each batch.
+        P_bs: The number of points to interpolate between in each batch.
             Shape: [B]
-        xi: Points at which to interpolate data.
+        xi: Points at which to interpolate data. Padding does not matter.
             Shape: [B, max(X_bs), D]
         X_bs: The number of points at which to interpolate data in each batch.
             Shape: [B]
@@ -58,7 +56,7 @@ def griddata_batched(
             incommensurable units and differ by many orders of magnitude.
 
     Returns:
-        Array of interpolated values.
+        Array of interpolated values. Padded with fill_value.
             Shape: [B, max(X_bs)]
     """
     B, max_X_bs, _ = xi.shape
