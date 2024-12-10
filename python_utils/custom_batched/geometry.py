@@ -1,3 +1,5 @@
+from typing import cast
+
 import geopandas as gpd
 import torch
 from shapely import GeometryCollection, MultiPolygon, Polygon
@@ -320,11 +322,11 @@ def cut_polygon_around_points(
     polygons = []
     for pr in point_region:
         polygons.append(Polygon(vertices[regions[pr]]))
-    polygons = gpd.GeoSeries(polygons)
+    polygons = cast(gpd.GeoSeries, gpd.GeoSeries(polygons))
 
     # Perform an intersection with the original polygon to remove the parts
     # that lie outside of it.
-    polygon_pieces = polygons.intersection(polygon)  # type: ignore
+    polygon_pieces = polygons.intersection(polygon)
 
     # Ensure all pieces only consist of Polygon objects.
     for i, polygon_piece in enumerate(polygon_pieces):
