@@ -56,6 +56,7 @@ def transform_points_3D_to_3D(
             coordinates.
             Shape: [B, max(P_bs), 3] or [P, 3]
         transform: The transformation to apply to the points.
+            Shape of .get_matrix(): [B, 4, 4] or [1, 4, 4]
 
     Returns:
         The transformed points. Represents x, y, and z coordinates.
@@ -76,6 +77,7 @@ def transform_points_2D_to_3D(
             The z coordinate will be set to zero.
             Shape: [B, max(P_bs), 2] or [P, 2]
         transform: The transformation to apply to the points.
+            Shape of .get_matrix(): [B, 4, 4] or [1, 4, 4]
 
     Returns:
         The transformed points. Represents x, y, and z coordinates.
@@ -98,6 +100,7 @@ def transform_points_3D_to_2D(
             coordinates.
             Shape: [B, max(P_bs), 3] or [P, 3]
         transform: The transformation to apply to the points.
+            Shape of .get_matrix(): [B, 4, 4] or [1, 4, 4]
 
     Returns:
         The transformed points. Represents x and y coordinates.
@@ -121,6 +124,7 @@ def transform_points_2D_to_2D(
             The z coordinate will be set to zero.
             Shape: [B, max(P_bs), 2] or [P, 2]
         transform: The transformation to apply to the points.
+            Shape of .get_matrix(): [B, 4, 4] or [1, 4, 4]
 
     Returns:
         The transformed points. Represents x and y coordinates.
