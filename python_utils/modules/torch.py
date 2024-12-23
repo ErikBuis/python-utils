@@ -295,7 +295,7 @@ def tuples_to_ints(t: torch.Tensor, extents: torch.Tensor) -> torch.Tensor:
     factors = torch.tensor(
         [1] + factors[:-1], device=t.device, dtype=torch.int64
     )  # [K]
-    return torch.sum(t * factors, dim=-1)  # [B]
+    return torch.sum(t * factors, dim=1)  # [B]
 
 
 def lexsort(
