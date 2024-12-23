@@ -270,6 +270,34 @@ def swap_idcs_vals_duplicates(x: torch.Tensor) -> torch.Tensor:
     return torch.sort(x).indices
 
 
+def tuples_to_ints(t: torch.Tensor, extents: torch.Tensor) -> torch.Tensor:
+    """Convert tuples of integers into single integers (t-values).
+
+    Args:
+        t: Batch of tuples of integers to convert. Each element in k-th column
+            must be between 0 and extents[k] - 1.
+            Shape: [B, K]
+        extents: Upper bound for each index in the tuples.
+            Shape: [K]
+
+    Returns:
+        The integer representation of the tuples (t-values).
+            Shape: [B]
+    """
+    # Python ints can't overflow, so we can safely do cumprod here.
+    factors = list(itertools.accumulate(extents.tolist(), operator.mul))  # [K]
+
+    if factors[-1] > 2**63 - 1:
+        raise OverflowError(
+            "The largest t-value would cause integer overflow."
+        )
+
+    factors = torch.tensor(
+        [1] + factors[:-1], device=t.device, dtype=torch.int64
+    )  # [K]
+    return torch.sum(t * factors, dim=-1)  # [B]
+
+
 def lexsort(
     keys: torch.Tensor | tuple[torch.Tensor, ...], dim: int = -1
 ) -> torch.Tensor:
@@ -317,46 +345,40 @@ def lexsort(
         keys = torch.stack(keys, dim=0)
 
     K = len(keys)
-    D = len(keys.shape)
-    device = keys.device
 
     # If the tensor is an integer tensor, first try sorting by representing
     # each of the "tuples" as a single integer, let's call it the "t-value".
     # This is much faster than lexsorting along the given dimension.
     if keys.dtype in [torch.int8, torch.int16, torch.int32, torch.int64]:
-        # This method can't be used if the largest t-value would cause integer
-        # overflow. Thus, we have to check if the maximum t-value would be
-        # outside the int64 range.
-        dims_not_zero = tuple(range(1, D))
-        dims_expanded = tuple(1 if d != 0 else K for d in range(D))
-        mins = torch.amin(keys, dim=dims_not_zero)  # [K]
-        maxs = torch.amax(keys, dim=dims_not_zero)  # [K]
+        # Check if we can convert the tuples to t-values without overflow.
+        keys_flattened = keys.reshape(K, -1).T  # [N_0 * ... * N_{D-1}, K]
+        maxs = torch.amax(keys_flattened, dim=0)  # [K]
+        mins = torch.amin(keys_flattened, dim=0)  # [K]
         extents = maxs - mins + 1  # [K]
-        # Python ints can't overflow, so we can safely do cumprod here.
-        extents_cumprod = list(
-            itertools.accumulate(extents.tolist(), operator.mul)
-        )  # [K]
-        if extents_cumprod[-1] <= 2**63 - 1:
-            extents_cumprod = torch.tensor(
-                [1] + extents_cumprod[:-1], device=device, dtype=torch.int64
-            )  # [K]
+        keys_flattened -= mins  # [N_0 * ... * N_{D-1}, K]
 
+        try:
             # Convert to t-values.
-            t_values = torch.sum(
-                (keys - mins.reshape(dims_expanded))
-                * extents_cumprod.reshape(dims_expanded),
-                dim=0,
+            t_values = tuples_to_ints(
+                keys_flattened, extents
+            )  # [N_0 * ... * N_{D-1}]
+            t_values = t_values.reshape(
+                keys.shape[1:]
             )  # [N_0, ..., N_dim, ..., N_{D-1}]
 
             # Sort the t-values.
-            return torch.argsort(t_values, dim=dim)
+            return torch.argsort(
+                t_values, dim=dim
+            )  # [N_0, ..., N_dim, ..., N_{D-1}]
+        except OverflowError:
+            pass
 
-    # If the tensor is not an integer tensor, we have to use np.lexsort().
-    # Unfortunately, torch doesn't have a lexsort() equivalent, so we have to
-    # convert to numpy.
+    # If the tensor is not an integer tensor or if overflow would occur when
+    # converting to t-values, we have to use np.lexsort(). Unfortunately,
+    # torch doesn't have a lexsort() equivalent, so we have to use numpy here.
     return torch.from_numpy(
         np.lexsort(keys.detach().cpu().numpy(), axis=dim)
-    ).to(device)
+    ).to(keys.device)
 
 
 def lexsort_along(
