@@ -23,8 +23,8 @@ from ...modules.timeit import measure_times
 
 
 def plot_times(
-    ns: npt.NDArray[np.int_],
-    ms: npt.NDArray[np.int_],
+    ns: npt.NDArray[np.integer],
+    ms: npt.NDArray[np.integer],
     map_to_inputs: Callable[[int, int], Any],
     algorithm1: Callable[..., Any],
     algorithm2: Callable[..., Any],

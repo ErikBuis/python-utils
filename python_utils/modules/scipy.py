@@ -266,9 +266,9 @@ def voronoi_constrain_to_rect(
 ) -> tuple[
     npt.NDArray[np.float64],
     npt.NDArray[np.float64],
-    npt.NDArray[np.int_],
+    npt.NDArray[np.intc],
     list[list[int]],
-    npt.NDArray[np.int_],
+    npt.NDArray[np.signedinteger],
     list[list[int]],
 ]:
     """Compute Voronoi regions, but constrain all regions in a rectangle.
