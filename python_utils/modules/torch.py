@@ -233,7 +233,7 @@ def swap_idcs_vals(x: torch.Tensor) -> torch.Tensor:
         raise ValueError("x must be 1D.")
 
     x_swapped = torch.empty_like(x)
-    x_swapped.scatter_(0, x, torch.arange(x.shape[0], device=x.device))
+    x_swapped[x] = torch.arange(len(x), device=x.device)
     return x_swapped
 
 
