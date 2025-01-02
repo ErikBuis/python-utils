@@ -206,9 +206,13 @@ def start_timer(
     Returns:
         The id of the timer. Pass this id to stop_timer to stop the timer.
     """
+    global __timers
+
+    # Log the message with an ellipsis to indicate that the timer has started.
+    msg = 4 * len(__timers) * " " + msg
     logger.log(logging_level, f"{msg}...")
 
-    global __timers
+    # Find a unique timer id.
     timer_id = 0
     while timer_id in __timers:
         timer_id += 1
@@ -237,6 +241,8 @@ def stop_timer(timer_id: int) -> int:
     # calls.
     stop_time = time.perf_counter_ns()
 
+    # Log the time passed since the corresponding call to start_timer.
+    global __timers
     try:
         timer_config = __timers.pop(timer_id)
     except KeyError:
