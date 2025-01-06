@@ -14,7 +14,7 @@ try:
         ),
     ]
 except ImportError:
-    TensorAnn = Annotated[None, None]
+    pass
 
 try:
     import shapely
@@ -84,11 +84,4 @@ try:
         ),
     ]
 except ImportError:
-    PointAnn = Annotated[None, None]
-    LineStringAnn = Annotated[None, None]
-    LinearRingAnn = Annotated[None, None]
-    PolygonAnn = Annotated[None, None]
-    MultiPointAnn = Annotated[None, None]
-    MultiLineStringAnn = Annotated[None, None]
-    MultiPolygonAnn = Annotated[None, None]
-    MultiGeometryCollectionAnn = Annotated[None, None]
+    pass
