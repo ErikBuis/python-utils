@@ -1,3 +1,5 @@
+# pyright: reportAttributeAccessIssue=false, reportMissingImports=false
+
 from typing import Annotated
 
 from pydantic import GetPydanticSchema
@@ -80,6 +82,20 @@ try:
         GetPydanticSchema(
             lambda tp, handler: core_schema.is_instance_schema(
                 shapely.geometry.GeometryCollection
+            )
+        ),
+    ]
+except ImportError:
+    pass
+
+try:
+    import pytorch3d
+
+    PointCloudsAnn = Annotated[
+        pytorch3d.structures.Pointclouds,
+        GetPydanticSchema(
+            lambda tp, handler: core_schema.is_instance_schema(
+                pytorch3d.structures.Pointclouds
             )
         ),
     ]
