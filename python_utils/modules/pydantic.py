@@ -89,7 +89,7 @@ except ImportError:
     pass
 
 try:
-    import pytorch3d
+    import pytorch3d.structures
 
     PointcloudsAnn = Annotated[
         pytorch3d.structures.Pointclouds,
