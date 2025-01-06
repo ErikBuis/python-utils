@@ -28,9 +28,14 @@ dependencies:
   - pre-commit
   - ipython
   - ipykernel
-  - tqdm
   - pytest
+
+  # Logging
+  - tqdm
   - loguru
+
+  # Pydantic
+  - pydantic
 
   # PyTorch
   - pytorch

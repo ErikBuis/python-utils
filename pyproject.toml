@@ -29,6 +29,9 @@ dev = ["pre-commit", "ipython", "ipykernel", "pytest"]
 # Logging
 logging = ["tqdm", "loguru"]
 
+# Pydantic
+pydantic = ["pydantic"]
+
 # PyTorch
 pytorch = [
     "pytorch",
