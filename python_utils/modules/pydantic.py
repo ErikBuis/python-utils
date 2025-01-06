@@ -91,7 +91,7 @@ except ImportError:
 try:
     import pytorch3d
 
-    PointCloudsAnn = Annotated[
+    PointcloudsAnn = Annotated[
         pytorch3d.structures.Pointclouds,
         GetPydanticSchema(
             lambda tp, handler: core_schema.is_instance_schema(
