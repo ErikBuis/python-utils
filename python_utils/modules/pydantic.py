@@ -101,3 +101,25 @@ try:
     ]
 except ImportError:
     pass
+
+try:
+    import geopandas
+
+    GeoSeriesAnn = Annotated[
+        geopandas.GeoSeries,
+        GetPydanticSchema(
+            lambda tp, handler: core_schema.is_instance_schema(
+                geopandas.GeoSeries
+            )
+        ),
+    ]
+    GeoDataFrameAnn = Annotated[
+        geopandas.GeoDataFrame,
+        GetPydanticSchema(
+            lambda tp, handler: core_schema.is_instance_schema(
+                geopandas.GeoDataFrame
+            )
+        ),
+    ]
+except ImportError:
+    pass
