@@ -1,7 +1,6 @@
 from typing import NamedTuple, cast
 
 import geopandas as gpd
-import numpy as np
 import pandas as pd
 import torch
 from shapely import LinearRing, MultiPolygon, Polygon
@@ -364,25 +363,30 @@ def __count_freqs_until(
 
 
 def LinearRing2LinearRingVertices(
-    linearring: LinearRing, device: torch.device | str = "cpu"
+    linearring: LinearRing,
+    dtype: torch.dtype = torch.float32,
+    device: torch.device | str = "cpu",
 ) -> LinearRingVertices:
     """Convert a LinearRing object to a LinearRingVertices object.
 
     Args:
         linearring: The LinearRing object.
+        dtype: The data type of the output vertices.
         device: The device to use.
 
     Returns:
         The vertices of the LinearRing object as a LinearRingVertices object.
     """
     vertices = torch.tensor(
-        linearring.coords, dtype=torch.float64, device=device
+        linearring.coords, dtype=dtype, device=device
     )  # [V, 2]
     return LinearRingVertices(vertices)
 
 
 def LinearRings2LinearRingsVertices(
-    linearrings: gpd.GeoSeries, device: torch.device | str = "cpu"
+    linearrings: gpd.GeoSeries,
+    dtype: torch.dtype = torch.float32,
+    device: torch.device | str = "cpu",
 ) -> LinearRingsVertices:
     """Convert a batch of LinearRing objects to a LinearRingsVertices object.
 
@@ -390,6 +394,7 @@ def LinearRings2LinearRingsVertices(
         linearrings: The GeoSeries of LinearRing objects. Can also contain
             NaN/None values, these will be handled correctly by inserting
             an empty row into the output.
+        dtype: The data type of the output vertices.
         device: The device to use.
 
     Returns:
@@ -402,8 +407,8 @@ def LinearRings2LinearRingsVertices(
     vertices_df = linearrings.get_coordinates()  # [sum(V_bs), 2]
     V_bs = __count_freqs_until(vertices_df, len(linearrings), device)  # [B]
     vertices_packed = torch.from_numpy(
-        vertices_df.to_numpy(dtype=np.float64)
-    ).to(device=device)  # [sum(V_bs), 2]  # fmt: skip
+        vertices_df.to_numpy()
+    ).to(dtype=dtype, device=device)  # [sum(V_bs), 2]  # fmt: skip
     vertices = pad_packed_batched(
         vertices_packed, V_bs, int(V_bs.max()) if len(V_bs) > 0 else 0
     )  # [B, max(V_bs), 2]
@@ -411,30 +416,36 @@ def LinearRings2LinearRingsVertices(
 
 
 def Polygon2PolygonExterior(
-    polygon: Polygon, device: torch.device | str = "cpu"
+    polygon: Polygon,
+    dtype: torch.dtype = torch.float32,
+    device: torch.device | str = "cpu",
 ) -> PolygonExterior:
     """Convert a Polygon object to a PolygonExterior object.
 
     Args:
         polygon: The Polygon object.
+        dtype: The data type of the output vertices.
         device: The device to use.
 
     Returns:
         The exterior of the Polygon as a PolygonExterior object.
     """
     (exterior,) = LinearRing2LinearRingVertices(
-        polygon.exterior, device
+        polygon.exterior, dtype, device
     )  # [V, 2]
     return PolygonExterior(exterior)
 
 
 def Polygons2PolygonsExterior(
-    polygons: gpd.GeoSeries, device: torch.device | str = "cpu"
+    polygons: gpd.GeoSeries,
+    dtype: torch.dtype = torch.float32,
+    device: torch.device | str = "cpu",
 ) -> PolygonsExterior:
     """Convert a batch of Polygon objects to a PolygonsExterior object.
 
     Args:
         polygons: The GeoSeries of Polygon objects.
+        dtype: The data type of the output vertices.
         device: The device to use.
 
     Returns:
@@ -442,36 +453,42 @@ def Polygons2PolygonsExterior(
         object.
     """
     exterior, V_bs = LinearRings2LinearRingsVertices(
-        polygons.exterior, device
+        polygons.exterior, dtype, device
     )  # [B, max(V_bs), 2], [B]
     return PolygonsExterior(exterior, V_bs)
 
 
 def Polygon2PolygonInteriors(
-    polygon: Polygon, device: torch.device | str = "cpu"
+    polygon: Polygon,
+    dtype: torch.dtype = torch.float32,
+    device: torch.device | str = "cpu",
 ) -> PolygonInteriors:
     """Convert a Polygon object to a PolygonInteriors object.
 
     Args:
         polygon: The Polygon object.
+        dtype: The data type of the output vertices.
         device: The device to use.
 
     Returns:
         The interiors of the Polygon as a PolygonInteriors object.
     """
     interiors, V_is = LinearRings2LinearRingsVertices(
-        gpd.GeoSeries(polygon.interiors), device
+        gpd.GeoSeries(polygon.interiors), dtype, device
     )  # [I, max(V_is), 2], [I]
     return PolygonInteriors(interiors, V_is)
 
 
 def Polygons2PolygonsInteriors(
-    polygons: gpd.GeoSeries, device: torch.device | str = "cpu"
+    polygons: gpd.GeoSeries,
+    dtype: torch.dtype = torch.float32,
+    device: torch.device | str = "cpu",
 ) -> PolygonsInteriors:
     """Convert a batch of Polygon objects to a PolygonsInteriors object.
 
     Args:
         polygons: The GeoSeries of Polygon objects.
+        dtype: The data type of the output vertices.
         device: The device to use.
 
     Returns:
@@ -483,7 +500,7 @@ def Polygons2PolygonsInteriors(
     )  # [sum(I_bs)]
     I_bs = __count_freqs_until(interiors_series, len(polygons), device)  # [B]
     interiors_packed, V_is_packed = LinearRings2LinearRingsVertices(
-        gpd.GeoSeries(interiors_series.reset_index(drop=True)), device
+        gpd.GeoSeries(interiors_series.reset_index(drop=True)), dtype, device
     )  # [sum(I_bs), max(V_is), 2], [sum(I_bs)]
     I_bs_max = int(I_bs.max())
     interiors = pad_packed_batched(
@@ -494,30 +511,36 @@ def Polygons2PolygonsInteriors(
 
 
 def Polygon2PolygonVertices(
-    polygon: Polygon, device: torch.device | str = "cpu"
+    polygon: Polygon,
+    dtype: torch.dtype = torch.float32,
+    device: torch.device | str = "cpu",
 ) -> PolygonVertices:
     """Convert a Polygon object to a PolygonVertices object.
 
     Args:
         polygon: The Polygon object.
+        dtype: The data type of the output vertices.
         device: The device to use.
 
     Returns:
         The vertices of the Polygon as a PolygonVertices object.
     """
     return PolygonVertices(
-        Polygon2PolygonExterior(polygon, device),
-        Polygon2PolygonInteriors(polygon, device),
+        Polygon2PolygonExterior(polygon, dtype, device),
+        Polygon2PolygonInteriors(polygon, dtype, device),
     )
 
 
 def Polygons2PolygonsVertices(
-    polygons: gpd.GeoSeries, device: torch.device | str = "cpu"
+    polygons: gpd.GeoSeries,
+    dtype: torch.dtype = torch.float32,
+    device: torch.device | str = "cpu",
 ) -> PolygonsVertices:
     """Convert a batch of Polygon objects to a PolygonsVertices object.
 
     Args:
         polygons: The GeoSeries of Polygon objects.
+        dtype: The data type of the output vertices.
         device: The device to use.
 
     Returns:
@@ -525,37 +548,43 @@ def Polygons2PolygonsVertices(
         object.
     """
     return PolygonsVertices(
-        Polygons2PolygonsExterior(polygons, device),
-        Polygons2PolygonsInteriors(polygons, device),
+        Polygons2PolygonsExterior(polygons, dtype, device),
+        Polygons2PolygonsInteriors(polygons, dtype, device),
     )
 
 
 def MultiPolygon2MultiPolygonExterior(
-    multipolygon: MultiPolygon, device: torch.device | str = "cpu"
+    multipolygon: MultiPolygon,
+    dtype: torch.dtype = torch.float32,
+    device: torch.device | str = "cpu",
 ) -> MultiPolygonExterior:
     """Convert a MultiPolygon object to a MultiPolygonExterior object.
 
     Args:
         multipolygon: The MultiPolygon object.
+        dtype: The data type of the output vertices.
         device: The device to use.
 
     Returns:
         The exterior of the MultiPolygon as a MultiPolygonExterior object.
     """
     exterior, V_ps = Polygons2PolygonsExterior(
-        gpd.GeoSeries(multipolygon.geoms), device
+        gpd.GeoSeries(multipolygon.geoms), dtype, device
     )  # [P, max(V_ps), 2], [P]
     return MultiPolygonExterior(exterior, V_ps)
 
 
 def MultiPolygons2MultiPolygonsExterior(
-    multipolygons: gpd.GeoSeries, device: torch.device | str = "cpu"
+    multipolygons: gpd.GeoSeries,
+    dtype: torch.dtype = torch.float32,
+    device: torch.device | str = "cpu",
 ) -> MultiPolygonsExterior:
     """Convert a batch of MultiPolygon objects to a MultiPolygonsExterior
     object.
 
     Args:
         multipolygons: The GeoSeries of MultiPolygon objects.
+        dtype: The data type of the output vertices.
         device: The device to use.
 
     Returns:
@@ -567,7 +596,9 @@ def MultiPolygons2MultiPolygonsExterior(
         polygons_geoseries, len(multipolygons), device
     )  # [B]
     exterior_packed, V_ps_packed = Polygons2PolygonsExterior(
-        cast(gpd.GeoSeries, polygons_geoseries.reset_index(drop=True)), device
+        cast(gpd.GeoSeries, polygons_geoseries.reset_index(drop=True)),
+        dtype,
+        device,
     )  # [sum(P_bs), max(V_ps), 2], [sum(P_bs)]
     P_bs_max = int(P_bs.max())
     exteriors = pad_packed_batched(
@@ -578,31 +609,37 @@ def MultiPolygons2MultiPolygonsExterior(
 
 
 def MultiPolygon2MultiPolygonInteriors(
-    multipolygon: MultiPolygon, device: torch.device | str = "cpu"
+    multipolygon: MultiPolygon,
+    dtype: torch.dtype = torch.float32,
+    device: torch.device | str = "cpu",
 ) -> MultiPolygonInteriors:
     """Convert a MultiPolygon object to a MultiPolygonInteriors object.
 
     Args:
         multipolygon: The MultiPolygon object.
+        dtype: The data type of the output vertices.
         device: The device to use.
 
     Returns:
         The interiors of the MultiPolygon as a MultiPolygonInteriors object.
     """
     interiors, I_ps, V_is = Polygons2PolygonsInteriors(
-        gpd.GeoSeries(multipolygon.geoms), device
+        gpd.GeoSeries(multipolygon.geoms), dtype, device
     )  # [P, max(I_ps), max(V_is), 2], [P], [P, max(I_ps)]
     return MultiPolygonInteriors(interiors, I_ps, V_is)
 
 
 def MultiPolygons2MultiPolygonsInteriors(
-    multipolygons: gpd.GeoSeries, device: torch.device | str = "cpu"
+    multipolygons: gpd.GeoSeries,
+    dtype: torch.dtype = torch.float32,
+    device: torch.device | str = "cpu",
 ) -> MultiPolygonsInteriors:
     """Convert a batch of MultiPolygon objects to a MultiPolygonsInteriors
     object.
 
     Args:
         multipolygons: The GeoSeries of MultiPolygon objects.
+        dtype: The data type of the output vertices.
         device: The device to use.
 
     Returns:
@@ -618,7 +655,9 @@ def MultiPolygons2MultiPolygonsInteriors(
         I_ps_packed,  # [sum(P_bs)]
         V_is_packed,  # [sum(P_bs), max(I_ps)]
     ) = Polygons2PolygonsInteriors(
-        cast(gpd.GeoSeries, polygons_geoseries.reset_index(drop=True)), device
+        cast(gpd.GeoSeries, polygons_geoseries.reset_index(drop=True)),
+        dtype,
+        device,
     )
     P_bs_max = int(P_bs.max())
     interiors = pad_packed_batched(
@@ -632,31 +671,37 @@ def MultiPolygons2MultiPolygonsInteriors(
 
 
 def MultiPolygon2MultiPolygonVertices(
-    multipolygon: MultiPolygon, device: torch.device | str = "cpu"
+    multipolygon: MultiPolygon,
+    dtype: torch.dtype = torch.float32,
+    device: torch.device | str = "cpu",
 ) -> MultiPolygonVertices:
     """Convert a MultiPolygon object to a MultiPolygonVertices object.
 
     Args:
         multipolygon: The MultiPolygon object.
+        dtype: The data type of the output vertices.
         device: The device to use.
 
     Returns:
         The vertices of the MultiPolygon as a MultiPolygonVertices object.
     """
     return MultiPolygonVertices(
-        MultiPolygon2MultiPolygonExterior(multipolygon, device),
-        MultiPolygon2MultiPolygonInteriors(multipolygon, device),
+        MultiPolygon2MultiPolygonExterior(multipolygon, dtype, device),
+        MultiPolygon2MultiPolygonInteriors(multipolygon, dtype, device),
     )
 
 
 def MultiPolygons2MultiPolygonsVertices(
-    multipolygons: gpd.GeoSeries, device: torch.device | str = "cpu"
+    multipolygons: gpd.GeoSeries,
+    dtype: torch.dtype = torch.float32,
+    device: torch.device | str = "cpu",
 ) -> MultiPolygonsVertices:
     """Convert a batch of MultiPolygon objects to a MultiPolygonsVertices
     object.
 
     Args:
         multipolygons: The GeoSeries of MultiPolygon objects.
+        dtype: The data type of the output vertices.
         device: The device to use.
 
     Returns:
@@ -664,19 +709,22 @@ def MultiPolygons2MultiPolygonsVertices(
         MultiPolygonsVertices object.
     """
     return MultiPolygonsVertices(
-        MultiPolygons2MultiPolygonsExterior(multipolygons, device),
-        MultiPolygons2MultiPolygonsInteriors(multipolygons, device),
+        MultiPolygons2MultiPolygonsExterior(multipolygons, dtype, device),
+        MultiPolygons2MultiPolygonsInteriors(multipolygons, dtype, device),
     )
 
 
 def PolygonLike2PolygonLikeExterior(
-    polygon_like: Polygon | MultiPolygon, device: torch.device | str = "cpu"
+    polygon_like: Polygon | MultiPolygon,
+    dtype: torch.dtype = torch.float32,
+    device: torch.device | str = "cpu",
 ) -> PolygonLikeExterior:
     """Convert a Polygon or MultiPolygon object to a PolygonLikeExterior
     object.
 
     Args:
         polygon_like: The Polygon or MultiPolygon object.
+        dtype: The data type of the output vertices.
         device: The device to use.
 
     Returns:
@@ -684,24 +732,27 @@ def PolygonLike2PolygonLikeExterior(
         object.
     """
     if isinstance(polygon_like, Polygon):
-        (exterior,) = Polygon2PolygonExterior(polygon_like, device)
+        (exterior,) = Polygon2PolygonExterior(polygon_like, dtype, device)
         V_ps = torch.tensor([len(exterior)], device=device)
         exterior = exterior.unsqueeze(0)
     else:
         exterior, V_ps = MultiPolygon2MultiPolygonExterior(
-            polygon_like, device
+            polygon_like, dtype, device
         )
     return PolygonLikeExterior(exterior, V_ps)
 
 
 def PolygonLikes2PolygonLikesExterior(
-    polygon_likes: gpd.GeoSeries, device: torch.device | str = "cpu"
+    polygon_likes: gpd.GeoSeries,
+    dtype: torch.dtype = torch.float32,
+    device: torch.device | str = "cpu",
 ) -> PolygonLikesExterior:
     """Convert a batch of Polygon or MultiPolygon objects to a
     PolygonLikesExterior object.
 
     Args:
         polygon_likes: The GeoSeries of Polygon or MultiPolygon objects.
+        dtype: The data type of the output vertices.
         device: The device to use.
 
     Returns:
@@ -709,19 +760,22 @@ def PolygonLikes2PolygonLikesExterior(
         PolygonLikesExterior object.
     """
     exterior, P_bs, V_ps = MultiPolygons2MultiPolygonsExterior(
-        polygon_likes, device
+        polygon_likes, dtype, device
     )
     return PolygonLikesExterior(exterior, P_bs, V_ps)
 
 
 def PolygonLike2PolygonLikeInteriors(
-    polygon_like: Polygon | MultiPolygon, device: torch.device | str = "cpu"
+    polygon_like: Polygon | MultiPolygon,
+    dtype: torch.dtype = torch.float32,
+    device: torch.device | str = "cpu",
 ) -> PolygonLikeInteriors:
     """Convert a Polygon or MultiPolygon object to a PolygonLikeInteriors
     object.
 
     Args:
         polygon_like: The Polygon or MultiPolygon object.
+        dtype: The data type of the output vertices.
         device: The device to use.
 
     Returns:
@@ -729,25 +783,28 @@ def PolygonLike2PolygonLikeInteriors(
         object.
     """
     if isinstance(polygon_like, Polygon):
-        interiors, V_is = Polygon2PolygonInteriors(polygon_like, device)
+        interiors, V_is = Polygon2PolygonInteriors(polygon_like, dtype, device)
         I_ps = torch.tensor([len(interiors)], device=device)
         V_is = V_is.unsqueeze(0)
         interiors = interiors.unsqueeze(0)
     else:
         interiors, I_ps, V_is = MultiPolygon2MultiPolygonInteriors(
-            polygon_like, device
+            polygon_like, dtype, device
         )
     return PolygonLikeInteriors(interiors, I_ps, V_is)
 
 
 def PolygonLikes2PolygonLikesInteriors(
-    polygon_likes: gpd.GeoSeries, device: torch.device | str = "cpu"
+    polygon_likes: gpd.GeoSeries,
+    dtype: torch.dtype = torch.float32,
+    device: torch.device | str = "cpu",
 ) -> PolygonLikesInteriors:
     """Convert a batch of Polygon or MultiPolygon objects to a
     PolygonLikesInteriors object.
 
     Args:
         polygon_likes: The GeoSeries of Polygon or MultiPolygon objects.
+        dtype: The data type of the output vertices.
         device: The device to use.
 
     Returns:
@@ -755,19 +812,22 @@ def PolygonLikes2PolygonLikesInteriors(
         PolygonLikesInteriors object.
     """
     interiors, P_bs, I_ps, V_is = MultiPolygons2MultiPolygonsInteriors(
-        polygon_likes, device
+        polygon_likes, dtype, device
     )
     return PolygonLikesInteriors(interiors, P_bs, I_ps, V_is)
 
 
 def PolygonLike2PolygonLikeVertices(
-    polygon_like: Polygon | MultiPolygon, device: torch.device | str = "cpu"
+    polygon_like: Polygon | MultiPolygon,
+    dtype: torch.dtype = torch.float32,
+    device: torch.device | str = "cpu",
 ) -> PolygonLikeVertices:
     """Convert a Polygon or MultiPolygon object to a PolygonLikeVertices
     object.
 
     Args:
         polygon_like: The Polygon or MultiPolygon object.
+        dtype: The data type of the output vertices.
         device: The device to use.
 
     Returns:
@@ -775,19 +835,22 @@ def PolygonLike2PolygonLikeVertices(
         object.
     """
     return PolygonLikeVertices(
-        PolygonLike2PolygonLikeExterior(polygon_like, device),
-        PolygonLike2PolygonLikeInteriors(polygon_like, device),
+        PolygonLike2PolygonLikeExterior(polygon_like, dtype, device),
+        PolygonLike2PolygonLikeInteriors(polygon_like, dtype, device),
     )
 
 
 def PolygonLikes2PolygonLikesVertices(
-    polygon_likes: gpd.GeoSeries, device: torch.device | str = "cpu"
+    polygon_likes: gpd.GeoSeries,
+    dtype: torch.dtype = torch.float32,
+    device: torch.device | str = "cpu",
 ) -> PolygonLikesVertices:
     """Convert a batch of Polygon or MultiPolygon objects to a
     PolygonLikesVertices object.
 
     Args:
         polygon_likes: The GeoSeries of Polygon or MultiPolygon objects.
+        dtype: The data type of the output vertices.
         device: The device to use.
 
     Returns:
@@ -795,8 +858,8 @@ def PolygonLikes2PolygonLikesVertices(
         PolygonLikesVertices object.
     """
     return PolygonLikesVertices(
-        PolygonLikes2PolygonLikesExterior(polygon_likes, device),
-        PolygonLikes2PolygonLikesInteriors(polygon_likes, device),
+        PolygonLikes2PolygonLikesExterior(polygon_likes, dtype, device),
+        PolygonLikes2PolygonLikesInteriors(polygon_likes, dtype, device),
     )
 
 
