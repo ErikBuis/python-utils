@@ -192,13 +192,11 @@ class Matrix2D:
 
     @overload
     def __matmul__(self, other: "Matrix2D") -> "Matrix2D":
-        """Multiply two matrices."""
-        ...
+        pass
 
     @overload
     def __matmul__(self, other: geometricobject2d) -> geometricobject2d:
-        """Multiply a matrix with a geometric object."""
-        ...
+        pass
 
     def __matmul__(
         self, other: "Matrix2D" | geometricobject2d

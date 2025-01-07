@@ -188,7 +188,7 @@ def determine_extreme_model_metric(
     model: Literal["random", "best", "worst"],
     extreme: Literal["best", "worst"],
 ) -> tuple[float, float, float]:
-    ...  # fmt: skip
+    pass
 
 
 @overload
@@ -199,7 +199,7 @@ def determine_extreme_model_metric(
     model: Literal["random", "best", "worst"],
     extreme: Literal["best", "worst"],
 ) -> tuple[float, float, float]:
-    ...  # fmt: skip
+    pass
 
 
 @overload
@@ -210,7 +210,7 @@ def determine_extreme_model_metric(
     model: Literal["random", "best", "worst"],
     extreme: Literal["best", "worst"],
 ) -> tuple[float, float, float]:
-    ...  # fmt: skip
+    pass
 
 
 def determine_extreme_model_metric(
@@ -219,7 +219,7 @@ def determine_extreme_model_metric(
     metric_to_analyze: str,
     model: Literal["random", "best", "worst"],
     extreme: Literal["best", "worst"],
-) -> float | tuple[float, float, float]:
+) -> tuple[float, float, float]:
     """Calculate the metrics for the best/worst possible model.
 
     Args:
@@ -301,21 +301,21 @@ def determine_extreme_model_metric(
 def log_extreme_model_metric(
     frac_labels_pos: float, frac_preds_pos: float, metric_to_analyze: str
 ) -> None:
-    ...  # fmt: skip
+    pass
 
 
 @overload
 def log_extreme_model_metric(
     frac_labels_pos: float, frac_preds_pos: None, metric_to_analyze: str
 ) -> None:
-    ...  # fmt: skip
+    pass
 
 
 @overload
 def log_extreme_model_metric(
     frac_labels_pos: None, frac_preds_pos: float, metric_to_analyze: str
 ) -> None:
-    ...  # fmt: skip
+    pass
 
 
 def log_extreme_model_metric(

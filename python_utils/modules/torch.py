@@ -496,8 +496,8 @@ def lexsort_along(
 @overload
 def unique_consecutive(  # type: ignore
     x: torch.Tensor,
-    return_inverse: Literal[False] = False,
-    return_counts: Literal[False] = False,
+    return_inverse: Literal[False] = ...,
+    return_counts: Literal[False] = ...,
     dim: int | None = None,
 ) -> torch.Tensor:
     pass
@@ -506,8 +506,8 @@ def unique_consecutive(  # type: ignore
 @overload
 def unique_consecutive(
     x: torch.Tensor,
-    return_inverse: Literal[True] = True,
-    return_counts: Literal[False] = False,
+    return_inverse: Literal[True] = ...,
+    return_counts: Literal[False] = ...,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     pass
@@ -516,8 +516,8 @@ def unique_consecutive(
 @overload
 def unique_consecutive(
     x: torch.Tensor,
-    return_inverse: Literal[False] = False,
-    return_counts: Literal[True] = True,
+    return_inverse: Literal[False] = ...,
+    return_counts: Literal[True] = ...,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     pass
@@ -526,8 +526,8 @@ def unique_consecutive(
 @overload
 def unique_consecutive(
     x: torch.Tensor,
-    return_inverse: Literal[True] = True,
-    return_counts: Literal[True] = True,
+    return_inverse: Literal[True] = ...,
+    return_counts: Literal[True] = ...,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     pass
@@ -737,9 +737,9 @@ def unique_consecutive(
 @overload
 def unique(  # type: ignore
     x: torch.Tensor,
-    return_backmap: Literal[False] = False,
-    return_inverse: Literal[False] = False,
-    return_counts: Literal[False] = False,
+    return_backmap: Literal[False] = ...,
+    return_inverse: Literal[False] = ...,
+    return_counts: Literal[False] = ...,
     dim: int | None = None,
 ) -> torch.Tensor:
     pass
@@ -748,9 +748,9 @@ def unique(  # type: ignore
 @overload
 def unique(
     x: torch.Tensor,
-    return_backmap: Literal[True] = True,
-    return_inverse: Literal[False] = False,
-    return_counts: Literal[False] = False,
+    return_backmap: Literal[True] = ...,
+    return_inverse: Literal[False] = ...,
+    return_counts: Literal[False] = ...,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     pass
@@ -759,9 +759,9 @@ def unique(
 @overload
 def unique(
     x: torch.Tensor,
-    return_backmap: Literal[False] = False,
-    return_inverse: Literal[True] = True,
-    return_counts: Literal[False] = False,
+    return_backmap: Literal[False] = ...,
+    return_inverse: Literal[True] = ...,
+    return_counts: Literal[False] = ...,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     pass
@@ -770,9 +770,9 @@ def unique(
 @overload
 def unique(
     x: torch.Tensor,
-    return_backmap: Literal[False] = False,
-    return_inverse: Literal[False] = False,
-    return_counts: Literal[True] = True,
+    return_backmap: Literal[False] = ...,
+    return_inverse: Literal[False] = ...,
+    return_counts: Literal[True] = ...,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     pass
@@ -781,9 +781,9 @@ def unique(
 @overload
 def unique(
     x: torch.Tensor,
-    return_backmap: Literal[True] = True,
-    return_inverse: Literal[True] = True,
-    return_counts: Literal[False] = False,
+    return_backmap: Literal[True] = ...,
+    return_inverse: Literal[True] = ...,
+    return_counts: Literal[False] = ...,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     pass
@@ -792,9 +792,9 @@ def unique(
 @overload
 def unique(
     x: torch.Tensor,
-    return_backmap: Literal[True] = True,
-    return_inverse: Literal[False] = False,
-    return_counts: Literal[True] = True,
+    return_backmap: Literal[True] = ...,
+    return_inverse: Literal[False] = ...,
+    return_counts: Literal[True] = ...,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     pass
@@ -803,9 +803,9 @@ def unique(
 @overload
 def unique(
     x: torch.Tensor,
-    return_backmap: Literal[False] = False,
-    return_inverse: Literal[True] = True,
-    return_counts: Literal[True] = True,
+    return_backmap: Literal[False] = ...,
+    return_inverse: Literal[True] = ...,
+    return_counts: Literal[True] = ...,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     pass
@@ -814,9 +814,9 @@ def unique(
 @overload
 def unique(
     x: torch.Tensor,
-    return_backmap: Literal[True] = True,
-    return_inverse: Literal[True] = True,
-    return_counts: Literal[True] = True,
+    return_backmap: Literal[True] = ...,
+    return_inverse: Literal[True] = ...,
+    return_counts: Literal[True] = ...,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     pass

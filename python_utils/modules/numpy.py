@@ -217,41 +217,41 @@ def lexsort_along(
 @overload
 def unique_consecutive(  # type: ignore
     x: npt.NDArray,
-    return_inverse: Literal[False] = False,
-    return_counts: Literal[False] = False,
+    return_inverse: Literal[False] = ...,
+    return_counts: Literal[False] = ...,
     axis: int | None = None,
 ) -> npt.NDArray:
-    ...  # fmt: skip
+    pass
 
 
 @overload
 def unique_consecutive(
     x: npt.NDArray,
-    return_inverse: Literal[True] = True,
-    return_counts: Literal[False] = False,
+    return_inverse: Literal[True] = ...,
+    return_counts: Literal[False] = ...,
     axis: int | None = None,
 ) -> tuple[npt.NDArray, npt.NDArray]:
-    ...  # fmt: skip
+    pass
 
 
 @overload
 def unique_consecutive(
     x: npt.NDArray,
-    return_inverse: Literal[False] = False,
-    return_counts: Literal[True] = True,
+    return_inverse: Literal[False] = ...,
+    return_counts: Literal[True] = ...,
     axis: int | None = None,
 ) -> tuple[npt.NDArray, npt.NDArray]:
-    ...  # fmt: skip
+    pass
 
 
 @overload
 def unique_consecutive(
     x: npt.NDArray,
-    return_inverse: Literal[True] = True,
-    return_counts: Literal[True] = True,
+    return_inverse: Literal[True] = ...,
+    return_counts: Literal[True] = ...,
     axis: int | None = None,
 ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
-    ...  # fmt: skip
+    pass
 
 
 def unique_consecutive(

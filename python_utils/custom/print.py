@@ -505,10 +505,9 @@ def __stringify_fast(
     max_line_len: int = 0,
     ignore: tuple[type, ...] | type | None = None,
     line_len_left: int = -1,
-    breaking_allowed: Literal[True] = True,
+    breaking_allowed: Literal[True] = ...,
 ) -> Iterable[str]:
-    # Case where breaking is allowed.
-    ...
+    pass
 
 
 @overload
@@ -518,12 +517,9 @@ def __stringify_fast(
     max_line_len: int = 0,
     ignore: tuple[type, ...] | type | None = None,
     line_len_left: int = -1,
-    breaking_allowed: Literal[False] = False,
+    breaking_allowed: Literal[False] = ...,
 ) -> Iterable[str | None]:
-    # Case where breaking is not allowed.
-    # The function will yield None as soon as a break would be absolutely
-    # necessary, after which it will return immediately.
-    ...
+    pass
 
 
 def __stringify_fast(

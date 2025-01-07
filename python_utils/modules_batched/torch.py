@@ -98,7 +98,7 @@ def replace_padding_batched(  # type: ignore
     values: torch.Tensor,
     L_bs: torch.Tensor,
     padding_value: Any = 0,
-    in_place: Literal[False] = False,
+    in_place: Literal[False] = ...,
 ) -> torch.Tensor:
     pass
 
@@ -108,7 +108,7 @@ def replace_padding_batched(
     values: torch.Tensor,
     L_bs: torch.Tensor,
     padding_value: Any = 0,
-    in_place: Literal[True] = True,
+    in_place: Literal[True] = ...,
 ) -> None:
     pass
 
@@ -699,8 +699,8 @@ def lexsort_along_batched(
 @overload
 def unique_consecutive_batched(  # type: ignore
     x: torch.Tensor,
-    return_inverse: Literal[False] = False,
-    return_counts: Literal[False] = False,
+    return_inverse: Literal[False] = ...,
+    return_counts: Literal[False] = ...,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     ...  # fmt: skip
@@ -709,8 +709,8 @@ def unique_consecutive_batched(  # type: ignore
 @overload
 def unique_consecutive_batched(
     x: torch.Tensor,
-    return_inverse: Literal[True] = True,
-    return_counts: Literal[False] = False,
+    return_inverse: Literal[True] = ...,
+    return_counts: Literal[False] = ...,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     ...  # fmt: skip
@@ -719,8 +719,8 @@ def unique_consecutive_batched(
 @overload
 def unique_consecutive_batched(
     x: torch.Tensor,
-    return_inverse: Literal[False] = False,
-    return_counts: Literal[True] = True,
+    return_inverse: Literal[False] = ...,
+    return_counts: Literal[True] = ...,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     ...  # fmt: skip
@@ -729,8 +729,8 @@ def unique_consecutive_batched(
 @overload
 def unique_consecutive_batched(
     x: torch.Tensor,
-    return_inverse: Literal[True] = True,
-    return_counts: Literal[True] = True,
+    return_inverse: Literal[True] = ...,
+    return_counts: Literal[True] = ...,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     ...  # fmt: skip
@@ -952,9 +952,9 @@ def unique_consecutive_batched(
 @overload
 def unique_batched(  # type: ignore
     x: torch.Tensor,
-    return_backmap: Literal[False] = False,
-    return_inverse: Literal[False] = False,
-    return_counts: Literal[False] = False,
+    return_backmap: Literal[False] = ...,
+    return_inverse: Literal[False] = ...,
+    return_counts: Literal[False] = ...,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     pass
@@ -963,9 +963,9 @@ def unique_batched(  # type: ignore
 @overload
 def unique_batched(
     x: torch.Tensor,
-    return_backmap: Literal[True] = True,
-    return_inverse: Literal[False] = False,
-    return_counts: Literal[False] = False,
+    return_backmap: Literal[True] = ...,
+    return_inverse: Literal[False] = ...,
+    return_counts: Literal[False] = ...,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     pass
@@ -974,9 +974,9 @@ def unique_batched(
 @overload
 def unique_batched(
     x: torch.Tensor,
-    return_backmap: Literal[False] = False,
-    return_inverse: Literal[True] = True,
-    return_counts: Literal[False] = False,
+    return_backmap: Literal[False] = ...,
+    return_inverse: Literal[True] = ...,
+    return_counts: Literal[False] = ...,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     pass
@@ -985,9 +985,9 @@ def unique_batched(
 @overload
 def unique_batched(
     x: torch.Tensor,
-    return_backmap: Literal[False] = False,
-    return_inverse: Literal[False] = False,
-    return_counts: Literal[True] = True,
+    return_backmap: Literal[False] = ...,
+    return_inverse: Literal[False] = ...,
+    return_counts: Literal[True] = ...,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     pass
@@ -996,9 +996,9 @@ def unique_batched(
 @overload
 def unique_batched(
     x: torch.Tensor,
-    return_backmap: Literal[True] = True,
-    return_inverse: Literal[True] = True,
-    return_counts: Literal[False] = False,
+    return_backmap: Literal[True] = ...,
+    return_inverse: Literal[True] = ...,
+    return_counts: Literal[False] = ...,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     pass
@@ -1007,9 +1007,9 @@ def unique_batched(
 @overload
 def unique_batched(
     x: torch.Tensor,
-    return_backmap: Literal[True] = True,
-    return_inverse: Literal[False] = False,
-    return_counts: Literal[True] = True,
+    return_backmap: Literal[True] = ...,
+    return_inverse: Literal[False] = ...,
+    return_counts: Literal[True] = ...,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     pass
@@ -1018,9 +1018,9 @@ def unique_batched(
 @overload
 def unique_batched(
     x: torch.Tensor,
-    return_backmap: Literal[False] = False,
-    return_inverse: Literal[True] = True,
-    return_counts: Literal[True] = True,
+    return_backmap: Literal[False] = ...,
+    return_inverse: Literal[True] = ...,
+    return_counts: Literal[True] = ...,
     dim: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     pass
@@ -1029,9 +1029,9 @@ def unique_batched(
 @overload
 def unique_batched(
     x: torch.Tensor,
-    return_backmap: Literal[True] = True,
-    return_inverse: Literal[True] = True,
-    return_counts: Literal[True] = True,
+    return_backmap: Literal[True] = ...,
+    return_inverse: Literal[True] = ...,
+    return_counts: Literal[True] = ...,
     dim: int | None = None,
 ) -> tuple[
     torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor
