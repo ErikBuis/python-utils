@@ -97,6 +97,10 @@ def stringify(
     return repr_obj
 
 
+# TODO Debug the stringify_fast_*() functions. They currently always end in a
+# TODO stack overflow error.
+
+
 def __stringify_fast_sequence_consecutive(
     obj: Sequence[Any],
     indent_level: int,

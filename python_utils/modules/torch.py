@@ -1061,7 +1061,7 @@ def count_freqs_until(x: torch.Tensor, high: int) -> torch.Tensor:
 
 
 def collate_replace_corrupted(
-    batch: list[Any],
+    batch_list: list[Any],
     dataset: Dataset,
     default_collate_fn: Callable | None = None,
 ) -> Any:
@@ -1088,7 +1088,7 @@ def collate_replace_corrupted(
     https://stackoverflow.com/a/69578320/15636460
 
     Args:
-        batch: Batch from the DataLoader.
+        batch_list: List of samples from the DataLoader.
         dataset: Dataset that the DataLoader is passing through.
         default_collate_fn: The collate function to call once the batch has no
             corrupted samples any more. If None,
@@ -1106,14 +1106,14 @@ def collate_replace_corrupted(
     )
 
     # Filter out all corrupted samples.
-    B = len(batch)
-    batch = [sample for sample in batch if sample is not None]
+    B = len(batch_list)
+    batch_list = [sample for sample in batch_list if sample is not None]
 
     # Replace the corrupted samples with other randomly selected samples.
-    while len(batch) < B:
+    while len(batch_list) < B:
         sample = dataset[random.randint(0, len(dataset) - 1)]  # type: ignore
         if sample is not None:
-            batch.append(sample)
+            batch_list.append(sample)
 
     # When the whole batch is fine, apply the default collate function.
-    return default_collate_fn(batch)
+    return default_collate_fn(batch_list)
