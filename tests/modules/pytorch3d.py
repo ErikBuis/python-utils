@@ -1,3 +1,5 @@
+# pyright: reportConstantRedefinition=false
+
 import unittest
 from collections.abc import Callable
 
@@ -24,21 +26,22 @@ class TestGetMatrixRotateVecAToVecB(unittest.TestCase):
         return v / torch.norm(v)
 
     def __transform_points(
-        self, R: torch.Tensor, a: torch.Tensor
+        self, R: torch.Tensor, x: torch.Tensor
     ) -> torch.Tensor:
         """Transform a batch of 3D points with a rotation matrix.
 
         Args:
-            rot: The rotation matrix to apply to the points.
+            R: The rotation matrix to apply to the points.
                 Shape: [B, 3, 3]
-            points: The points to transform.
+            x: The points to transform. Padding could be arbitrary.
                 Shape: [B, max(P_bs), 3]
 
         Returns:
             The transformed points.
+            Padding could be arbitrary and is not preserved.
                 Shape: [B, max(P_bs), 3]
         """
-        return a.bmm(R)
+        return x.bmm(R)
 
     def test_a_equals_b(self) -> None:
         for _ in range(self.ITERATIONS):

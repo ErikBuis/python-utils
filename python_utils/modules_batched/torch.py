@@ -17,7 +17,7 @@ def mask_padding_batched(L_bs: torch.Tensor, max_L_b: int) -> torch.Tensor:
 
     Returns:
         A mask that indicates which values are valid in each sample.
-            mask[b, i] is True if i < L_bs[b] and False otherwise.
+        mask[b, i] is True if i < L_bs[b] and False otherwise.
             Shape: [B, max(L_bs)]
     """
     dtype = L_bs.dtype
@@ -35,7 +35,7 @@ def pack_padded_batched(
     """Pack a batch of padded values into a single tensor.
 
     Args:
-        values: The values to pack. Padding does not matter.
+        values: The values to pack. Padding could be arbitrary.
             Shape: [B, max(L_bs), *]
         L_bs: The number of valid values in each sample.
             Shape: [B]
@@ -68,7 +68,7 @@ def pad_packed_batched(
             a specific value.
 
     Returns:
-        The padded values.
+        The padded values. Padded with padding_value.
             Shape: [B, max(L_bs), *]
     """
     B = len(L_bs)
@@ -122,7 +122,7 @@ def replace_padding_batched(
     """Pad the values with padding_value to create a tensor with a fixed size.
 
     Args:
-        values: The values to pad.
+        values: The values to pad. Padding could be arbitrary.
             Shape: [B, max(L_bs), *]
         L_bs: The number of valid values in each sample.
             Shape: [B]
@@ -130,7 +130,8 @@ def replace_padding_batched(
         in_place: Whether to perform the operation in-place.
 
     Returns:
-        The padded values. If in_place is True, this is None.
+        The padded values. Padded with padding_value.
+        If in_place is True, this is None.
             Shape: [B, max(L_bs), *]
     """
     max_L_bs = values.shape[1]
@@ -146,8 +147,8 @@ def mean_padding_batched(
     """Calculate the mean per dimension for each sample in the batch.
 
     Args:
-        values: The values to calculate the mean for. If the values are not yet
-            padded with zeros, is_padding_zero must be set to False.
+        values: The values to calculate the mean for. Padded with zeros if
+            is_padding_zero is True. Otherwise, padding could be arbitrary.
             Shape: [B, max(L_bs), *]
         L_bs: The number of valid values in each sample.
             Shape: [B]
@@ -177,9 +178,9 @@ def stddev_padding_batched(
         sqrt(sum((x_i - mean(x))^2) / n)
 
     Args:
-        values: The values to calculate the standard deviation for. If the
-            values are not yet padded with zeros, is_padding_zero must be set
-            to False.
+        values: The values to calculate the standard deviation for. Padded with
+            zeros if is_padding_zero is True. Otherwise, padding could be
+            arbitrary.
             Shape: [B, max(L_bs), *]
         L_bs: The number of valid values in each sample.
             Shape: [B]
@@ -206,8 +207,8 @@ def min_padding_batched(
     """Calculate the minimum per dimension for each sample in the batch.
 
     Args:
-        values: The values to calculate the minimum for. If the values are not
-            yet padded with inf values, is_padding_inf must be set to False.
+        values: The values to calculate the minimum for. Padded with inf values
+            if is_padding_inf is True. Otherwise, padding could be arbitrary.
             Shape: [B, max(L_bs), *]
         L_bs: The number of valid values in each sample.
             Shape: [B]
@@ -235,9 +236,9 @@ def max_padding_batched(
     """Calculate the maximum per dimension for each sample in the batch.
 
     Args:
-        values: The values to calculate the maximum for. If the values are not
-            yet padded with -inf values, is_padding_minus_inf must be set to
-            False.
+        values: The values to calculate the maximum for. Padded with -inf
+            values if is_padding_minus_inf is True. Otherwise, padding could be
+            arbitrary.
             Shape: [B, max(L_bs), *]
         L_bs: The number of valid values in each sample.
             Shape: [B]
@@ -476,9 +477,9 @@ def sample_unique_pairs_batched(
     # 2  1 2 x x x
     # 3  3 4 5 x x
     # 4  6 7 8 9 x
-    # This is done using the `max_P_b - 1 - triu_idcs` trick. However, the
+    # This is done using the max_P_b - 1 - triu_idcs trick. However, the
     # order of the elements is still in reverse, so when indexing, we index at
-    # `-idcs_pairs - 1` instead of `idcs_pairs`.
+    # -idcs_pairs - 1 instead of at idcs_pairs.
     triu_idcs = torch.triu_indices(
         max_L_b, max_L_b, 1, device=device
     )  # [2, max(P_bs)]

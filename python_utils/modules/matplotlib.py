@@ -42,7 +42,7 @@ def get_scalar_mappable(
             automatically. Ignored if use_log_scale is False.
 
     Returns:
-        scalar_mappable: ScalarMappable color map for the coefficients.
+        ScalarMappable color map for the coefficients.
         - Use scalar_mappable.cmap to get the color map.
         - Use scalar_mappable.norm to get the norm.
             The norm maps the range [vmin, vmax] to [0, 1].
@@ -133,14 +133,14 @@ def get_scalar_mappable_middle_white(
             the average between vmin and vmax will be mapped to white.
 
     Returns:
-        scalar_mappable: ScalarMappable color map for the coefficients.
-            Use scalar_mappable.get_cmap() to get the color map.
-            Use scalar_mappable.norm to get the norm.
-                The norm maps the range [vmin, vmax] to [0, 1].
-                To get vmin and vmax, use scalar_mappable.norm.vmin and
-                    scalar_mappable.norm.vmax respectively.
-                To map a value to the range [0, 1], use
-                    scalar_mappable.norm(value).
+        ScalarMappable color map for the coefficients.
+        - Use scalar_mappable.get_cmap() to get the color map.
+        - Use scalar_mappable.norm to get the norm.
+            The norm maps the range [vmin, vmax] to [0, 1].
+            To get vmin and vmax, use scalar_mappable.norm.vmin and
+                scalar_mappable.norm.vmax respectively.
+            To map a value to the range [0, 1], use
+                scalar_mappable.norm(value).
     """
     values = np.array(values)
 
@@ -215,9 +215,8 @@ def arrow3D(
 ) -> None:
     """Add an 3D arrow to an Axes3D instance.
 
-    Note:
-        In contrast to other patches, the default capstyle and joinstyle for
-        Arrow3D are set to "round".
+    Note: In contrast to other patches, the default capstyle and joinstyle for
+    Arrow3D are set to "round".
 
     Args:
         ax: The Axes3D instance to add the arrow to.

@@ -53,13 +53,14 @@ def transform_points_3D_to_3D(
 
     Args:
         points: The points to transform. Should represent x, y, and z
-            coordinates.
+            coordinates. Padding could be arbitrary.
             Shape: [B, max(P_bs), 3] or [P, 3]
         transform: The transformation to apply to the points.
             Shape of .get_matrix(): [B, 4, 4] or [1, 4, 4]
 
     Returns:
         The transformed points. Represents x, y, and z coordinates.
+        Padding could be arbitrary and is not preserved.
             Shape: [B, max(P_bs), 3] or [P, 3]
     """
     return transform.transform_points(
@@ -74,13 +75,14 @@ def transform_points_2D_to_3D(
 
     Args:
         points: The points to transform. Should represent x and y coordinates.
-            The z coordinate will be set to zero.
+            The z coordinate will be set to zero. Padding could be arbitrary.
             Shape: [B, max(P_bs), 2] or [P, 2]
         transform: The transformation to apply to the points.
             Shape of .get_matrix(): [B, 4, 4] or [1, 4, 4]
 
     Returns:
         The transformed points. Represents x, y, and z coordinates.
+        Padding could be arbitrary and is not preserved.
             Shape: [B, max(P_bs), 3] or [P, 3]
     """
     # Transform the points to 3D.
@@ -97,14 +99,15 @@ def transform_points_3D_to_2D(
 
     Args:
         points: The points to transform. Should represent x, y, and z
-            coordinates.
+            coordinates. Padding could be arbitrary.
             Shape: [B, max(P_bs), 3] or [P, 3]
         transform: The transformation to apply to the points.
             Shape of .get_matrix(): [B, 4, 4] or [1, 4, 4]
 
     Returns:
         The transformed points. Represents x and y coordinates.
-            The z coordinate will be ignored.
+        The z coordinate will be ignored.
+        Padding could be arbitrary and is not preserved.
             Shape: [B, max(P_bs), 2] or [P, 2]
     """
     # Transform the points.
@@ -121,14 +124,15 @@ def transform_points_2D_to_2D(
 
     Args:
         points: The points to transform. Should represent x and y coordinates.
-            The z coordinate will be set to zero.
+            The z coordinate will be set to zero. Padding could be arbitrary.
             Shape: [B, max(P_bs), 2] or [P, 2]
         transform: The transformation to apply to the points.
             Shape of .get_matrix(): [B, 4, 4] or [1, 4, 4]
 
     Returns:
         The transformed points. Represents x and y coordinates.
-            The z coordinate will be ignored.
+        The z coordinate will be ignored.
+        Padding could be arbitrary and is not preserved.
             Shape: [B, max(P_bs), 2] or [P, 2]
     """
     # Transform the points to 3D.
@@ -150,9 +154,9 @@ def get_matrix_rotate_vec_a_to_vec_b(
     Useful for rotating a plane onto another plane in 3D.
 
     Warning: The returned matrix is transposed compared to the mathematical
-        conventions! This is because the operation is batched: it is easier to
-        multiply the batch of matrices with a batch column vectors when the
-        matrices are already transposed.
+    conventions! This is because the operation is batched: it is easier to
+    multiply the batch of matrices with a batch column vectors when the
+    matrices are already transposed.
 
     For the mathematical derivation, see:
     https://math.stackexchange.com/questions/180418/
@@ -398,13 +402,13 @@ def estimate_normals(
 ) -> torch.Tensor:
     """Estimate the normals of a batch of point clouds.
 
-    This function is equivalent to `estimate_pointcloud_normals` from
-    PyTorch3D, but it handles the case where the number of points in a point
-    cloud is smaller than the neighborhood size correctly. It does this by
-    decreasing the neighborhood size for the point clouds that are too small.
+    This function is equivalent to estimate_pointcloud_normals from PyTorch3D,
+    but it handles the case where the number of points in a point cloud is
+    smaller than the neighborhood size correctly. It does this by decreasing
+    the neighborhood size for the point clouds that are too small.
 
     Warning: This function does not handle the case where the number of points
-        in a point cloud is one or zero.
+    in a point cloud is one or zero.
     """
     if (
         isinstance(pointclouds, torch.Tensor)

@@ -34,8 +34,8 @@ def load_best_model(
             creating a new directory for the test results.
             Warning: This argument is not yet implemented.
         **kwargs: Additional keyword arguments needed to initialize the model,
-            such as when the `save_hyperparameters()` method was never called
-            or when `save_hyperparameters(ignore=[...])` was used to ignore
+            such as when the save_hyperparameters() method was never called
+            or when save_hyperparameters(ignore=[...]) was used to ignore
             certain hyperparameters. Can also be used to override saved
             hyperparameter values.
 
@@ -44,12 +44,12 @@ def load_best_model(
     """
     if reuse_version:
         raise NotImplementedError(
-            "The `reuse_version` argument is not yet implemented."
+            "The reuse_version argument is not yet implemented."
         )
 
-    # Unfortunately, we cannot use the `trainer.test(ckpt_path="best")` method
-    # without first having called `trainer.fit()`, since the path to the best
-    # model is saved in the `trainer.checkpoint_callback.best_model_path`
+    # Unfortunately, we cannot use the trainer.test(ckpt_path="best") method
+    # without first having called trainer.fit(), since the path to the best
+    # model is saved in the trainer.checkpoint_callback.best_model_path
     # attribute, which is only set during/after training. See this GitHub
     # issue for further details on why this is the default behaviour:
     # https://github.com/Lightning-AI/pytorch-lightning/issues/17312
@@ -72,7 +72,7 @@ def load_best_model(
     list_of_checkpoints = glob(f"{dirpath}/*.ckpt")
     if len(list_of_checkpoints) == 0:
         raise ValueError(
-            '`ckpt_path="best"` is set but `ModelCheckpoint` has not saved any'
+            'ckpt_path="best" is set but ModelCheckpoint has not saved any'
             f" checkpoints to '{dirpath}'"
         )
 
@@ -153,8 +153,8 @@ def load_best_model(
         candidate_models.items(),
         key=lambda kv: (
             kv[1][0] if monitor_mode[1] == "min" else -kv[1][0],
-            kv[1][1]
-        )
+            kv[1][1],
+        ),
     )
 
     # Check if the best model's state_dict is compatible with the given model.
@@ -204,7 +204,7 @@ def load_best_model(
             pass
         else:
             logger.warning(
-                "The `reuse_version` argument is set, but the logger used"
+                "The reuse_version argument is set, but the logger used"
                 " during training is not supported yet. Thus, the logger "
                 " version will not be reused."
             )

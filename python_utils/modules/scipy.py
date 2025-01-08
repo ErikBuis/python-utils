@@ -28,8 +28,8 @@ def plot_fitted_curve(
 ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     """Plot a fitted curve with varying confidence intervals.
 
-    Note: The plotted data will be given labels. Make sure to call
-        ax.legend() after this function if you want to display these labels.
+    Note: The plotted data will be given labels. Make sure to call ax.legend()
+    after this function if you want to display these labels.
 
     Args:
         ax: The axes to plot on.
@@ -66,12 +66,12 @@ def plot_fitted_curve(
 
     Returns:
         Tuple containing:
-        - popt: Optimal values for the parameters so that the sum of the
-            squared residuals of f(x, *popt) - y is minimized.
+        - Optimal values for the parameters so that the sum of the squared
+            residuals of f(x, *popt) - y is minimized.
             Shape: [C]
-        - pcov: The estimated approximate covariance of popt. The diagonals
-            provide the variance of the parameter estimate. To compute one
-            standard deviation errors on the parameters, use
+        - The estimated approximate covariance of popt. The diagonals provide
+            the variance of the parameter estimate. To compute one standard
+            deviation errors on the parameters, use
             perr = np.sqrt(np.diag(pcov)). Note that the relationship between
             cov and parameter error estimates is derived based on a linear
             approximation to the model function around the optimum. When this

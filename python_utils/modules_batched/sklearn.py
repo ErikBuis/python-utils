@@ -29,9 +29,9 @@ def ransac_batched(
     Args:
         lines: The lines to intersect. Each line is represented by a pair
             (r, theta) in Hough space as a tuple containing:
-            - The values of r. Padding does not matter.
+            - The values of r. Padding could be arbitrary.
                 Shape: [B, max(L_bs)]
-            - The values of theta. Padding does not matter.
+            - The values of theta. Padding could be arbitrary.
                 Shape: [B, max(L_bs)]
         L_bs: The number of lines for each sample in the batch.
             Shape: [B]

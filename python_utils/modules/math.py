@@ -67,7 +67,7 @@ def cumprod(iterable: Iterable[NumberT]) -> Iterator[NumberT]:
 def extended_gcd(a: int, b: int) -> tuple[int, int, int]:
     """Calculate (gcd, s, t) in the equation a*s + b*t = gcd(a, b).
 
-    Note: You should use `gcd` from the math library if you're only interested
+    Note: You should use gcd() from the math library if you're only interested
     in the gcd! It is much faster than an iterative implementation in Python.
 
     Args:

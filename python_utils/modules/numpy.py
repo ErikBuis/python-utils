@@ -73,7 +73,7 @@ def pad_sequence(
     """Pad a list of variable length arrays with padding_value.
 
     Note: This function is the numpy equivalent of
-    torch.nn.utils.rnn.pad_sequence. It is slower than the torch
+    torch.nn.utils.rnn.pad_sequence(). It is slower than the torch
     implementation, so please use the latter if you are working with PyTorch
     tensors.
 
@@ -88,7 +88,7 @@ def pad_sequence(
 
     Returns:
         Array of shape [max(L_bs), B, *] if batch_first is False, otherwise
-        array of shape [B, max(L_bs), *].
+        array of shape [B, max(L_bs), *]. Padded with padding_value.
     """
     sequences_arr = [np.array(seq) for seq in sequences]
     star_shape = sequences_arr[0].shape[1:]
@@ -285,10 +285,10 @@ def unique_consecutive(
         Tuple containing:
         - The unique elements.
             Shape: [N_0, ..., N_{axis-1}, N_unique, N_{axis+1}, ..., N_{D-1}]
-        - (optional) if return_inverse is True, the indices where elements
+        - (Optional) If return_inverse is True, the indices where elements
             in the original input ended up in the returned unique values.
             Shape: [N_axis]
-        - (optional) if return_counts is True, the counts for each unique
+        - (Optional) If return_counts is True, the counts for each unique
             element.
             Shape: [N_unique]
 

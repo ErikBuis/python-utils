@@ -63,8 +63,8 @@ def measure_times(
             and kwargs returned by map_to_inputs().
 
     Returns:
-        times: The updated cache of the times it took for the algorithms to
-            execute, including the times for the new inputs.
+        The updated cache of the times it took for the algorithms to execute,
+        including the times for the new inputs.
     """
     logger.info(f"{'n':<9}{'m':<9}{'Algorithm 1':<24}{'Algorithm 2':<24}")
 
