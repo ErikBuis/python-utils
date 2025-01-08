@@ -685,9 +685,9 @@ def unique_consecutive(
     is_change = torch.concatenate(
         [
             (
-                torch.ones((1,), dtype=torch.bool, device=x.device)
+                torch.ones(1, dtype=torch.bool, device=x.device)
                 if N_dim > 0
-                else torch.empty((0,), dtype=torch.bool, device=x.device)
+                else torch.empty(0, dtype=torch.bool, device=x.device)
             ),  # [1] or [0]
             (y[:, :-1] != y[:, 1:]).any(dim=0),  # [N_dim - 1] or [0]
         ],
@@ -718,9 +718,7 @@ def unique_consecutive(
                             (1,), N_dim, dtype=torch.int64, device=x.device
                         )
                         if N_dim > 0
-                        else torch.empty(
-                            (0,), dtype=torch.int64, device=x.device
-                        )
+                        else torch.empty(0, dtype=torch.int64, device=x.device)
                     ),  # [1] or [0]
                 ],
                 dim=0,

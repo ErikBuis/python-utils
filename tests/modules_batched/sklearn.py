@@ -23,8 +23,8 @@ class TestRansacBatched(unittest.TestCase):
         max_r = 20
 
         # Generate random lines.
-        rs = torch.rand(B, max_L_bs) * max_r
-        thetas = torch.rand(B, max_L_bs) * 2 * torch.pi
+        rs = torch.rand((B, max_L_bs)) * max_r
+        thetas = torch.rand((B, max_L_bs)) * 2 * torch.pi
         L_bs = torch.randint(2, max_L_bs + 1, (B,))
         lines = (rs, thetas)
         max_view = max_r * 2

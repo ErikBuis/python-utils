@@ -219,7 +219,7 @@ def __is_point_in_polygon_complex_batched(
     # first point of each sequence to the end of the sequence. This is
     # described in the section "Concave Components, Multiple Components, and
     # Holes" of the above link.
-    zero_point = torch.zeros(1, 2, dtype=dtype, device=device)
+    zero_point = torch.zeros((1, 2), dtype=dtype, device=device)
     point_tensors = [zero_point, exterior]
     for hole in interiors:
         point_tensors.extend([zero_point, hole])

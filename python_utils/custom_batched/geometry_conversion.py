@@ -1064,7 +1064,7 @@ def generate_random_polygon_like() -> Polygon | MultiPolygon:
     # Generate the exterior of the Polygon.
     V = int(rand_int_decreasingly_likely(1)) * 7 + 3  # in [3, inf), E(X) = 10
     vertices = (
-        torch.rand(V, 2) - 0.5
+        torch.rand((V, 2)) - 0.5
     ) * scaling_factor  # in (-inf, inf), E(abs(X)) = 3
     exterior = PolygonExterior(vertices)
 
@@ -1074,7 +1074,7 @@ def generate_random_polygon_like() -> Polygon | MultiPolygon:
     )  # in [0, inf), E(X) = 1  # noqa: E741
     V_is = rand_int_decreasingly_likely(I) * 7 + 3  # in [3, inf), E(X) = 10
     vertices = (
-        torch.rand(I, 0 if I == 0 else int(V_is.max()), 2) - 0.5
+        torch.rand((I, 0 if I == 0 else int(V_is.max()), 2)) - 0.5
     ) * scaling_factor  # in (-inf, inf), E(abs(X)) = 3
     interiors = PolygonInteriors(vertices, V_is)
 

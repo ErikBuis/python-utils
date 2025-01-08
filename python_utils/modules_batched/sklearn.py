@@ -87,7 +87,9 @@ def ransac_batched(
     idcs_random = sample_unique_pairs_batched(L_bs, max_L_b, I)  # [B, I, 2]
     arange_B = torch.arange(B, device=device)  # [B]
 
-    best_intersection = torch.empty(B, 2, dtype=dtype, device=device)  # [B, 2]
+    best_intersection = torch.empty(
+        (B, 2), dtype=dtype, device=device
+    )  # [B, 2]
     best_num_inliers = torch.zeros(B, dtype=torch.int64, device=device)  # [B]
 
     # This variable is used to stop the algorithm early for samples that have
