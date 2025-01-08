@@ -24,7 +24,7 @@ def griddata_batched(
     implement this method here.
 
     Args:
-        points: Point coordinates to interpolate between. Padded does not
+        points: Point coordinates to interpolate between. Padding does not
             matter.
             Shape: [B, max(P_bs), D]
         values: Values per point coordinate. Padding does not matter.
