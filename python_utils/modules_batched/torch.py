@@ -772,7 +772,7 @@ def unique_consecutive_batched(
 
     Returns:
         Tuple containing:
-        - The unique elements.
+        - The unique elements. Padded with zeros.
             Shape: [B, N_0, ..., N_{dim-1}, max(U_bs), N_{dim+1}, ..., N_{D-1}]
         - The amount of unique elements per batch element.
             Shape: [B]
@@ -1081,7 +1081,7 @@ def unique_batched(
     Returns:
         Tuple containing:
         - The unique elements, guaranteed to be sorted along the given
-            dimension.
+            dimension. Padded with zeros.
             Shape: [B, N_0, ..., N_{dim-1}, max(U_bs), N_{dim+1}, ..., N_{D-1}]
         - The amount of unique values per batch element.
             Shape: [B]
