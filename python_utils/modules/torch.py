@@ -171,11 +171,11 @@ def to_tensor(
     # Torch supported types: bool, uint8, int8, int16, int32, int64, float16,
     # float32, float64, complex64, and complex128.
     if isinstance(object, torch.Tensor):
-        return object.to(device, dtype)
+        return object.to(dtype=dtype, device=device)
 
     if isinstance(object, np.ndarray):
         try:
-            return torch.from_numpy(object).to(device, dtype)
+            return torch.from_numpy(object).to(dtype=dtype, device=device)
         except TypeError as e:
             # Try to convert to a supported type before calling from_numpy().
             np2torch_fallbacks = {
@@ -194,7 +194,9 @@ def to_tensor(
                 f"Can't convert np.ndarray of type {object.dtype} to tensor."
                 f" Falling back to type {fallback}."
             )
-            return torch.from_numpy(object.astype(fallback)).to(device, dtype)
+            return torch.from_numpy(object.astype(fallback)).to(
+                dtype=dtype, device=device
+            )
 
     # Last resort: because numpy recognizes more array-like types than torch,
     # we try to convert to numpy first.

@@ -358,7 +358,7 @@ def __count_freqs_until(
         The frequency of each element in x in range(0, high).
             Shape: [high]
     """
-    index = torch.from_numpy(obj_with_index.index.to_numpy()).to(device=device)
+    index = torch.from_numpy(obj_with_index.index.to_numpy()).to(device)
     return count_freqs_until(index, high)
 
 
