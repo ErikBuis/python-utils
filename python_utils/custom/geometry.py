@@ -2913,6 +2913,7 @@ def xiaolin_wu_anti_aliasing(
         - Pixel values between 0 and 1.
             Shape: [S]
     """
+    # Determine if the line is steep.
     steep = abs(y1 - y0) > abs(x1 - x0)
 
     if steep:

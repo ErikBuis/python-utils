@@ -293,7 +293,7 @@ def tuples_to_ints(t: torch.Tensor, extents: torch.Tensor) -> torch.Tensor:
         )
 
     factors = torch.tensor(
-        [1] + factors[:-1], device=t.device, dtype=torch.int64
+        [1] + factors[:-1], dtype=torch.int64, device=t.device
     )  # [K]
     return torch.sum(t * factors, dim=1)  # [B]
 

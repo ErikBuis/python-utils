@@ -82,6 +82,4 @@ def rand_int_decreasingly_likely(*args: Any, **kwargs: Any) -> torch.Tensor:
     Returns:
         A tensor of random integers.
     """
-    return rand_float_decreasingly_likely(*args, **kwargs).to(
-        dtype=torch.int64
-    )
+    return rand_float_decreasingly_likely(*args, **kwargs).long()

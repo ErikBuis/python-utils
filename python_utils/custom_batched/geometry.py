@@ -279,11 +279,13 @@ def is_point_in_polygon_like_batched(
             Shape: [B]
     """
     device = points.device
+
     if isinstance(polygon_like, Polygon):
         return is_point_in_polygon_batched(polygon_like, points)
     in_polygon = torch.zeros(len(points), device=device, dtype=torch.bool)
     for subpolygon in polygon_like.geoms:
         in_polygon |= is_point_in_polygon_batched(subpolygon, points)
+
     return in_polygon
 
 
@@ -366,6 +368,9 @@ def xiaolin_wu_anti_aliasing_batched(
         - The number of pixels in each line segment.
             Shape: [B]
     """
+    device = x0.device
+
+    # Determine if the line is steep.
     steep = torch.abs(y1 - y0) > torch.abs(x1 - x0)  # [B]
 
     # Swap the x and y coordinates to ensure the line is not steep.
@@ -394,9 +399,9 @@ def xiaolin_wu_anti_aliasing_batched(
     S_bs = 2 * (xpxl_end - xpxl_begin + 1)  # [B]
     max_S_bs = int(S_bs.max())
     B = len(S_bs)
-    pixels_x = torch.empty((B, max_S_bs), dtype=torch.int64)
-    pixels_y = torch.empty((B, max_S_bs), dtype=torch.int64)
-    vals = torch.empty((B, max_S_bs), dtype=torch.float64)
+    pixels_x = torch.empty((B, max_S_bs), dtype=torch.int64, device=device)
+    pixels_y = torch.empty((B, max_S_bs), dtype=torch.int64, device=device)
+    vals = torch.empty((B, max_S_bs), dtype=torch.float64, device=device)
 
     # Calculate values used in the main loop.
     x, _ = arange_batched(
@@ -419,8 +424,8 @@ def xiaolin_wu_anti_aliasing_batched(
 
     # Handle the beginning and end of the line segments.
     vals[:, :2] *= xgap_begin.unsqueeze(1)
-    vals[torch.arange(B), S_bs - 2] *= xgap_end
-    vals[torch.arange(B), S_bs - 1] *= xgap_end
+    vals[torch.arange(B, device=device), S_bs - 2] *= xgap_end
+    vals[torch.arange(B, device=device), S_bs - 1] *= xgap_end
 
     # Pad the return values.
     replace_padding_batched(pixels_x, S_bs, in_place=True)

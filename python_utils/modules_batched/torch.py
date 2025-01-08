@@ -518,6 +518,8 @@ def swap_idcs_vals_batched(x: torch.Tensor) -> torch.Tensor:
     if len(x.shape) != 2:
         raise ValueError("x must be a batch of 1D tensors.")
 
+    # TODO I'm pretty sure this scatter_ can be replaced by a gather, and that
+    # TODO it would be faster. I should test this.
     x_swapped = torch.empty_like(x)
     x_swapped.scatter_(
         1, x, torch.arange(x.shape[1], device=x.device).repeat(x.shape[0], 1)
