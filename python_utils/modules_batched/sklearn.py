@@ -85,16 +85,14 @@ def ransac_batched(
     I = int(max_iterations.max())
     P_bs = L_bs * (L_bs - 1) // 2  # [B]
     idcs_random = sample_unique_pairs_batched(L_bs, max_L_b, I)  # [B, I, 2]
-    arange_B = torch.arange(B, device=device)  # [B]
+    arange_B = torch.arange(B, device=device)
 
-    best_intersection = torch.empty(
-        (B, 2), dtype=dtype, device=device
-    )  # [B, 2]
-    best_num_inliers = torch.zeros(B, dtype=torch.int64, device=device)  # [B]
+    best_intersection = torch.empty((B, 2), dtype=dtype, device=device)
+    best_num_inliers = torch.zeros(B, dtype=torch.int64, device=device)
 
     # This variable is used to stop the algorithm early for samples that have
     # already found a good intersection point.
-    is_running = torch.ones(B, dtype=torch.bool, device=device)  # [B]
+    is_running = torch.ones(B, dtype=torch.bool, device=device)
 
     for i in range(I):
         # Only select samples that haven't yet found a good intersection point.
@@ -102,7 +100,7 @@ def ransac_batched(
             break
         samples_running = arange_B[is_running]  # [R]
         R = len(samples_running)
-        arange_R = torch.arange(R, device=device)  # [R]
+        arange_R = torch.arange(R, device=device)
         L_rs = L_bs[samples_running]  # [R]
         max_L_r = int(L_rs.max())
         P_rs = P_bs[samples_running]  # [R]

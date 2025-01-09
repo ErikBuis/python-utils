@@ -282,7 +282,7 @@ def is_point_in_polygon_like_batched(
 
     if isinstance(polygon_like, Polygon):
         return is_point_in_polygon_batched(polygon_like, points)
-    in_polygon = torch.zeros(len(points), device=device, dtype=torch.bool)
+    in_polygon = torch.zeros(len(points), dtype=torch.bool, device=device)
     for subpolygon in polygon_like.geoms:
         in_polygon |= is_point_in_polygon_batched(subpolygon, points)
 
@@ -423,9 +423,10 @@ def xiaolin_wu_anti_aliasing_batched(
     vals[:, 1::2] = fpart_intery
 
     # Handle the beginning and end of the line segments.
+    arange_B = torch.arange(B, device=device)
     vals[:, :2] *= xgap_begin.unsqueeze(1)
-    vals[torch.arange(B, device=device), S_bs - 2] *= xgap_end
-    vals[torch.arange(B, device=device), S_bs - 1] *= xgap_end
+    vals[arange_B, S_bs - 2] *= xgap_end
+    vals[arange_B, S_bs - 1] *= xgap_end
 
     # Pad the return values.
     replace_padding_batched(pixels_x, S_bs, in_place=True)

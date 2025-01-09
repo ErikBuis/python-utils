@@ -63,9 +63,7 @@ def griddata_batched(
     device = points.device
 
     # Initialize the output array.
-    values_interpolated = torch.full(
-        (B, max_X_bs), fill_value, device=device
-    )  # [B, max(X_bs)]
+    values_interpolated = torch.full((B, max_X_bs), fill_value, device=device)
 
     # Loop over the batch and interpolate the values.
     for b in range(B):

@@ -176,7 +176,7 @@ def get_matrix_rotate_vec_a_to_vec_b(
     """
     device_ = torch.device(device) if device is not None else from_n.device
     B = len(from_n)
-    zeros = torch.zeros(B, dtype=dtype, device=device_)  # [B]
+    zeros = torch.zeros(B, dtype=dtype, device=device_)
     u = torch.cross(from_n, to_n, dim=1)  # [B, 3]
     c = torch.sum(from_n * to_n, dim=1, keepdim=True).unsqueeze(2)  # [B, 1, 1]
     v_x = torch.stack([
@@ -249,8 +249,8 @@ class ProjectToSurface(Transform3d):
         # Create the projection matrix.
         B = surface.shape[0]
         n0, n1, n2, d = surface.unbind(-1)  # [B], ...
-        zeros = torch.zeros(B, dtype=dtype, device=device_)  # [B]
-        ones = torch.ones(B, dtype=dtype, device=device_)  # [B]
+        zeros = torch.zeros(B, dtype=dtype, device=device_)
+        ones = torch.ones(B, dtype=dtype, device=device_)
 
         mat = torch.stack([
             torch.stack([1 - n0.square(), -n0 * n1, -n0 * n2, -n0 * d]),

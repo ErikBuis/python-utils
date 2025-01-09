@@ -301,7 +301,7 @@ def arange_batched(
 
     L_bs = ((ends - starts) // steps).long()
     max_L_b = int(L_bs.max())
-    aranges = torch.arange(max_L_b, dtype=dtype, device=device)  # [max(L_bs)]
+    aranges = torch.arange(max_L_b, dtype=dtype, device=device)
     aranges = starts.unsqueeze(1) + aranges * steps.unsqueeze(1)
     aranges[aranges >= ends.unsqueeze(1)] = 0
     if requires_grad:
