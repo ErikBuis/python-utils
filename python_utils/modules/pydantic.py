@@ -4,6 +4,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, GetPydanticSchema
 from pydantic_core import core_schema
+from typing_extensions import Self
 
 
 try:
@@ -42,7 +43,7 @@ try:
         Field(..., alias=...).
         """
 
-        def to(self, device: torch.device | str | int) -> "ToDevice":
+        def to(self, device: torch.device | str | int) -> Self:
             """Move the data to the specified device.
 
             Args:
