@@ -263,7 +263,7 @@ def arange_batched(
     ends: torch.Tensor | None = None,
     steps: torch.Tensor | None = None,
     dtype: torch.dtype | None = None,
-    device: torch.device | None = None,
+    device: torch.device | str | int | None = None,
     requires_grad: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Create a batch of tensors with values in the range [start, end).

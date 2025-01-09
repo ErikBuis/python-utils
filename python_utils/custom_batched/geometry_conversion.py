@@ -335,7 +335,7 @@ Attributes:
 def __count_freqs_until(
     obj_with_index: pd.Series | pd.DataFrame,
     high: int,
-    device: torch.device | str,
+    device: torch.device | str | int | None,
 ) -> torch.Tensor:
     """Count the frequency of each integer index value in range(0, high).
 
@@ -365,7 +365,7 @@ def __count_freqs_until(
 def LinearRing2LinearRingVertices(
     linearring: LinearRing,
     dtype: torch.dtype = torch.float32,
-    device: torch.device | str = "cpu",
+    device: torch.device | str | int | None = "cpu",
 ) -> LinearRingVertices:
     """Convert a LinearRing object to a LinearRingVertices object.
 
@@ -386,7 +386,7 @@ def LinearRing2LinearRingVertices(
 def LinearRings2LinearRingsVertices(
     linearrings: gpd.GeoSeries,
     dtype: torch.dtype = torch.float32,
-    device: torch.device | str = "cpu",
+    device: torch.device | str | int | None = "cpu",
 ) -> LinearRingsVertices:
     """Convert a batch of LinearRing objects to a LinearRingsVertices object.
 
@@ -418,7 +418,7 @@ def LinearRings2LinearRingsVertices(
 def Polygon2PolygonExterior(
     polygon: Polygon,
     dtype: torch.dtype = torch.float32,
-    device: torch.device | str = "cpu",
+    device: torch.device | str | int | None = "cpu",
 ) -> PolygonExterior:
     """Convert a Polygon object to a PolygonExterior object.
 
@@ -439,7 +439,7 @@ def Polygon2PolygonExterior(
 def Polygons2PolygonsExterior(
     polygons: gpd.GeoSeries,
     dtype: torch.dtype = torch.float32,
-    device: torch.device | str = "cpu",
+    device: torch.device | str | int | None = "cpu",
 ) -> PolygonsExterior:
     """Convert a batch of Polygon objects to a PolygonsExterior object.
 
@@ -461,7 +461,7 @@ def Polygons2PolygonsExterior(
 def Polygon2PolygonInteriors(
     polygon: Polygon,
     dtype: torch.dtype = torch.float32,
-    device: torch.device | str = "cpu",
+    device: torch.device | str | int | None = "cpu",
 ) -> PolygonInteriors:
     """Convert a Polygon object to a PolygonInteriors object.
 
@@ -482,7 +482,7 @@ def Polygon2PolygonInteriors(
 def Polygons2PolygonsInteriors(
     polygons: gpd.GeoSeries,
     dtype: torch.dtype = torch.float32,
-    device: torch.device | str = "cpu",
+    device: torch.device | str | int | None = "cpu",
 ) -> PolygonsInteriors:
     """Convert a batch of Polygon objects to a PolygonsInteriors object.
 
@@ -513,7 +513,7 @@ def Polygons2PolygonsInteriors(
 def Polygon2PolygonVertices(
     polygon: Polygon,
     dtype: torch.dtype = torch.float32,
-    device: torch.device | str = "cpu",
+    device: torch.device | str | int | None = "cpu",
 ) -> PolygonVertices:
     """Convert a Polygon object to a PolygonVertices object.
 
@@ -534,7 +534,7 @@ def Polygon2PolygonVertices(
 def Polygons2PolygonsVertices(
     polygons: gpd.GeoSeries,
     dtype: torch.dtype = torch.float32,
-    device: torch.device | str = "cpu",
+    device: torch.device | str | int | None = "cpu",
 ) -> PolygonsVertices:
     """Convert a batch of Polygon objects to a PolygonsVertices object.
 
@@ -556,7 +556,7 @@ def Polygons2PolygonsVertices(
 def MultiPolygon2MultiPolygonExterior(
     multipolygon: MultiPolygon,
     dtype: torch.dtype = torch.float32,
-    device: torch.device | str = "cpu",
+    device: torch.device | str | int | None = "cpu",
 ) -> MultiPolygonExterior:
     """Convert a MultiPolygon object to a MultiPolygonExterior object.
 
@@ -577,7 +577,7 @@ def MultiPolygon2MultiPolygonExterior(
 def MultiPolygons2MultiPolygonsExterior(
     multipolygons: gpd.GeoSeries,
     dtype: torch.dtype = torch.float32,
-    device: torch.device | str = "cpu",
+    device: torch.device | str | int | None = "cpu",
 ) -> MultiPolygonsExterior:
     """Convert a batch of MultiPolygon objects to a MultiPolygonsExterior
     object.
@@ -611,7 +611,7 @@ def MultiPolygons2MultiPolygonsExterior(
 def MultiPolygon2MultiPolygonInteriors(
     multipolygon: MultiPolygon,
     dtype: torch.dtype = torch.float32,
-    device: torch.device | str = "cpu",
+    device: torch.device | str | int | None = "cpu",
 ) -> MultiPolygonInteriors:
     """Convert a MultiPolygon object to a MultiPolygonInteriors object.
 
@@ -632,7 +632,7 @@ def MultiPolygon2MultiPolygonInteriors(
 def MultiPolygons2MultiPolygonsInteriors(
     multipolygons: gpd.GeoSeries,
     dtype: torch.dtype = torch.float32,
-    device: torch.device | str = "cpu",
+    device: torch.device | str | int | None = "cpu",
 ) -> MultiPolygonsInteriors:
     """Convert a batch of MultiPolygon objects to a MultiPolygonsInteriors
     object.
@@ -673,7 +673,7 @@ def MultiPolygons2MultiPolygonsInteriors(
 def MultiPolygon2MultiPolygonVertices(
     multipolygon: MultiPolygon,
     dtype: torch.dtype = torch.float32,
-    device: torch.device | str = "cpu",
+    device: torch.device | str | int | None = "cpu",
 ) -> MultiPolygonVertices:
     """Convert a MultiPolygon object to a MultiPolygonVertices object.
 
@@ -694,7 +694,7 @@ def MultiPolygon2MultiPolygonVertices(
 def MultiPolygons2MultiPolygonsVertices(
     multipolygons: gpd.GeoSeries,
     dtype: torch.dtype = torch.float32,
-    device: torch.device | str = "cpu",
+    device: torch.device | str | int | None = "cpu",
 ) -> MultiPolygonsVertices:
     """Convert a batch of MultiPolygon objects to a MultiPolygonsVertices
     object.
@@ -717,7 +717,7 @@ def MultiPolygons2MultiPolygonsVertices(
 def PolygonLike2PolygonLikeExterior(
     polygon_like: Polygon | MultiPolygon,
     dtype: torch.dtype = torch.float32,
-    device: torch.device | str = "cpu",
+    device: torch.device | str | int | None = "cpu",
 ) -> PolygonLikeExterior:
     """Convert a Polygon or MultiPolygon object to a PolygonLikeExterior
     object.
@@ -745,7 +745,7 @@ def PolygonLike2PolygonLikeExterior(
 def PolygonLikes2PolygonLikesExterior(
     polygon_likes: gpd.GeoSeries,
     dtype: torch.dtype = torch.float32,
-    device: torch.device | str = "cpu",
+    device: torch.device | str | int | None = "cpu",
 ) -> PolygonLikesExterior:
     """Convert a batch of Polygon or MultiPolygon objects to a
     PolygonLikesExterior object.
@@ -768,7 +768,7 @@ def PolygonLikes2PolygonLikesExterior(
 def PolygonLike2PolygonLikeInteriors(
     polygon_like: Polygon | MultiPolygon,
     dtype: torch.dtype = torch.float32,
-    device: torch.device | str = "cpu",
+    device: torch.device | str | int | None = "cpu",
 ) -> PolygonLikeInteriors:
     """Convert a Polygon or MultiPolygon object to a PolygonLikeInteriors
     object.
@@ -797,7 +797,7 @@ def PolygonLike2PolygonLikeInteriors(
 def PolygonLikes2PolygonLikesInteriors(
     polygon_likes: gpd.GeoSeries,
     dtype: torch.dtype = torch.float32,
-    device: torch.device | str = "cpu",
+    device: torch.device | str | int | None = "cpu",
 ) -> PolygonLikesInteriors:
     """Convert a batch of Polygon or MultiPolygon objects to a
     PolygonLikesInteriors object.
@@ -820,7 +820,7 @@ def PolygonLikes2PolygonLikesInteriors(
 def PolygonLike2PolygonLikeVertices(
     polygon_like: Polygon | MultiPolygon,
     dtype: torch.dtype = torch.float32,
-    device: torch.device | str = "cpu",
+    device: torch.device | str | int | None = "cpu",
 ) -> PolygonLikeVertices:
     """Convert a Polygon or MultiPolygon object to a PolygonLikeVertices
     object.
@@ -843,7 +843,7 @@ def PolygonLike2PolygonLikeVertices(
 def PolygonLikes2PolygonLikesVertices(
     polygon_likes: gpd.GeoSeries,
     dtype: torch.dtype = torch.float32,
-    device: torch.device | str = "cpu",
+    device: torch.device | str | int | None = "cpu",
 ) -> PolygonLikesVertices:
     """Convert a batch of Polygon or MultiPolygon objects to a
     PolygonLikesVertices object.

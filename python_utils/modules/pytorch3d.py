@@ -147,7 +147,7 @@ def get_matrix_rotate_vec_a_to_vec_b(
     from_n: torch.Tensor,
     to_n: torch.Tensor,
     dtype: torch.dtype = torch.float32,
-    device: torch.device | None = None,
+    device: torch.device | str | int | None = None,
 ) -> torch.Tensor:
     """Find the matrices that rotate one set of vectors onto another.
 
@@ -174,9 +174,9 @@ def get_matrix_rotate_vec_a_to_vec_b(
         The rotation matrices to rotate from from_n to to_n.
             Shape: [B, 3, 3]
     """
-    device_ = torch.device(device) if device is not None else from_n.device
+    device = device if device is not None else from_n.device
     B = len(from_n)
-    zeros = torch.zeros(B, dtype=dtype, device=device_)
+    zeros = torch.zeros(B, dtype=dtype, device=device)
     u = torch.cross(from_n, to_n, dim=1)  # [B, 3]
     c = torch.sum(from_n * to_n, dim=1, keepdim=True).unsqueeze(2)  # [B, 1, 1]
     v_x = torch.stack([
@@ -185,7 +185,7 @@ def get_matrix_rotate_vec_a_to_vec_b(
         torch.stack([-u[:, 1], u[:, 0], zeros]),
     ])  # [3, 3, B]
     v_x = v_x.permute(2, 1, 0)  # [B, 3, 3]
-    I = torch.eye(3, dtype=dtype, device=device_)  # [3, 3]  # noqa: E741
+    I = torch.eye(3, dtype=dtype, device=device)  # [3, 3]  # noqa: E741
     return torch.where(
         # Test whether the vectors are opposites.
         (from_n + to_n).abs() > 1e-7,
@@ -210,7 +210,7 @@ class ProjectToSurface(Transform3d):
         self,
         surface: torch.Tensor,
         dtype: torch.dtype = torch.float32,
-        device: torch.device | None = None,
+        device: torch.device | str | int | None = None,
     ) -> None:
         """Create a transformation that projects 3D points to a plane in 3D.
 
@@ -231,10 +231,8 @@ class ProjectToSurface(Transform3d):
             device: The device to store the transformation matrix on.
         """
         # Initialize the transformation.
-        device_ = (
-            torch.device(device) if device is not None else surface.device
-        )
-        super().__init__(dtype=dtype, device=device_)
+        device = torch.device(device) if device is not None else surface.device
+        super().__init__(dtype=dtype, device=device)
 
         # Perform error handling.
         if surface.ndim == 1:
@@ -244,13 +242,13 @@ class ProjectToSurface(Transform3d):
                 "surface must have shape [4] or [B, 4], but got"
                 f" {surface.shape}"
             )
-        surface = surface.to(dtype=dtype, device=device_)
+        surface = surface.to(dtype=dtype, device=device)
 
         # Create the projection matrix.
         B = surface.shape[0]
         n0, n1, n2, d = surface.unbind(-1)  # [B], ...
-        zeros = torch.zeros(B, dtype=dtype, device=device_)
-        ones = torch.ones(B, dtype=dtype, device=device_)
+        zeros = torch.zeros(B, dtype=dtype, device=device)
+        ones = torch.ones(B, dtype=dtype, device=device)
 
         mat = torch.stack([
             torch.stack([1 - n0.square(), -n0 * n1, -n0 * n2, -n0 * d]),
@@ -292,7 +290,7 @@ class SurfaceToSurface(Transform3d):
         from_surface: torch.Tensor,
         to_surface: torch.Tensor,
         dtype: torch.dtype = torch.float32,
-        device: torch.device | None = None,
+        device: torch.device | str | int | None = None,
     ) -> None:
         """Create a transformation that rotates a surface onto another surface.
 
@@ -329,10 +327,10 @@ class SurfaceToSurface(Transform3d):
             device: The device to store the transformation matrix on.
         """
         # Initialize the transformation.
-        device_ = (
+        device = (
             torch.device(device) if device is not None else from_surface.device
         )
-        super().__init__(dtype=dtype, device=device_)
+        super().__init__(dtype=dtype, device=device)
 
         # Perform error handling.
         if from_surface.ndim == 1:
@@ -342,7 +340,7 @@ class SurfaceToSurface(Transform3d):
                 "from_surface must have shape [4] or [B, 4], but got"
                 f" {from_surface.shape}"
             )
-        from_surface = from_surface.to(dtype=dtype, device=device_)
+        from_surface = from_surface.to(dtype=dtype, device=device)
         if to_surface.ndim == 1:
             to_surface = to_surface.unsqueeze(0)  # [1, 4]
         if to_surface.shape[-1] != 4 or to_surface.ndim > 2:
@@ -350,7 +348,7 @@ class SurfaceToSurface(Transform3d):
                 "to_surface must have shape [4] or [B, 4], but got"
                 f" {to_surface.shape}"
             )
-        to_surface = to_surface.to(dtype=dtype, device=device_)
+        to_surface = to_surface.to(dtype=dtype, device=device)
         if from_surface.shape[0] == 1 and to_surface.shape[0] != 1:
             from_surface = from_surface.expand(to_surface.shape[0], -1)
         if to_surface.shape[0] == 1 and from_surface.shape[0] != 1:
@@ -373,22 +371,22 @@ class SurfaceToSurface(Transform3d):
         # from_v is the point on from_surface closest to the origin.
         from_v = -from_n * from_d.unsqueeze(-1)  # [B, 3]
         matrix1 = Translate(
-            -from_v, dtype=dtype, device=device_
+            -from_v, dtype=dtype, device=device
         ).get_matrix()  # [B, 4, 4]
 
         # Then rotate the points from from_n to to_n.
         rot = get_matrix_rotate_vec_a_to_vec_b(
-            from_n, to_n, dtype=dtype, device=device_
+            from_n, to_n, dtype=dtype, device=device
         )  # [B, 3, 3]
         matrix2 = Rotate(
-            rot, dtype=dtype, device=device_
+            rot, dtype=dtype, device=device
         ).get_matrix()  # [B, 4, 4]
 
         # Finally, translate the points from the origin to to_surface.
         # to_v is the point on to_surface closest to the origin.
         to_v = -to_n * to_d.unsqueeze(-1)  # [B, 3]
         matrix3 = Translate(
-            to_v, dtype=dtype, device=device_
+            to_v, dtype=dtype, device=device
         ).get_matrix()  # [B, 4, 4]
 
         self._matrix = matrix1.bmm(matrix2).bmm(matrix3)  # [B, 4, 4]

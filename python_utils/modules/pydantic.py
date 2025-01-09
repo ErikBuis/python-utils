@@ -42,7 +42,7 @@ try:
         Field(..., alias=...).
         """
 
-        def to(self, device: torch.device) -> "ToDevice":
+        def to(self, device: torch.device | str | int) -> "ToDevice":
             """Move the data to the specified device.
 
             Args:

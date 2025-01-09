@@ -154,7 +154,7 @@ def cumsum_start_0(
 def to_tensor(
     object: object,
     dtype: torch.dtype | None = None,
-    device: torch.device | None = None,
+    device: torch.device | str | int | None = None,
 ) -> torch.Tensor:
     """Convert an object to a tensor.
 
