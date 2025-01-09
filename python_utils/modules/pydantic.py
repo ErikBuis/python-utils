@@ -32,6 +32,14 @@ try:
         attributes that themselves have a to() method to the specified device.
         Some inner attributes might still be shared between the original and
         moved object.
+
+        Note: This class is only available if Pytorch Lightning is installed.
+
+        Note: This class will automatically recognize which attributes are
+        movable using to() and which are not. If an attribute is not movable,
+        it will be left as is. The class will also automatically infer the
+        model fields and correctly handle alias fields defined using
+        Field(..., alias=...).
         """
 
         def to(self, device: torch.device) -> "ToDevice":
