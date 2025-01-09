@@ -1,8 +1,8 @@
-# pyright: reportAttributeAccessIssue=false, reportMissingImports=false
+# pyright: reportMissingImports=false, reportAttributeAccessIssue=false
 
 from typing import Annotated
 
-from pydantic import GetPydanticSchema
+from pydantic import BaseModel, GetPydanticSchema
 from pydantic_core import core_schema
 
 
@@ -15,6 +15,41 @@ try:
             lambda tp, handler: core_schema.is_instance_schema(torch.Tensor)
         ),
     ]
+except ImportError:
+    pass
+
+try:
+    import torch
+    from lightning.pytorch.utilities import move_data_to_device
+
+    class ToDevice(BaseModel):
+        """A custom type for data that can be moved to a device using to().
+
+        This is useful for e.g. letting Pytorch Lightning be able to move the
+        data to the correct device automatically when training on a GPU.
+
+        Warning: The to() does not deep copy the object, it only moves inner
+        attributes that themselves have a to() method to the specified device.
+        Some inner attributes might still be shared between the original and
+        moved object.
+        """
+
+        def to(self, device: torch.device) -> "ToDevice":
+            """Move the data to the specified device.
+
+            Args:
+                device: The device to move the data to.
+
+            Returns:
+                Data with the inner attributes moved to the specified device.
+            """
+            return self.model_copy(
+                update={
+                    k: move_data_to_device(getattr(self, k), device)
+                    for k in self.model_fields
+                }
+            )
+
 except ImportError:
     pass
 
