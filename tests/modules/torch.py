@@ -6,6 +6,7 @@ import torch
 from python_utils.modules.torch import (
     interp,
     lexsort_along,
+    ravel_multi_index,
     swap_idcs_vals,
     swap_idcs_vals_duplicates,
     unique,
@@ -24,6 +25,68 @@ class TestInterp(unittest.TestCase):
                 interp(x, xp, fp, left, right),
                 torch.from_numpy(
                     np.interp(x, xp, fp, left, right).astype(np.float32)
+                ),
+            )
+        )
+
+
+class TestRavelMultiIndex(unittest.TestCase):
+    def test_ravel_multi_index_equivalent_np(self) -> None:
+        dims = torch.arange(10, 20)  # [10]
+        multi_index = torch.stack(
+            [torch.randint(0, int(dim), (10, 10)) for dim in dims]
+        )  # [10, 10, 10]
+        self.assertTrue(
+            torch.equal(
+                ravel_multi_index(multi_index, dims),
+                torch.from_numpy(
+                    np.ravel_multi_index(
+                        multi_index.numpy(), dims.numpy()  # type: ignore
+                    )
+                ),
+            )
+        )
+        self.assertTrue(
+            torch.equal(
+                ravel_multi_index(multi_index, dims, order="F"),
+                torch.from_numpy(
+                    np.ravel_multi_index(
+                        multi_index.numpy(),  # type: ignore
+                        dims.numpy(),  # type: ignore
+                        order="F",
+                    )
+                ),
+            )
+        )
+        multi_index = torch.stack([
+            torch.concatenate([
+                torch.randint(-2 * int(dim), -int(dim), (5, 10)),
+                torch.randint(int(dim), 2 * int(dim), (5, 10)),
+            ])
+            for dim in dims
+        ])  # [10, 10, 10]
+        self.assertRaises(ValueError, ravel_multi_index, multi_index, dims)
+        self.assertTrue(
+            torch.equal(
+                ravel_multi_index(multi_index, dims, mode="wrap"),
+                torch.from_numpy(
+                    np.ravel_multi_index(
+                        multi_index.numpy(),  # type: ignore
+                        dims.numpy(),  # type: ignore
+                        mode="wrap",
+                    )
+                ),
+            )
+        )
+        self.assertTrue(
+            torch.equal(
+                ravel_multi_index(multi_index, dims, mode="clip"),
+                torch.from_numpy(
+                    np.ravel_multi_index(
+                        multi_index.numpy(),  # type: ignore
+                        dims.numpy(),  # type: ignore
+                        mode="clip",
+                    )
                 ),
             )
         )

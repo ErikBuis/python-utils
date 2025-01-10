@@ -1,5 +1,3 @@
-import itertools
-import operator
 import random
 import warnings
 from typing import Any, Callable, Literal, overload
@@ -27,9 +25,9 @@ def interp(
     right: float | None = None,
     period: float | None = None,
 ) -> torch.Tensor:
-    """Like numpy.interp, but for PyTorch tensors.
+    """Like numpy.interp(), but for PyTorch tensors.
 
-    This function is a direct translation of numpy.interp to PyTorch tensors.
+    This function is a direct translation of numpy.interp() to PyTorch tensors.
     It performs linear interpolation on a 1D tensor.
 
     Args:
@@ -231,7 +229,7 @@ def swap_idcs_vals(x: torch.Tensor) -> torch.Tensor:
         >>> swap_idcs_vals(x)
         tensor([2, 4, 0, 1, 3])
     """
-    if len(x.shape) != 1:
+    if x.ndim != 1:
         raise ValueError("x must be 1D.")
 
     x_swapped = torch.empty_like(x)
@@ -264,7 +262,7 @@ def swap_idcs_vals_duplicates(x: torch.Tensor) -> torch.Tensor:
         >>> swap_idcs_vals_duplicates(x)
         tensor([2, 0, 3, 1, 4])
     """
-    if len(x.shape) != 1:
+    if x.ndim != 1:
         raise ValueError("x must be 1D.")
 
     # Believe it or not, this O(n log n) algorithm is actually faster than a
@@ -272,32 +270,88 @@ def swap_idcs_vals_duplicates(x: torch.Tensor) -> torch.Tensor:
     return torch.sort(x).indices
 
 
-def tuples_to_ints(t: torch.Tensor, extents: torch.Tensor) -> torch.Tensor:
-    """Convert tuples of integers into single integers (t-values).
+def ravel_multi_index(
+    multi_index: torch.Tensor,
+    dims: torch.Tensor,
+    mode: Literal["raise", "wrap", "clip"] = "raise",
+    order: Literal["C", "F"] = "C",
+) -> torch.Tensor:
+    """Like numpy.ravel_multi_index(), but for PyTorch tensors.
+
+    Converts a tuple of index arrays into an array of flat indices, applying
+    boundary modes to the multi-index.
+
+    Warning: Unlike numpy.ravel_multi_index(), this function does not raise an
+    error if integer overflow occurs. Instead, it will silently wrap around
+    and return incorrect results. Be careful when using this function with
+    large tensors.
+
+    Warning: Unlike numpy.ravel_multi_index(), this function does not support
+    the mode being a tuple of modes.
 
     Args:
-        t: Batch of tuples of integers to convert. Each element in k-th column
-            must be between 0 and extents[k] - 1.
-            Shape: [B, K]
-        extents: Upper bound for each index in the tuples.
+        multi_index: A tensor of shape [K, N_0, ..., N_{D-1}] or a tuple
+            containing K [N_0, ..., N_{D-1}]-shaped sequences. K refers to the
+            amount of elements in the tuples.
+        dims: The shape of the array into which the indices point.
             Shape: [K]
+        mode: Specifies how out-of-bounds indices are handled. Can specify
+            either one mode or a tuple of modes, one mode per index.
+            - "raise": Raise an error (default).
+            - "wrap": Wrap around.
+            - "clip": Clip to the range.
+            In "clip" mode, a negative index which would normally wrap will
+            clip to 0 instead.
+        order: Determines whether the multi-index should be viewed as indexing
+            in row-major (C-style) or column-major (Fortran-style) order.
 
     Returns:
-        The integer representation of the tuples (t-values).
-            Shape: [B]
+        Tensor of indices into the flattened version of an array of shape dims.
+            Shape: [N_0, ..., N_{D-1}]
     """
-    # Python ints can't overflow, so we can safely do cumprod here.
-    factors = list(itertools.accumulate(extents.tolist(), operator.mul))  # [K]
+    if isinstance(multi_index, tuple):
+        multi_index = torch.stack(multi_index, dim=0)
 
-    if factors[-1] > 2**63 - 1:
-        raise OverflowError(
-            "The largest t-value would cause integer overflow."
+    if order == "C":
+        factors = torch.concatenate([
+            dims[1:].flip(0).cumprod(0, dtype=torch.int64).flip(0),
+            torch.ones(1, dtype=torch.int64, device=dims.device),
+        ])  # [K]
+    elif order == "F":
+        factors = torch.concatenate([
+            torch.ones(1, dtype=torch.int64, device=dims.device),
+            dims[:-1].cumprod(0, dtype=torch.int64),
+        ])  # [K]
+    else:
+        raise ValueError("only 'C' or 'F' order is permitted")
+
+    dims = dims.reshape(
+        -1, *(1 for _ in range(multi_index.ndim - 1))
+    )  # [K, 1, ..., 1]
+    factors = factors.reshape(
+        -1, *([1] * (multi_index.ndim - 1))
+    )  # [K, 1, ..., 1]
+
+    if mode == "raise":
+        # Raise an error if the multi-index is out of bounds.
+        if not torch.all(multi_index.abs() < dims):
+            raise ValueError(
+                "invalid dims: array size defined by dims is larger than the"
+                " maximum possible size."
+            )
+    elif mode == "wrap":
+        # Wrap around the multi-index.
+        multi_index = multi_index % dims
+    elif mode == "clip":
+        # Clip the multi-index to the range.
+        multi_index = torch.clamp(multi_index, torch.tensor(0), dims - 1)
+    else:
+        raise ValueError(
+            "clipmode must be one of 'clip', 'raise', or 'wrap' (got"
+            f" '{mode}')"
         )
 
-    factors = torch.tensor(
-        [1] + factors[:-1], dtype=torch.int64, device=t.device
-    )  # [K]
-    return torch.sum(t * factors, dim=1)  # [B]
+    return torch.sum(multi_index * factors, dim=0)  # [N_0, ..., N_{D-1}]
 
 
 def lexsort(
@@ -346,37 +400,27 @@ def lexsort(
     if isinstance(keys, tuple):
         keys = torch.stack(keys, dim=0)
 
-    K = len(keys)
-
     # If the tensor is an integer tensor, first try sorting by representing
-    # each of the "tuples" as a single integer, let's call it the "t-value".
-    # This is much faster than lexsorting along the given dimension.
-    if keys.dtype in [torch.int8, torch.int16, torch.int32, torch.int64]:
-        # Check if we can convert the tuples to t-values without overflow.
-        keys_flattened = keys.reshape(K, -1).T  # [N_0 * ... * N_{D-1}, K]
-        maxs = torch.amax(keys_flattened, dim=0)  # [K]
-        mins = torch.amin(keys_flattened, dim=0)  # [K]
-        extents = maxs - mins + 1  # [K]
-        keys_flattened -= mins  # [N_0 * ... * N_{D-1}, K]
+    # each of the "tuples" as a single integer. This is much faster than
+    # lexsorting along the given dimension.
+    if keys.dtype in (torch.int8, torch.int16, torch.int32, torch.int64):
+        # Compute the minimum and maximum values for each key.
+        dims_flat = tuple(range(1, keys.ndim))
+        maxs = torch.amax(keys, dim=dims_flat, keepdim=True)  # [K, 1, ..., 1]
+        mins = torch.amin(keys, dim=dims_flat, keepdim=True)  # [K, 1, ..., 1]
+        extents = (maxs - mins + 1).squeeze(dim=dims_flat)  # [K]
+        keys_dense = keys - mins  # [K, N_0, ..., N_dim, ..., N_{D-1}]
 
-        try:
-            # Convert to t-values.
-            t_values = tuples_to_ints(
-                keys_flattened, extents
-            )  # [N_0 * ... * N_{D-1}]
-            t_values = t_values.reshape(
-                keys.shape[1:]
-            )  # [N_0, ..., N_dim, ..., N_{D-1}]
+        # Convert the tuples to single integers.
+        idcs = ravel_multi_index(
+            keys_dense, extents, mode="raise", order="F"
+        )  # [N_0, ..., N_dim, ..., N_{D-1}]
 
-            # Sort the t-values.
-            return torch.argsort(
-                t_values, dim=dim
-            )  # [N_0, ..., N_dim, ..., N_{D-1}]
-        except OverflowError:
-            pass
+        # Sort the integers.
+        return torch.argsort(idcs, dim=dim)  # [N_0, ..., N_dim, ..., N_{D-1}]
 
     # If the tensor is not an integer tensor or if overflow would occur when
-    # converting to t-values, we have to use np.lexsort(). Unfortunately,
+    # converting to integers, we have to use np.lexsort(). Unfortunately,
     # torch doesn't have a lexsort() equivalent, so we have to use numpy here.
     return torch.from_numpy(
         np.lexsort(keys.detach().cpu().numpy(), axis=dim)

@@ -515,7 +515,7 @@ def swap_idcs_vals_batched(x: torch.Tensor) -> torch.Tensor:
         tensor([[2, 4, 0, 1, 3],
                 [3, 0, 2, 1, 4]])
     """
-    if len(x.shape) != 2:
+    if x.ndim != 2:
         raise ValueError("x must be a batch of 1D tensors.")
 
     # TODO I'm pretty sure this scatter_ can be replaced by a gather, and that
