@@ -86,7 +86,9 @@ def load_best_model(
         defaultdict(dict)
     )
     for checkpoint in list_of_checkpoints:
-        curr_model = torch.load(checkpoint, map_location=map_location)
+        curr_model = torch.load(
+            checkpoint, map_location=map_location, weights_only=True
+        )
         for callback_name, keys in curr_model["callbacks"].items():
             if callback_name.startswith("ModelCheckpoint"):
                 ckpt_kwargs = eval(callback_name[len("ModelCheckpoint") :])
