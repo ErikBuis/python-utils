@@ -104,8 +104,8 @@ def ransac_batched(
         L_rs = L_bs[samples_running]  # [R]
         max_L_rs = int(L_rs.max())
         P_rs = P_bs[samples_running]  # [R]
-        r_running = r[samples_running, :max_L_rs]  # [R, max(L_r)]
-        theta_running = theta[samples_running, :max_L_rs]  # [R, max(L_r)]
+        r_running = r[samples_running, :max_L_rs]  # [R, max(L_rs)]
+        theta_running = theta[samples_running, :max_L_rs]  # [R, max(L_rs)]
         idcs_random_running = idcs_random[samples_running]  # [R, I, 2]
         best_num_inliers_running = best_num_inliers[samples_running]  # [R]
         max_iterations_running = max_iterations[samples_running]  # [R]
@@ -125,18 +125,18 @@ def ransac_batched(
         )  # [R, 2]
 
         # Count the number of lines that pass close to the intersection point.
-        r_packed = pack_padded_batched(r_running, L_rs)  # [sum(L_r)]
-        theta_packed = pack_padded_batched(theta_running, L_rs)  # [sum(L_r)]
+        r_packed = pack_padded_batched(r_running, L_rs)  # [L]
+        theta_packed = pack_padded_batched(theta_running, L_rs)  # [L]
         intersections_packed = intersections.repeat_interleave(
             L_rs, dim=0
-        )  # [sum(L_r), 2]
+        )  # [L, 2]
         distances_packed = distance_line_to_point_batched(
             (r_packed, theta_packed), intersections_packed
-        )  # [sum(L_r)]
+        )  # [L]
         inlier_threshold_packed = inlier_threshold_running.repeat_interleave(
             L_rs, dim=0
-        )  # [sum(L_r)]
-        is_inlier = distances_packed <= inlier_threshold_packed  # [sum(L_r)]
+        )  # [L]
+        is_inlier = distances_packed <= inlier_threshold_packed  # [L]
         num_inliers = pad_packed_batched(is_inlier, L_rs, max_L_rs).sum(
             dim=1
         )  # [R]

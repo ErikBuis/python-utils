@@ -404,11 +404,11 @@ def LinearRings2LinearRingsVertices(
     # I timed multiple different approaches against each other, so almost all
     # conceivable variations of the below code were compared. This one turned
     # out to be the fastest.
-    vertices_df = linearrings.get_coordinates()  # [sum(V_bs), 2]
+    vertices_df = linearrings.get_coordinates()  # [V, 2]
     V_bs = __count_freqs_until(vertices_df, len(linearrings), device)  # [B]
-    vertices_packed = torch.from_numpy(
-        vertices_df.to_numpy()
-    ).to(dtype=dtype, device=device)  # [sum(V_bs), 2]  # fmt: skip
+    vertices_packed = torch.from_numpy(vertices_df.to_numpy()).to(
+        dtype=dtype, device=device
+    )  # [V, 2]
     vertices = pad_packed_batched(
         vertices_packed, V_bs, int(V_bs.max()) if len(V_bs) > 0 else 0
     )  # [B, max(V_bs), 2]
@@ -497,16 +497,16 @@ def Polygons2PolygonsInteriors(
     """
     interiors_series = (
         cast(pd.Series, polygons.interiors).explode().dropna()
-    )  # [sum(I_bs)]
+    )  # [I]
     I_bs = __count_freqs_until(interiors_series, len(polygons), device)  # [B]
     interiors_packed, V_is_packed = LinearRings2LinearRingsVertices(
         gpd.GeoSeries(interiors_series.reset_index(drop=True)), dtype, device
-    )  # [sum(I_bs), max(V_is), 2], [sum(I_bs)]
-    I_bs_max = int(I_bs.max())
+    )  # [I, max(V_is), 2], [I]
+    max_I_bs = int(I_bs.max())
     interiors = pad_packed_batched(
-        interiors_packed, I_bs, I_bs_max
+        interiors_packed, I_bs, max_I_bs
     )  # [B, max(I_bs), max(V_is), 2]
-    V_is = pad_packed_batched(V_is_packed, I_bs, I_bs_max)  # [B, max(I_bs)]
+    V_is = pad_packed_batched(V_is_packed, I_bs, max_I_bs)  # [B, max(I_bs)]
     return PolygonsInteriors(interiors, I_bs, V_is)
 
 
@@ -591,7 +591,7 @@ def MultiPolygons2MultiPolygonsExterior(
         The exterior of the batch of MultiPolygon objects as a
         MultiPolygonsExterior object.
     """
-    polygons_geoseries = multipolygons.explode()  # [sum(P_bs)]
+    polygons_geoseries = multipolygons.explode()  # [P]
     P_bs = __count_freqs_until(
         polygons_geoseries, len(multipolygons), device
     )  # [B]
@@ -599,12 +599,12 @@ def MultiPolygons2MultiPolygonsExterior(
         cast(gpd.GeoSeries, polygons_geoseries.reset_index(drop=True)),
         dtype,
         device,
-    )  # [sum(P_bs), max(V_ps), 2], [sum(P_bs)]
-    P_bs_max = int(P_bs.max())
+    )  # [P, max(V_ps), 2], [P]
+    max_P_bs = int(P_bs.max())
     exteriors = pad_packed_batched(
-        exterior_packed, P_bs, P_bs_max
+        exterior_packed, P_bs, max_P_bs
     )  # [B, max(P_bs), max(V_ps), 2]
-    V_ps = pad_packed_batched(V_ps_packed, P_bs, P_bs_max)  # [B, max(P_bs)]
+    V_ps = pad_packed_batched(V_ps_packed, P_bs, max_P_bs)  # [B, max(P_bs)]
     return MultiPolygonsExterior(exteriors, P_bs, V_ps)
 
 
@@ -646,26 +646,26 @@ def MultiPolygons2MultiPolygonsInteriors(
         The interiors of the batch of MultiPolygon objects as a
         MultiPolygonsInteriors object.
     """
-    polygons_geoseries = multipolygons.explode()  # [sum(P_bs)]
+    polygons_geoseries = multipolygons.explode()  # [P]
     P_bs = __count_freqs_until(
         polygons_geoseries, len(multipolygons), device
     )  # [B]
     (
-        interiors_packed,  # [sum(P_bs), max(I_ps), max(V_is), 2]
-        I_ps_packed,  # [sum(P_bs)]
-        V_is_packed,  # [sum(P_bs), max(I_ps)]
+        interiors_packed,  # [P, max(I_ps), max(V_is), 2]
+        I_ps_packed,  # [P]
+        V_is_packed,  # [P, max(I_ps)]
     ) = Polygons2PolygonsInteriors(
         cast(gpd.GeoSeries, polygons_geoseries.reset_index(drop=True)),
         dtype,
         device,
     )
-    P_bs_max = int(P_bs.max())
+    max_P_bs = int(P_bs.max())
     interiors = pad_packed_batched(
-        interiors_packed, P_bs, P_bs_max
+        interiors_packed, P_bs, max_P_bs
     )  # [B, max(P_bs), max(I_ps), max(V_is), 2]
-    I_ps = pad_packed_batched(I_ps_packed, P_bs, P_bs_max)  # [B, max(P_bs)]
+    I_ps = pad_packed_batched(I_ps_packed, P_bs, max_P_bs)  # [B, max(P_bs)]
     V_is = pad_packed_batched(
-        V_is_packed, P_bs, P_bs_max
+        V_is_packed, P_bs, max_P_bs
     )  # [B, max(P_bs), max(I_ps)]
     return MultiPolygonsInteriors(interiors, P_bs, I_ps, V_is)
 

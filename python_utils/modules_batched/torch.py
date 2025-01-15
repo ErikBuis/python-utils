@@ -43,7 +43,7 @@ def pack_padded_batched(
 
     Returns:
         The packed values.
-            Shape: [sum(L_bs), *]
+            Shape: [L, *]
     """
     max_L_bs = values.shape[1]
     mask = mask_padding_batched(L_bs, max_L_bs)  # [B, max(L_bs)]
@@ -60,7 +60,7 @@ def pad_packed_batched(
 
     Args:
         values: The values to pad.
-            Shape: [sum(L_bs), *]
+            Shape: [L, *]
         L_bs: The number of valid values in each sample.
             Shape: [B]
         max_L_bs: The maximum number of values of any element in the batch.
@@ -934,9 +934,7 @@ def unique_consecutive_batched(
     )  # [B, N_dim]
 
     # Find the unique values.
-    batch_idcs, dim_idcs = is_change.nonzero(
-        as_tuple=True
-    )  # [sum(U_bs)], [sum(U_bs)]
+    batch_idcs, dim_idcs = is_change.nonzero(as_tuple=True)  # [U], [U]
     U_bs = count_freqs_until(batch_idcs, B)  # [B]
     max_U_bs = int(U_bs.max())
     dim_idcs_padded = pad_packed_batched(
