@@ -7,13 +7,14 @@ from ..modules.torch import count_freqs_until, lexsort
 
 
 @lru_cache(maxsize=8)
-def mask_padding_batched(L_bs: torch.Tensor, max_L_b: int) -> torch.Tensor:
+def mask_padding_batched(L_bs: torch.Tensor, max_L_bs: int) -> torch.Tensor:
     """Create a mask that indicates which values are valid in each sample.
 
     Args:
         L_bs: The number of valid values in each sample.
             Shape: [B]
-        max_L_b: The maximum number of values of any element in the batch.
+        max_L_bs: The maximum number of values of any element in the batch.
+            Must be equal to max(L_bs).
 
     Returns:
         A mask that indicates which values are valid in each sample.
@@ -24,7 +25,7 @@ def mask_padding_batched(L_bs: torch.Tensor, max_L_b: int) -> torch.Tensor:
     device = L_bs.device
 
     return (
-        torch.arange(max_L_b, dtype=dtype, device=device)  # [max(L_bs)]
+        torch.arange(max_L_bs, dtype=dtype, device=device)  # [max(L_bs)]
         < L_bs.unsqueeze(1)  # [B, 1]
     )  # [B, max(L_bs)]  # fmt: skip
 
@@ -45,7 +46,7 @@ def pack_padded_batched(
             Shape: [sum(L_bs), *]
     """
     max_L_bs = values.shape[1]
-    mask = mask_padding_batched(L_bs, max_L_bs)
+    mask = mask_padding_batched(L_bs, max_L_bs)  # [B, max(L_bs)]
     return values[mask]
 
 
@@ -62,7 +63,8 @@ def pad_packed_batched(
             Shape: [sum(L_bs), *]
         L_bs: The number of valid values in each sample.
             Shape: [B]
-        max_L_b: The maximum number of values of any element in the batch.
+        max_L_bs: The maximum number of values of any element in the batch.
+            Must be equal to max(L_bs).
         padding_value: The value to pad the values with. If None, the values
             are padded with random values. This is faster than padding with
             a specific value.
@@ -87,7 +89,7 @@ def pad_packed_batched(
             padded_shape, padding_value, dtype=dtype, device=device
         )
 
-    mask = mask_padding_batched(L_bs, max_L_bs)
+    mask = mask_padding_batched(L_bs, max_L_bs)  # [B, max(L_bs)]
     values_padded[mask] = values
 
     return values_padded
@@ -135,7 +137,7 @@ def replace_padding_batched(
             Shape: [B, max(L_bs), *]
     """
     max_L_bs = values.shape[1]
-    mask = mask_padding_batched(L_bs, max_L_bs)
+    mask = mask_padding_batched(L_bs, max_L_bs)  # [B, max(L_bs)]
     values_padded = values if in_place else values.clone()
     values_padded[~mask] = padding_value
     return values_padded
@@ -258,6 +260,38 @@ def max_padding_batched(
     return values.amax(dim=1)  # [B, *]
 
 
+def move_mask_to_front_batched(
+    values: torch.Tensor,
+    mask: torch.Tensor,
+    L_bs: torch.Tensor,
+    max_L_bs: int,
+    padding_value: Any | None = 0,
+) -> torch.Tensor:
+    """Move the masked values to the front of the tensor.
+
+    Args:
+        values: The values to move the masked values to the front of.
+            Shape: [B, N, *]
+        mask: The mask that indicates which values are valid.
+            Shape: [B, N]
+        L_bs: The number of valid values in each sample.
+            Must be equal to mask.sum(dim=1).
+        max_L_bs: The maximum number of values of any element in the batch.
+            Must be equal to max(L_bs).
+        padding_value: The value to pad the values with. If None, the values
+            are padded with random values. This is faster than padding with
+            a specific value.
+
+    Returns:
+        The values with the masked values moved to the front. Padded with
+        padding_value.
+            Shape: [B, max(L_bs), *]
+    """
+    return pad_packed_batched(
+        values[mask], L_bs, max_L_bs, padding_value=padding_value
+    )  # [B, max(L_bs), *]
+
+
 def arange_batched(
     starts: torch.Tensor,
     ends: torch.Tensor | None = None,
@@ -300,8 +334,8 @@ def arange_batched(
         steps = torch.ones(B, dtype=dtype, device=device)
 
     L_bs = ((ends - starts) // steps).long()
-    max_L_b = int(L_bs.max())
-    aranges = torch.arange(max_L_b, dtype=dtype, device=device)
+    max_L_bs = int(L_bs.max())
+    aranges = torch.arange(max_L_bs, dtype=dtype, device=device)
     aranges = starts.unsqueeze(1) + aranges * steps.unsqueeze(1)
     aranges[aranges >= ends.unsqueeze(1)] = 0
     if requires_grad:
@@ -398,7 +432,7 @@ def interp_batched(
 
 
 def sample_unique_batched(
-    L_bs: torch.Tensor, max_L_b: int, num_samples: int
+    L_bs: torch.Tensor, max_L_bs: int, num_samples: int
 ) -> torch.Tensor:
     """Sample unique indices i in [0, L_b-1] for each element in the batch.
 
@@ -409,7 +443,7 @@ def sample_unique_batched(
     Args:
         L_bs: The number of valid values for each element in the batch.
             Shape: [B]
-        max_L_b: The maximum number of values of any element in the batch.
+        max_L_bs: The maximum number of values of any element in the batch.
         num_samples: The number of indices to sample for each element in the
             batch.
 
@@ -422,7 +456,7 @@ def sample_unique_batched(
     # uniformly# sample with replacement. To do this, the
     # .clamp(min=num_samples) and % L_b operations are used.
     weights = mask_padding_batched(
-        L_bs.clamp(min=num_samples), max_L_b
+        L_bs.clamp(min=num_samples), max_L_bs
     ).double()  # [B, max(L_bs)]
     return (
         torch.multinomial(weights, num_samples)  # [B, num_samples]
@@ -431,7 +465,7 @@ def sample_unique_batched(
 
 
 def sample_unique_pairs_batched(
-    L_bs: torch.Tensor, max_L_b: int, num_samples: int
+    L_bs: torch.Tensor, max_L_bs: int, num_samples: int
 ) -> torch.Tensor:
     """Sample unique pairs of indices (i, j), where i and j are in [0, L_b-1].
 
@@ -442,7 +476,7 @@ def sample_unique_pairs_batched(
     Args:
         L_bs: The number of valid values for each element in the batch.
             Shape: [B]
-        max_L_b: The maximum number of valid values.
+        max_L_bs: The maximum number of valid values.
         num_samples: The number of pairs to sample.
 
     Returns:
@@ -453,11 +487,11 @@ def sample_unique_pairs_batched(
 
     # Compute the number of unique pairs of indices.
     P_bs = L_bs * (L_bs - 1) // 2  # [B]
-    max_P_b = max_L_b * (max_L_b - 1) // 2
+    max_P_bs = max_L_bs * (max_L_bs - 1) // 2
 
     # Select unique pairs of elements for each sample in the batch.
     idcs_pairs = sample_unique_batched(
-        P_bs, max_P_b, num_samples
+        P_bs, max_P_bs, num_samples
     )  # [B, num_samples]
 
     # Convert the pair indices to element indices.
@@ -477,13 +511,13 @@ def sample_unique_pairs_batched(
     # 2  1 2 x x x
     # 3  3 4 5 x x
     # 4  6 7 8 9 x
-    # This is done using the max_P_b - 1 - triu_idcs trick. However, the
+    # This is done using the max_P_bs - 1 - triu_idcs trick. However, the
     # order of the elements is still in reverse, so when indexing, we index at
     # -idcs_pairs - 1 instead of at idcs_pairs.
     triu_idcs = torch.triu_indices(
-        max_L_b, max_L_b, 1, device=device
+        max_L_bs, max_L_bs, 1, device=device
     )  # [2, max(P_bs)]
-    triu_idcs = max_L_b - 1 - triu_idcs
+    triu_idcs = max_L_bs - 1 - triu_idcs
     idcs_elements = triu_idcs[:, -idcs_pairs - 1]  # [2, B, num_samples]
     return idcs_elements.permute(1, 2, 0)  # [B, num_samples, 2]
 

@@ -96,9 +96,11 @@ def pad_sequence(
         (arr.shape[1:] == star_shape) for arr in sequences_arr[1:]
     ), "All arrays must have the same shape after the first dimension."
     B = len(sequences_arr)
-    max_L_b = max(len(arr) for arr in sequences_arr)
+    max_L_bs = max(len(arr) for arr in sequences_arr)
     shape = (
-        (B, max_L_b, *star_shape) if batch_first else (max_L_b, B, *star_shape)
+        (B, max_L_bs, *star_shape)
+        if batch_first
+        else (max_L_bs, B, *star_shape)
     )
     dtype = np.result_type(*sequences_arr)
     padded = np.full(shape, padding_value, dtype=dtype)

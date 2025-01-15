@@ -450,8 +450,8 @@ def estimate_normals(
 
     normals = torch.zeros_like(pointclouds.points_padded())
     for neighborhood_size, idcs in counts.items():
-        max_P_b = pointclouds[idcs].points_padded().shape[1]
-        normals[idcs, :max_P_b] = estimate_pointcloud_normals(
+        max_P_bs = pointclouds[idcs].points_padded().shape[1]
+        normals[idcs, :max_P_bs] = estimate_pointcloud_normals(
             pointclouds[idcs],
             neighborhood_size=neighborhood_size,
             disambiguate_directions=disambiguate_directions,

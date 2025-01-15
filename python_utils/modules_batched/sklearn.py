@@ -59,7 +59,7 @@ def ransac_batched(
         )
 
     r, theta = lines
-    B, max_L_b = r.shape
+    B, max_L_bs = r.shape
     dtype = theta.dtype
     device = theta.device
 
@@ -84,7 +84,7 @@ def ransac_batched(
 
     I = int(max_iterations.max())
     P_bs = L_bs * (L_bs - 1) // 2  # [B]
-    idcs_random = sample_unique_pairs_batched(L_bs, max_L_b, I)  # [B, I, 2]
+    idcs_random = sample_unique_pairs_batched(L_bs, max_L_bs, I)  # [B, I, 2]
     arange_B = torch.arange(B, device=device)
 
     best_intersection = torch.empty((B, 2), dtype=dtype, device=device)
@@ -102,10 +102,10 @@ def ransac_batched(
         R = len(samples_running)
         arange_R = torch.arange(R, device=device)
         L_rs = L_bs[samples_running]  # [R]
-        max_L_r = int(L_rs.max())
+        max_L_rs = int(L_rs.max())
         P_rs = P_bs[samples_running]  # [R]
-        r_running = r[samples_running, :max_L_r]  # [R, max(L_r)]
-        theta_running = theta[samples_running, :max_L_r]  # [R, max(L_r)]
+        r_running = r[samples_running, :max_L_rs]  # [R, max(L_r)]
+        theta_running = theta[samples_running, :max_L_rs]  # [R, max(L_r)]
         idcs_random_running = idcs_random[samples_running]  # [R, I, 2]
         best_num_inliers_running = best_num_inliers[samples_running]  # [R]
         max_iterations_running = max_iterations[samples_running]  # [R]
@@ -137,7 +137,7 @@ def ransac_batched(
             L_rs, dim=0
         )  # [sum(L_r)]
         is_inlier = distances_packed <= inlier_threshold_packed  # [sum(L_r)]
-        num_inliers = pad_packed_batched(is_inlier, L_rs, max_L_r).sum(
+        num_inliers = pad_packed_batched(is_inlier, L_rs, max_L_rs).sum(
             dim=1
         )  # [R]
 
