@@ -554,10 +554,11 @@ def swap_idcs_vals_batched(x: torch.Tensor) -> torch.Tensor:
 
     # TODO I'm pretty sure this scatter_ can be replaced by a gather, and that
     # TODO it would be faster. I should test this.
+    device = x.device
+    B, N = x.shape
+
     x_swapped = torch.empty_like(x)
-    x_swapped.scatter_(
-        1, x, torch.arange(x.shape[1], device=x.device).repeat(x.shape[0], 1)
-    )
+    x_swapped.scatter_(1, x, torch.arange(N, device=device).repeat(B, 1))
     return x_swapped
 
 
@@ -905,6 +906,7 @@ def unique_consecutive_batched(
             " explicitly."
         )
 
+    device = x.device
     B, N_dim = x.shape[0], x.shape[dim + 1]
 
     # Flatten all dimensions except the one we want to operate on.
@@ -922,9 +924,9 @@ def unique_consecutive_batched(
     is_change = torch.concatenate(
         [
             (
-                torch.ones((B, 1), dtype=torch.bool, device=x.device)
+                torch.ones((B, 1), dtype=torch.bool, device=device)
                 if N_dim > 0
-                else torch.empty((B, 0), dtype=torch.bool, device=x.device)
+                else torch.empty((B, 0), dtype=torch.bool, device=device)
             ),  # [B, 1] or [B, 0]
             (y[:, :, :-1] != y[:, :, 1:]).any(
                 dim=1
@@ -943,6 +945,9 @@ def unique_consecutive_batched(
     uniques = index_select_batched(
         x, dim, dim_idcs_padded
     )  # [B, N_0, ..., N_{dim-1}, max(U_bs), N_{dim+1}..., N_{D-1}]
+    replace_padding_batched(
+        dim_idcs_padded, U_bs, padding_value=N_dim, in_place=True
+    )
     uniques = uniques.movedim(
         dim + 1, 1
     )  # [B, max(U_bs), N_0, ..., N_{dim-1}, N_{dim+1}, ..., N_{D-1}]
@@ -966,11 +971,11 @@ def unique_consecutive_batched(
                     dim_idcs_padded,  # [B, max(U_bs)]
                     (
                         torch.full(
-                            (B, 1), N_dim, dtype=torch.int64, device=x.device
+                            (B, 1), N_dim, dtype=torch.int64, device=device
                         )
                         if N_dim > 0
                         else torch.empty(
-                            (B, 0), dtype=torch.int64, device=x.device
+                            (B, 0), dtype=torch.int64, device=device
                         )
                     ),  # [B, 1] or [B, 0]
                 ],
