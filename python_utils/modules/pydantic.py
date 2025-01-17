@@ -1,5 +1,6 @@
 # pyright: reportMissingImports=false, reportAttributeAccessIssue=false
 
+from abc import ABC
 from typing import Annotated
 
 from pydantic import BaseModel, GetPydanticSchema
@@ -23,7 +24,7 @@ try:
     import torch
     from lightning.pytorch.utilities import move_data_to_device
 
-    class ToDevice(BaseModel):
+    class ToDevice(BaseModel, ABC):
         """A custom type for data that can be moved to a device using to().
 
         This is useful for e.g. letting Pytorch Lightning be able to move the
