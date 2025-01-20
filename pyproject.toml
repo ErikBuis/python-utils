@@ -33,17 +33,7 @@ logging = ["tqdm", "loguru"]
 pydantic = ["pydantic"]
 
 # PyTorch
-pytorch = [
-    "pytorch",
-    "torchvision",
-    "torchaudio",
-    "pytorch-cuda",
-    "lightning",
-    "tensorboard",
-]
-
-# PyTorch3D
-pytorch3d = ["pytorch3d", "fvcore", "iopath"]
+pytorch = ["pytorch", "pytorch-cuda", "lightning", "tensorboard"]
 
 # Scientific
 scientific = ["numpy", "scipy", "matplotlib", "rtree"]

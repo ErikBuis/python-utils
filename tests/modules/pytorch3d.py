@@ -1,22 +1,18 @@
 # pyright: reportConstantRedefinition=false
 
 import unittest
-from collections.abc import Callable
 
 import torch
 
-
-try:
-    from python_utils.modules.pytorch3d import get_matrix_rotate_vec_a_to_vec_b
-
-    pytorch3d_installed = True
-except ImportError:
-    pytorch3d_installed = False
-
-    get_matrix_rotate_vec_a_to_vec_b: Callable
+from python_utils.modules.pytorch3d import SurfaceToSurface
 
 
-@unittest.skipUnless(pytorch3d_installed, "PyTorch3D is not installed")
+# fmt: off
+get_matrix_rotate_vec_a_to_vec_b = SurfaceToSurface.\
+    _SurfaceToSurface__get_matrix_rotate_vec_a_to_vec_b  # type: ignore
+# fmt: on
+
+
 class TestGetMatrixRotateVecAToVecB(unittest.TestCase):
     DTYPE = torch.float64  # for torch.float64, the atol 1e-6 is unnecessary
     ITERATIONS = 100

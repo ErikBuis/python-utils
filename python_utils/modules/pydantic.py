@@ -134,20 +134,6 @@ except ImportError:
     pass
 
 try:
-    import pytorch3d.structures
-
-    PointcloudsAnn = Annotated[
-        pytorch3d.structures.Pointclouds,
-        GetPydanticSchema(
-            lambda tp, handler: core_schema.is_instance_schema(
-                pytorch3d.structures.Pointclouds
-            )
-        ),
-    ]
-except ImportError:
-    pass
-
-try:
     import geopandas
 
     GeoSeriesAnn = Annotated[

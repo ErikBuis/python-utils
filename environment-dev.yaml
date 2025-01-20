@@ -9,8 +9,6 @@
 # To list all environments, run `mamba env list`.
 # To list all packages in the current environment, run `mamba list`.
 
-# ! After creating the environment, you must install the following package(s) manually. This can not be done through the environment file (see https://github.com/conda/conda/issues/6805).
-# ! pip install git+https://github.com/facebookresearch/pytorch3d.git@stable
 
 name: python_utils
 
@@ -21,7 +19,7 @@ channels:
 
 dependencies:
   # Base Python
-  - python=3.10
+  - python=3.11
   - pip
 
   # Development tools
@@ -39,14 +37,8 @@ dependencies:
 
   # PyTorch
   - pytorch
-  - torchvision
-  - torchaudio
   - pytorch-cuda
   - lightning
-
-  # PyTorch3D
-  - fvcore
-  - iopath
 
   # Scientific
   - numpy
