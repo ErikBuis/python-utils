@@ -7,6 +7,12 @@ See https://github.com/facebookresearch/pytorch3d for the original code.
 import torch
 
 
+try:
+    from typing import Self
+except ImportError:
+    from typing_extensions import Self
+
+
 class Transform3D:
     """A batch of 3D transformation matrices."""
 
@@ -131,7 +137,7 @@ class Transform3D:
         self,
         dtype: torch.dtype | None = None,
         device: torch.device | str | int | None = None,
-    ) -> "Transform3D":
+    ) -> Self:
         """Move the transformation matrices to a different device or data type.
 
         Warning: This method is in-place, meaning that the returned object is

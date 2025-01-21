@@ -5,7 +5,12 @@ from typing import Annotated
 
 from pydantic import BaseModel, GetPydanticSchema
 from pydantic_core import core_schema
-from typing_extensions import Self
+
+
+try:
+    from typing import Self
+except ImportError:
+    from typing_extensions import Self
 
 
 try:
