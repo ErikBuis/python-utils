@@ -35,7 +35,7 @@ function prompt {
     $condaPrompt = if ($condaEnv) { "$ColorWhite($condaEnv) " } else { "" }
 
     # Construct the prompt
-    "$condaPrompt$ColorGreen PS $ColorBlue$($executionContext.SessionState.Path.CurrentLocation)$ColorWhite $('>' * ($nestedPromptLevel + 1)) $ColorReset"
+    "$condaPrompt${ColorGreen}PS $ColorBlue$($executionContext.SessionState.Path.CurrentLocation)$ColorWhite$('>' * ($nestedPromptLevel + 1)) $ColorReset"
 }
 ```
 
