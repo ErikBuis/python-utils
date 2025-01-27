@@ -66,7 +66,7 @@ def create_func_values2idcs(
     if (
         not handle_missing_values
         and np.issubdtype(values_unique.dtype, np.integer)
-        and len(values_unique) != 0
+        and len(values_unique) > 0
     ):
         values_unique_int = cast(npt.NDArray[np.integer], values_unique)
         # If the values are integers, we can use a more efficient method for
