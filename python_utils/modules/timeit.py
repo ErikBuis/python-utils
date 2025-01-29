@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 def auto_timeit(
     stmt: str | Callable = "pass", setup: str | Callable = "pass"
-) -> None:
+) -> float:
     """Automatically determine the number of runs for timeit.
 
     This function runs timeit a number of times and averages over the runs. It
