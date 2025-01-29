@@ -12,7 +12,7 @@ from python_utils.custom_batched.geometry import (
 class XiaolinWuAntiAliasingBatched(unittest.TestCase):
     # xiaolin_wu_anti_aliasing_batched should return the same values as the
     # xiaolin_wu_anti_aliasing function, but in a batched manner.
-    def test_xiaolin_wu_anti_aliasing_batched(self):
+    def test_xiaolin_wu_anti_aliasing_batched(self) -> None:
         # Generate random line segments.
         x0s = torch.concatenate([
             torch.randint(-100, 101, (50,)) / 2,

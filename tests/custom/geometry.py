@@ -14,7 +14,7 @@ from python_utils.modules.numpy import lexsort_along
 
 class TestMatrix2D(unittest.TestCase):
     # __init__ should initialize the matrix with the given components.
-    def test_init(self):
+    def test_init(self) -> None:
         matrix = geometry.Matrix2D(1, 2, 3, 4)
         self.assertEqual(matrix.a, 1)
         self.assertEqual(matrix.b, 2)
@@ -22,13 +22,13 @@ class TestMatrix2D(unittest.TestCase):
         self.assertEqual(matrix.d, 4)
 
     # __iter__ should return an iterator over the matrix's components.
-    def test_iter(self):
+    def test_iter(self) -> None:
         matrix = geometry.Matrix2D(1, 2, 3, 4)
         components = list(matrix)
         self.assertEqual(components, [1, 2, 3, 4])
 
     # __getitem__ should return the component at the given index.
-    def test_getitem(self):
+    def test_getitem(self) -> None:
         matrix = geometry.Matrix2D(1, 2, 3, 4)
         self.assertEqual(matrix[0], 1)
         self.assertEqual(matrix[1], 2)
@@ -36,25 +36,25 @@ class TestMatrix2D(unittest.TestCase):
         self.assertEqual(matrix[3], 4)
 
     # __getitem__ should raise an IndexError if the index is out of bounds.
-    def test_getitem_index_error(self):
+    def test_getitem_index_error(self) -> None:
         matrix = geometry.Matrix2D(1, 2, 3, 4)
         with self.assertRaises(IndexError):
             matrix[4]
 
     # __repr__ should return a string representation of the matrix.
-    def test_repr(self):
+    def test_repr(self) -> None:
         matrix = geometry.Matrix2D(1, 2, 3, 4)
         expected_output = "Matrix2D(1, 2, 3, 4)"
         self.assertEqual(repr(matrix), expected_output)
 
     # __str__ should return a formatted string representation of the matrix.
-    def test_str(self):
+    def test_str(self) -> None:
         matrix = geometry.Matrix2D(1, 2, 3, 4)
         expected_output = "| 1  2 |\n| 3  4 |"
         self.assertEqual(str(matrix), expected_output)
 
     # __hash__ should return a unique hash id for the matrix.
-    def test_hash(self):
+    def test_hash(self) -> None:
         matrix1 = geometry.Matrix2D(1, 2, 3, 4)
         matrix2 = geometry.Matrix2D(1, 2, 3, 4)
         matrix3 = geometry.Matrix2D(5, 6, 7, 8)
@@ -63,7 +63,7 @@ class TestMatrix2D(unittest.TestCase):
         self.assertNotEqual(hash(matrix1), hash(matrix3))
 
     # __eq__ should return True iff two matrices are equal.
-    def test_eq(self):
+    def test_eq(self) -> None:
         matrix1 = geometry.Matrix2D(1, 2, 3, 4)
         matrix2 = geometry.Matrix2D(1, 2, 3, 4)
         self.assertTrue(matrix1 == matrix2)
@@ -73,14 +73,14 @@ class TestMatrix2D(unittest.TestCase):
         self.assertFalse(matrix1 == matrix2)
 
     # __eq__ should return False if the other object is not a matrix.
-    def test_eq_non_matrix(self):
+    def test_eq_non_matrix(self) -> None:
         matrix = geometry.Matrix2D(1, 2, 3, 4)
         non_matrix = "not a matrix"
         self.assertFalse(matrix == non_matrix)
 
     # __matmul__ should return a new matrix with the correct components when
     # multiplying a matrix with another matrix.
-    def test_matmul_matrix(self):
+    def test_matmul_matrix(self) -> None:
         matrix1 = geometry.Matrix2D(1, 2, 3, 4)
         matrix2 = geometry.Matrix2D(5, 6, 7, 8)
         result = matrix1 @ matrix2
@@ -91,7 +91,7 @@ class TestMatrix2D(unittest.TestCase):
 
     # __matmul__ should return a new transformed geometric object when
     # multiplying a matrix with a geometric object.
-    def test_matmul_geometric_object(self):
+    def test_matmul_geometric_object(self) -> None:
         matrix = geometry.Matrix2D(2, 0, 0, 2)
         point = geometry.Vector2D(1, 1)
         transformed_point = matrix @ point
@@ -101,7 +101,7 @@ class TestMatrix2D(unittest.TestCase):
 
 class TestInterval(unittest.TestCase):
     # __init__ should initialize the interval with the given components.
-    def test_init(self):
+    def test_init(self) -> None:
         interval = geometry.Interval("[", 1, 5, "]")
         self.assertEqual(interval.left_bracket, "[")
         self.assertEqual(interval.start, 1)
@@ -122,14 +122,14 @@ class TestInterval(unittest.TestCase):
 
     # __init__ should raise a ValueError if the interval starts or ends with
     # infinity and the bracket is not closed.
-    def test_init_inf_bracket_not_square(self):
+    def test_init_inf_bracket_not_square(self) -> None:
         with self.assertRaises(ValueError):
             geometry.Interval("(", -inf, 5, "]")
         with self.assertRaises(ValueError):
             geometry.Interval("[", 1, inf, ")")
 
     # __init__ should raise a ValueError if the interval is empty.
-    def test_init_interval_not_empty(self):
+    def test_init_interval_not_empty(self) -> None:
         with self.assertRaises(ValueError):
             geometry.Interval("[", 5, 1, "]")
         with self.assertRaises(ValueError):
@@ -140,26 +140,26 @@ class TestInterval(unittest.TestCase):
             geometry.Interval("(", 5, 5, ")")
 
     # __init__ should raise a ValueError if the interval is a point.
-    def test_init_interval_not_point(self):
+    def test_init_interval_not_point(self) -> None:
         with self.assertRaises(ValueError):
             geometry.Interval("[", 5, 5, "]")
 
     # __init__ should raise a ValueError if a bracket is the incorrect way
     # around.
-    def test_init_invalid_bracket(self):
+    def test_init_invalid_bracket(self) -> None:
         with self.assertRaises(ValueError):
             geometry.Interval("]", 1, 5, "]")  # type: ignore
         with self.assertRaises(ValueError):
             geometry.Interval("[", 1, 5, "(")  # type: ignore
 
     # __iter__ should return an iterator over the interval's components.
-    def test_iter(self):
+    def test_iter(self) -> None:
         interval = geometry.Interval("[", 1, 5, "]")
         components = list(interval)
         self.assertEqual(components, [True, 1, 5, True])
 
     # __getitem__ should return the component at the given index.
-    def test_getitem(self):
+    def test_getitem(self) -> None:
         interval = geometry.Interval("[", 1, 5, "]")
         self.assertEqual(interval[0], True)
         self.assertEqual(interval[1], 1)
@@ -167,13 +167,13 @@ class TestInterval(unittest.TestCase):
         self.assertEqual(interval[3], True)
 
     # __getitem__ should raise an IndexError if the index is out of bounds.
-    def test_getitem_invalid_index(self):
+    def test_getitem_invalid_index(self) -> None:
         interval = geometry.Interval("[", 1, 5, "]")
         with self.assertRaises(IndexError):
             interval[4]
 
     # __repr__ should return a string representation of the interval.
-    def test_interval_repr(self):
+    def test_interval_repr(self) -> None:
         interval = geometry.Interval("[", 1, 5, "]")
         self.assertEqual(repr(interval), "Interval('[', 1, 5, ']')")
         interval = geometry.Interval("[", -inf, 10, "]")
@@ -184,7 +184,7 @@ class TestInterval(unittest.TestCase):
         self.assertEqual(repr(interval), "Interval('(', -3.5, 7.8, ')')")
 
     # __str__ should return a formatted string representation of the interval.
-    def test_interval_str(self):
+    def test_interval_str(self) -> None:
         interval = geometry.Interval("[", 1, 5, "]")
         self.assertEqual(str(interval), "[1, 5]")
         interval = geometry.Interval("[", -inf, 10, "]")
@@ -195,7 +195,7 @@ class TestInterval(unittest.TestCase):
         self.assertEqual(str(interval), "(-3.5, 7.8)")
 
     # __hash__ should return a unique hash id for the interval.
-    def test_interval_hash(self):
+    def test_interval_hash(self) -> None:
         interval1 = geometry.Interval("[", 1, 5, "]")
         interval2 = geometry.Interval("[", 1, 5, "]")
         interval3 = geometry.Interval("[", 2, 5, "]")
@@ -204,7 +204,7 @@ class TestInterval(unittest.TestCase):
         self.assertNotEqual(hash(interval1), hash(interval3))
 
     # __eq__ should return True iff two intervals are equal.
-    def test_eq(self):
+    def test_eq(self) -> None:
         interval1 = geometry.Interval("[", 1, 5, "]")
         interval2 = geometry.Interval("[", 1, 5, "]")
         self.assertEqual(interval1, interval2)
@@ -214,7 +214,7 @@ class TestInterval(unittest.TestCase):
         self.assertNotEqual(interval1, interval2)
 
     # __eq__ should return False if the other object is not an interval.
-    def test_eq_non_interval(self):
+    def test_eq_non_interval(self) -> None:
         interval = geometry.Interval("[", 1, 5, "]")
         non_interval_object = "not an interval"
         self.assertFalse(interval == non_interval_object)
@@ -229,11 +229,11 @@ class TestNumberSet(unittest.TestCase):
 
     # amount_components should return the correct amount of components in the
     # set.
-    def test_amount_components(self):
+    def test_amount_components(self) -> None:
         self.assertEqual(self.numberset.amount_components, 5)
 
     # components should return the correct components.
-    def test_components(self):
+    def test_components(self) -> None:
         self.assertEqual(
             list(self.numberset.components),
             [
@@ -246,7 +246,7 @@ class TestNumberSet(unittest.TestCase):
         )
 
     # __iter__ should return an iterator over the set's components.
-    def test_iter(self):
+    def test_iter(self) -> None:
         components = list(self.numberset)
         self.assertEqual(
             components,
@@ -260,7 +260,7 @@ class TestNumberSet(unittest.TestCase):
         )
 
     # __getitem__ should return the component at the given index.
-    def test_getitem(self):
+    def test_getitem(self) -> None:
         self.assertEqual(self.numberset[0], 0)
         self.assertEqual(self.numberset[1], geometry.Interval("[", 1, 2, "]"))
         self.assertEqual(self.numberset[2], geometry.Interval("(", 3, 5, ")"))
@@ -270,12 +270,12 @@ class TestNumberSet(unittest.TestCase):
         )
 
     # __getitem__ should raise an IndexError if the index is out of bounds.
-    def test_getitem_index_error(self):
+    def test_getitem_index_error(self) -> None:
         with self.assertRaises(IndexError):
             self.numberset[5]
 
     # __repr__ should return a string representation of the set.
-    def test_repr(self):
+    def test_repr(self) -> None:
         self.assertEqual(
             repr(self.numberset),
             "NumberSet(0, Interval('[', 1, 2, ']'), "
@@ -284,19 +284,19 @@ class TestNumberSet(unittest.TestCase):
         )
 
     # __str__ should return a formatted string representation of the set.
-    def test_str(self):
+    def test_str(self) -> None:
         self.assertEqual(
             str(self.numberset),
             "NumberSet{0, [1, 2], (3, 5), (5, 6), (8, inf]}",
         )
 
     # __bool__ should return True iff the set is not empty.
-    def test_bool(self):
+    def test_bool(self) -> None:
         self.assertTrue(self.numberset)
         self.assertFalse(geometry.NumberSet())
 
     # __eq__ should return True iff two sets are equal.
-    def test_eq(self):
+    def test_eq(self) -> None:
         numberset1 = geometry.NumberSet._direct_init(
             [0, 0, 1, 2, 3, 5, 5, 6, 8, inf],
             [True, True, True, True, False, False, False, False, False, True],
@@ -309,12 +309,12 @@ class TestNumberSet(unittest.TestCase):
         self.assertNotEqual(self.numberset, numberset2)
 
     # __eq__ should return False if the other object is not a set.
-    def test_eq_non_set(self):
+    def test_eq_non_set(self) -> None:
         self.assertNotEqual(self.numberset, "not a set")
 
     # __lt__ should return True iff all numbers in the first set are left of
     # all numbers in the second set.
-    def test_lt(self):
+    def test_lt(self) -> None:
         numberset1 = geometry.NumberSet._direct_init(
             [0, 0, 1, 2, 3, 5, 5, 6, 8, inf],
             [True, True, True, True, False, False, False, False, False, True],
@@ -336,7 +336,7 @@ class TestNumberSet(unittest.TestCase):
 
     # __gt__ should return True iff all numbers in the first set are right of
     # all numbers in the second set.
-    def test_gt(self):
+    def test_gt(self) -> None:
         numberset1 = geometry.NumberSet._direct_init(
             [0, 0, 1, 2, 3, 5, 5, 6, 8, inf],
             [True, True, True, True, False, False, False, False, False, True],
@@ -357,7 +357,7 @@ class TestNumberSet(unittest.TestCase):
         self.assertFalse(numberset3 > self.numberset)
 
     # __contains__ should return True iff the number is in the set.
-    def test_contains(self):
+    def test_contains(self) -> None:
         self.assertFalse(-inf in self.numberset)
         self.assertFalse(-1 in self.numberset)
         self.assertTrue(0 in self.numberset)
@@ -373,7 +373,7 @@ class TestNumberSet(unittest.TestCase):
         self.assertTrue(inf in self.numberset)
 
     # __invert__ should return the complement of the set.
-    def test_invert(self):
+    def test_invert(self) -> None:
         inv_numberset = ~self.numberset
         self.assertEqual(
             inv_numberset._boundaries, [-inf, 0, 0, 1, 2, 3, 5, 5, 6, 8]
@@ -384,7 +384,7 @@ class TestNumberSet(unittest.TestCase):
         )
 
     # __lshift__ should return the set shifted left by the given amount.
-    def test_lshift(self):
+    def test_lshift(self) -> None:
         numberset = self.numberset << 2
         self.assertEqual(
             numberset._boundaries, [-2, -2, -1, 0, 1, 3, 3, 4, 6, inf]
@@ -395,7 +395,7 @@ class TestNumberSet(unittest.TestCase):
         )
 
     # __rshift__ should return the set shifted right by the given amount.
-    def test_rshift(self):
+    def test_rshift(self) -> None:
         numberset = self.numberset >> 2
         self.assertEqual(
             numberset._boundaries, [2, 2, 3, 4, 5, 7, 7, 8, 10, inf]
@@ -407,7 +407,7 @@ class TestNumberSet(unittest.TestCase):
 
     # copy should return a copy of the set that doesn't share any references
     # with the original set.
-    def test_copy(self):
+    def test_copy(self) -> None:
         numberset_copy = self.numberset.copy()
         self.assertIsNot(numberset_copy, self.numberset)
         self.assertIsNot(
@@ -419,7 +419,7 @@ class TestNumberSet(unittest.TestCase):
         )
 
     # contains_parallel should return which sets the numbers are contained in.
-    def test_contains_parallel(self):
+    def test_contains_parallel(self) -> None:
         # Set random seed for reproducibility.
         random.seed(69)
 
@@ -462,7 +462,7 @@ class TestNumberSet(unittest.TestCase):
             self.assertEqual(expected_result, result_parallel)
 
     # lookup returns 4 elements of the correct type.
-    def test_lookup_type(self):
+    def test_lookup_type(self) -> None:
         numberset = geometry.NumberSet()
         in_set, on_start, on_end, idx = numberset.lookup(0)
         self.assertIsInstance(in_set, bool)
@@ -471,7 +471,7 @@ class TestNumberSet(unittest.TestCase):
         self.assertIsInstance(idx, int)
 
     # lookup returns the correct values if number is on a point.
-    def test_lookup_point(self):
+    def test_lookup_point(self) -> None:
         in_set, on_start, on_end, idx = self.numberset.lookup(0)
         self.assertTrue(in_set)
         self.assertTrue(on_start)
@@ -480,7 +480,7 @@ class TestNumberSet(unittest.TestCase):
 
     # lookup returns the correct values if number is on an included start
     # bound.
-    def test_lookup_included_start_bound(self):
+    def test_lookup_included_start_bound(self) -> None:
         in_set, on_start, on_end, idx = self.numberset.lookup(1)
         self.assertTrue(in_set)
         self.assertTrue(on_start)
@@ -488,7 +488,7 @@ class TestNumberSet(unittest.TestCase):
         self.assertEqual(idx, 2)
 
     # lookup returns the correct values if number is on an included end bound.
-    def test_lookup_included_end_bound(self):
+    def test_lookup_included_end_bound(self) -> None:
         in_set, on_start, on_end, idx = self.numberset.lookup(2)
         self.assertTrue(in_set)
         self.assertFalse(on_start)
@@ -496,7 +496,7 @@ class TestNumberSet(unittest.TestCase):
         self.assertEqual(idx, 3)
 
     # lookup returns the correct values if number is in an interval.
-    def test_lookup_in_interval(self):
+    def test_lookup_in_interval(self) -> None:
         in_set, on_start, on_end, idx = self.numberset.lookup(4)
         self.assertTrue(in_set)
         self.assertFalse(on_start)
@@ -505,7 +505,7 @@ class TestNumberSet(unittest.TestCase):
 
     # lookup returns the correct values if number is in a hole between
     # intervals.
-    def test_lookup_hole(self):
+    def test_lookup_hole(self) -> None:
         in_set, on_start, on_end, idx = self.numberset.lookup(5)
         self.assertFalse(in_set)
         self.assertTrue(on_start)
@@ -514,7 +514,7 @@ class TestNumberSet(unittest.TestCase):
 
     # lookup returns the correct values if number is on an excluded start
     # bound.
-    def test_lookup_excluded_start_bound(self):
+    def test_lookup_excluded_start_bound(self) -> None:
         in_set, on_start, on_end, idx = self.numberset.lookup(3)
         self.assertFalse(in_set)
         self.assertTrue(on_start)
@@ -522,7 +522,7 @@ class TestNumberSet(unittest.TestCase):
         self.assertEqual(idx, 4)
 
     # lookup returns the correct values if number is on an excluded end bound.
-    def test_lookup_excluded_end_bound(self):
+    def test_lookup_excluded_end_bound(self) -> None:
         in_set, on_start, on_end, idx = self.numberset.lookup(6)
         self.assertFalse(in_set)
         self.assertFalse(on_start)
@@ -530,7 +530,7 @@ class TestNumberSet(unittest.TestCase):
         self.assertEqual(idx, 7)
 
     # lookup returns the correct values if number is outside all components.
-    def test_lookup_outside_components(self):
+    def test_lookup_outside_components(self) -> None:
         in_set, on_start, on_end, idx = self.numberset.lookup(7)
         self.assertFalse(in_set)
         self.assertFalse(on_start)
@@ -538,7 +538,7 @@ class TestNumberSet(unittest.TestCase):
         self.assertEqual(idx, 8)
 
     # lookup returns the correct values if number is -inf or inf.
-    def test_lookup_inf(self):
+    def test_lookup_inf(self) -> None:
         in_set, on_start, on_end, idx = self.numberset.lookup(-inf)
         self.assertFalse(in_set)
         self.assertFalse(on_start)
@@ -551,7 +551,7 @@ class TestNumberSet(unittest.TestCase):
         self.assertEqual(idx, 9)
 
     # add_number should add a number to the set if number is on a point.
-    def test_add_number_point(self):
+    def test_add_number_point(self) -> None:
         numberset = self.numberset.copy()
         numberset.add_number(0)
         self.assertEqual(
@@ -564,7 +564,7 @@ class TestNumberSet(unittest.TestCase):
 
     # add_number should add a number to the set if number is on an included
     # start bound.
-    def test_add_number_included_start_bound(self):
+    def test_add_number_included_start_bound(self) -> None:
         numberset = self.numberset.copy()
         numberset.add_number(1)
         self.assertEqual(
@@ -577,7 +577,7 @@ class TestNumberSet(unittest.TestCase):
 
     # add_number should add a number to the set if number is on an included
     # end bound.
-    def test_add_number_included_end_bound(self):
+    def test_add_number_included_end_bound(self) -> None:
         numberset = self.numberset.copy()
         numberset.add_number(2)
         self.assertEqual(
@@ -589,7 +589,7 @@ class TestNumberSet(unittest.TestCase):
         )
 
     # add_number should add a number to the set if number is in an interval.
-    def test_add_number_in_interval(self):
+    def test_add_number_in_interval(self) -> None:
         numberset = self.numberset.copy()
         numberset.add_number(4)
         self.assertEqual(
@@ -602,7 +602,7 @@ class TestNumberSet(unittest.TestCase):
 
     # add_number should add a number to the set if number is in a hole between
     # intervals.
-    def test_add_number_hole(self):
+    def test_add_number_hole(self) -> None:
         numberset = self.numberset.copy()
         numberset.add_number(5)
         self.assertEqual(numberset._boundaries, [0, 0, 1, 2, 3, 6, 8, inf])
@@ -613,7 +613,7 @@ class TestNumberSet(unittest.TestCase):
 
     # add_number should add a number to the set if number is on an excluded
     # start bound.
-    def test_add_number_excluded_start_bound(self):
+    def test_add_number_excluded_start_bound(self) -> None:
         numberset = self.numberset.copy()
         numberset.add_number(3)
         self.assertEqual(
@@ -626,7 +626,7 @@ class TestNumberSet(unittest.TestCase):
 
     # add_number should add a number to the set if number is on an excluded
     # end bound.
-    def test_add_number_excluded_end_bound(self):
+    def test_add_number_excluded_end_bound(self) -> None:
         numberset = self.numberset.copy()
         numberset.add_number(6)
         self.assertEqual(
@@ -639,7 +639,7 @@ class TestNumberSet(unittest.TestCase):
 
     # add_number should add a number to the set if number is outside all
     # components.
-    def test_add_number_outside_components(self):
+    def test_add_number_outside_components(self) -> None:
         numberset = self.numberset.copy()
         numberset.add_number(7)
         self.assertEqual(
@@ -664,7 +664,7 @@ class TestNumberSet(unittest.TestCase):
         )
 
     # add_number should raise a ValueError if number is -inf or inf.
-    def test_add_number_inf(self):
+    def test_add_number_inf(self) -> None:
         numberset = self.numberset.copy()
         with self.assertRaises(ValueError):
             numberset.add_number(-inf)
@@ -673,7 +673,7 @@ class TestNumberSet(unittest.TestCase):
 
     # remove_number should remove a number from the set if number is on a
     # point.
-    def test_remove_number_point(self):
+    def test_remove_number_point(self) -> None:
         numberset = self.numberset.copy()
         numberset.remove_number(0)
         self.assertEqual(numberset._boundaries, [1, 2, 3, 5, 5, 6, 8, inf])
@@ -684,7 +684,7 @@ class TestNumberSet(unittest.TestCase):
 
     # remove_number should remove a number from the set if number is on an
     # included start bound.
-    def test_remove_number_included_start_bound(self):
+    def test_remove_number_included_start_bound(self) -> None:
         numberset = self.numberset.copy()
         numberset.remove_number(1)
         self.assertEqual(
@@ -697,7 +697,7 @@ class TestNumberSet(unittest.TestCase):
 
     # remove_number should remove a number from the set if number is on an
     # included end bound.
-    def test_remove_number_included_end_bound(self):
+    def test_remove_number_included_end_bound(self) -> None:
         numberset = self.numberset.copy()
         numberset.remove_number(2)
         self.assertEqual(
@@ -710,7 +710,7 @@ class TestNumberSet(unittest.TestCase):
 
     # remove_number should remove a number from the set if number is in an
     # interval.
-    def test_remove_number_in_interval(self):
+    def test_remove_number_in_interval(self) -> None:
         numberset = self.numberset.copy()
         numberset.remove_number(4)
         self.assertEqual(
@@ -736,7 +736,7 @@ class TestNumberSet(unittest.TestCase):
 
     # remove_number should remove a number from the set if number is in a hole
     # between intervals.
-    def test_remove_number_hole(self):
+    def test_remove_number_hole(self) -> None:
         numberset = self.numberset.copy()
         numberset.remove_number(5)
         self.assertEqual(
@@ -749,7 +749,7 @@ class TestNumberSet(unittest.TestCase):
 
     # remove_number should remove a number from the set if number is on an
     # excluded start bound.
-    def test_remove_number_excluded_start_bound(self):
+    def test_remove_number_excluded_start_bound(self) -> None:
         numberset = self.numberset.copy()
         numberset.remove_number(3)
         self.assertEqual(
@@ -762,7 +762,7 @@ class TestNumberSet(unittest.TestCase):
 
     # remove_number should remove a number from the set if number is on an
     # excluded end bound.
-    def test_remove_number_excluded_end_bound(self):
+    def test_remove_number_excluded_end_bound(self) -> None:
         numberset = self.numberset.copy()
         numberset.remove_number(6)
         self.assertEqual(
@@ -775,7 +775,7 @@ class TestNumberSet(unittest.TestCase):
 
     # remove_number should remove a number from the set if number is outside
     # all components.
-    def test_remove_number_outside_components(self):
+    def test_remove_number_outside_components(self) -> None:
         numberset = self.numberset.copy()
         numberset.remove_number(7)
         self.assertEqual(
@@ -787,7 +787,7 @@ class TestNumberSet(unittest.TestCase):
         )
 
     # remove_number should raise a ValueError if number is -inf or inf.
-    def test_remove_number_inf(self):
+    def test_remove_number_inf(self) -> None:
         numberset = self.numberset.copy()
         with self.assertRaises(ValueError):
             numberset.remove_number(-inf)
@@ -796,7 +796,7 @@ class TestNumberSet(unittest.TestCase):
 
     # _extract_subset should return the correct subset if the subset is
     # discarded.
-    def test_extract_subset_discarded(self):
+    def test_extract_subset_discarded(self) -> None:
         subset = self.numberset._extract_subset(-inf, inf, True, True, "00")
         self.assertEqual(subset._boundaries, [])
         self.assertEqual(subset._boundaries_included, [])
@@ -809,7 +809,7 @@ class TestNumberSet(unittest.TestCase):
 
     # _extract_subset should return the correct subset if the subset is
     # returned in full.
-    def test_extract_subset_full(self):
+    def test_extract_subset_full(self) -> None:
         subset = self.numberset._extract_subset(-inf, inf, True, True, "11")
         self.assertEqual(subset._boundaries, [-inf, inf])
         self.assertEqual(subset._boundaries_included, [True, True])
@@ -822,13 +822,13 @@ class TestNumberSet(unittest.TestCase):
 
     # _extract_subset should raise a ValueError if the start is greater than
     # the end.
-    def test_extract_subset_start_greater_end(self):
+    def test_extract_subset_start_greater_end(self) -> None:
         with self.assertRaises(ValueError):
             self.numberset._extract_subset(1, 0, True, True, "11")
 
     # _extract_subset should raise a ValueError if the start is -inf and it is
     # not included, or if the end is inf and it is not included.
-    def test_extract_subset_inf_not_included(self):
+    def test_extract_subset_inf_not_included(self) -> None:
         with self.assertRaises(ValueError):
             self.numberset._extract_subset(-inf, 0, False, True, "11")
         with self.assertRaises(ValueError):
@@ -836,7 +836,7 @@ class TestNumberSet(unittest.TestCase):
 
     # _extract_subset should return the correct subset if a boundary is on a
     # point.
-    def test_extract_subset_ab_point(self):
+    def test_extract_subset_ab_point(self) -> None:
         subset = self.numberset._extract_subset(-inf, 0, True, True, "01")
         self.assertEqual(subset._boundaries, [0, 0])
         self.assertEqual(subset._boundaries_included, [True, True])
@@ -877,7 +877,7 @@ class TestNumberSet(unittest.TestCase):
 
     # _extract_subset should return the correct subset if a boundary is on an
     # included start bound.
-    def test_extract_subset_ab_included_start_bound(self):
+    def test_extract_subset_ab_included_start_bound(self) -> None:
         subset = self.numberset._extract_subset(-inf, 1, True, True, "01")
         self.assertEqual(subset._boundaries, [0, 0, 1, 1])
         self.assertEqual(subset._boundaries_included, [True, True, True, True])
@@ -920,7 +920,7 @@ class TestNumberSet(unittest.TestCase):
 
     # _extract_subset should return the correct subset if a boundary is on an
     # included end bound.
-    def test_extract_subset_ab_included_end_bound(self):
+    def test_extract_subset_ab_included_end_bound(self) -> None:
         subset = self.numberset._extract_subset(-inf, 2, True, True, "01")
         self.assertEqual(subset._boundaries, [0, 0, 1, 2])
         self.assertEqual(subset._boundaries_included, [True, True, True, True])
@@ -965,7 +965,7 @@ class TestNumberSet(unittest.TestCase):
 
     # _extract_subset should return the correct subset if a boundary is in an
     # interval.
-    def test_extract_subset_ab_in_interval(self):
+    def test_extract_subset_ab_in_interval(self) -> None:
         subset = self.numberset._extract_subset(-inf, 4, True, True, "01")
         self.assertEqual(subset._boundaries, [0, 0, 1, 2, 3, 4])
         self.assertEqual(
@@ -1010,7 +1010,7 @@ class TestNumberSet(unittest.TestCase):
 
     # _extract_subset should return the correct subset if a boundary is in a
     # hole between intervals.
-    def test_extract_subset_ab_hole(self):
+    def test_extract_subset_ab_hole(self) -> None:
         subset = self.numberset._extract_subset(-inf, 5, True, True, "01")
         self.assertEqual(subset._boundaries, [0, 0, 1, 2, 3, 5])
         self.assertEqual(
@@ -1053,7 +1053,7 @@ class TestNumberSet(unittest.TestCase):
 
     # _extract_subset should return the correct subset if a boundary is on an
     # excluded start bound.
-    def test_extract_subset_ab_excluded_start_bound(self):
+    def test_extract_subset_ab_excluded_start_bound(self) -> None:
         subset = self.numberset._extract_subset(-inf, 3, True, True, "01")
         self.assertEqual(subset._boundaries, [0, 0, 1, 2])
         self.assertEqual(subset._boundaries_included, [True, True, True, True])
@@ -1096,7 +1096,7 @@ class TestNumberSet(unittest.TestCase):
 
     # _extract_subset should return the correct subset if a boundary is on an
     # excluded end bound.
-    def test_extract_subset_ab_excluded_end_bound(self):
+    def test_extract_subset_ab_excluded_end_bound(self) -> None:
         subset = self.numberset._extract_subset(-inf, 6, True, True, "01")
         self.assertEqual(subset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6])
         self.assertEqual(
@@ -1137,7 +1137,7 @@ class TestNumberSet(unittest.TestCase):
 
     # _extract_subset should return the correct subset if a boundary is outside
     # all components.
-    def test_extract_subset_ab_outside_components(self):
+    def test_extract_subset_ab_outside_components(self) -> None:
         subset = self.numberset._extract_subset(-inf, 7, True, True, "01")
         self.assertEqual(subset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6])
         self.assertEqual(
@@ -1178,7 +1178,7 @@ class TestNumberSet(unittest.TestCase):
 
     # _concat_subsets should return the correct subset if the subsets are
     # bounded on a point.
-    def test_concat_subsets_bounded_point(self):
+    def test_concat_subsets_bounded_point(self) -> None:
         subset1 = self.numberset._extract_subset(-inf, 0, True, True, "01")
         subset2 = self.numberset._extract_subset(0, inf, True, True, "01")
         subset = self.numberset._concat_subsets([subset1, subset2], [0])
@@ -1198,7 +1198,7 @@ class TestNumberSet(unittest.TestCase):
 
     # _concat_subsets should return the correct subset if the subsets are
     # bounded on an included start bound.
-    def test_concat_subsets_bounded_included_start_bound(self):
+    def test_concat_subsets_bounded_included_start_bound(self) -> None:
         subset1 = self.numberset._extract_subset(-inf, 1, True, True, "01")
         subset2 = self.numberset._extract_subset(1, inf, True, True, "01")
         subset = self.numberset._concat_subsets([subset1, subset2], [1])
@@ -1218,7 +1218,7 @@ class TestNumberSet(unittest.TestCase):
 
     # _concat_subsets should return the correct subset if the subsets are
     # bounded on an included end bound.
-    def test_concat_subsets_bounded_included_end_bound(self):
+    def test_concat_subsets_bounded_included_end_bound(self) -> None:
         subset1 = self.numberset._extract_subset(-inf, 2, True, True, "01")
         subset2 = self.numberset._extract_subset(2, inf, True, True, "01")
         subset = self.numberset._concat_subsets([subset1, subset2], [2])
@@ -1238,7 +1238,7 @@ class TestNumberSet(unittest.TestCase):
 
     # _concat_subsets should return the correct subset if the subsets are
     # bounded in an interval.
-    def test_concat_subsets_bounded_in_interval(self):
+    def test_concat_subsets_bounded_in_interval(self) -> None:
         subset1 = self.numberset._extract_subset(-inf, 4, True, True, "01")
         subset2 = self.numberset._extract_subset(4, inf, True, True, "01")
         subset = self.numberset._concat_subsets([subset1, subset2], [4])
@@ -1258,7 +1258,7 @@ class TestNumberSet(unittest.TestCase):
 
     # _concat_subsets should return the correct subset if the subsets are
     # bounded in a hole between intervals.
-    def test_concat_subsets_bounded_in_hole(self):
+    def test_concat_subsets_bounded_in_hole(self) -> None:
         subset1 = self.numberset._extract_subset(-inf, 5, True, True, "01")
         subset2 = self.numberset._extract_subset(5, inf, True, True, "01")
         subset = self.numberset._concat_subsets([subset1, subset2], [5])
@@ -1278,7 +1278,7 @@ class TestNumberSet(unittest.TestCase):
 
     # _concat_subsets should return the correct subset if the subsets are
     # bounded on an excluded start bound.
-    def test_concat_subsets_bounded_excluded_start_bound(self):
+    def test_concat_subsets_bounded_excluded_start_bound(self) -> None:
         subset1 = self.numberset._extract_subset(-inf, 3, True, True, "01")
         subset2 = self.numberset._extract_subset(3, inf, True, True, "01")
         subset = self.numberset._concat_subsets([subset1, subset2], [3])
@@ -1298,7 +1298,7 @@ class TestNumberSet(unittest.TestCase):
 
     # _concat_subsets should return the correct subset if the subsets are
     # bounded on an excluded end bound.
-    def test_concat_subsets_bounded_excluded_end_bound(self):
+    def test_concat_subsets_bounded_excluded_end_bound(self) -> None:
         subset1 = self.numberset._extract_subset(-inf, 6, True, True, "01")
         subset2 = self.numberset._extract_subset(6, inf, True, True, "01")
         subset = self.numberset._concat_subsets([subset1, subset2], [6])
@@ -1318,7 +1318,7 @@ class TestNumberSet(unittest.TestCase):
 
     # _concat_subsets should return the correct subset if the subsets are
     # bounded outside all components.
-    def test_concat_subsets_bounded_outside_components(self):
+    def test_concat_subsets_bounded_outside_components(self) -> None:
         subset1 = self.numberset._extract_subset(-inf, 7, True, True, "01")
         subset2 = self.numberset._extract_subset(7, inf, True, True, "01")
         subset = self.numberset._concat_subsets([subset1, subset2], [7])
@@ -1337,13 +1337,13 @@ class TestNumberSet(unittest.TestCase):
         )
 
     # __and__ should return the correct set if the other set is empty.
-    def test_and_other_empty(self):
+    def test_and_other_empty(self) -> None:
         numberset = self.numberset & geometry.NumberSet()
         self.assertEqual(numberset._boundaries, [])
         self.assertEqual(numberset._boundaries_included, [])
 
     # __and__ should return the correct set if the other set is full.
-    def test_and_other_full(self):
+    def test_and_other_full(self) -> None:
         interval = geometry.Interval("[", -inf, inf, "]")
         numberset = self.numberset & geometry.NumberSet(interval)
         self.assertEqual(numberset._boundaries, self.numberset._boundaries)
@@ -1353,7 +1353,7 @@ class TestNumberSet(unittest.TestCase):
 
     # __and__ should return the correct set if the other set is a single
     # number.
-    def test_and_other_number(self):
+    def test_and_other_number(self) -> None:
         for number in range(9):
             numberset = self.numberset & geometry.NumberSet(number)
             self.assertEqual(
@@ -1367,7 +1367,7 @@ class TestNumberSet(unittest.TestCase):
 
     # __and__ should return the correct set if the other set's borders are
     # included.
-    def test_and_other_borders_included(self):
+    def test_and_other_borders_included(self) -> None:
         for start in range(9):
             interval = geometry.Interval("[", start, start + 1, "]")
             numberset_and = self.numberset & geometry.NumberSet(interval)
@@ -1384,7 +1384,7 @@ class TestNumberSet(unittest.TestCase):
 
     # __and__ should return the correct set if the other set's borders are
     # excluded.
-    def test_and_other_borders_excluded(self):
+    def test_and_other_borders_excluded(self) -> None:
         for start in range(9):
             interval = geometry.Interval("(", start, start + 1, ")")
             numberset_and = self.numberset & geometry.NumberSet(interval)
@@ -1396,7 +1396,7 @@ class TestNumberSet(unittest.TestCase):
             )
 
     # __or__ should return the correct set if the other set is empty.
-    def test_or_other_empty(self):
+    def test_or_other_empty(self) -> None:
         numberset = self.numberset | geometry.NumberSet()
         self.assertEqual(numberset._boundaries, self.numberset._boundaries)
         self.assertEqual(
@@ -1404,7 +1404,7 @@ class TestNumberSet(unittest.TestCase):
         )
 
     # __or__ should return the correct set if the other set is full.
-    def test_or_other_full(self):
+    def test_or_other_full(self) -> None:
         interval = geometry.Interval("[", -inf, inf, "]")
         numberset = self.numberset | geometry.NumberSet(interval)
         self.assertEqual(numberset._boundaries, [-inf, inf])
@@ -1412,7 +1412,7 @@ class TestNumberSet(unittest.TestCase):
 
     # __or__ should return the correct set if the other set is a single
     # number.
-    def test_or_other_number(self):
+    def test_or_other_number(self) -> None:
         for number in range(9):
             numberset_or = self.numberset | geometry.NumberSet(number)
             numberset_add = self.numberset.copy()
@@ -1427,7 +1427,7 @@ class TestNumberSet(unittest.TestCase):
 
     # __or__ should return the correct set if the other set's borders are
     # included.
-    def test_or_other_borders_included(self):
+    def test_or_other_borders_included(self) -> None:
         interval = geometry.Interval("[", 0, 1, "]")
         numberset_or = self.numberset | geometry.NumberSet(interval)
         self.assertEqual(numberset_or._boundaries, [0, 2, 3, 5, 5, 6, 8, inf])
@@ -1504,7 +1504,7 @@ class TestNumberSet(unittest.TestCase):
 
     # __or__ should return the correct set if the other set's borders are
     # excluded.
-    def test_or_other_borders_excluded(self):
+    def test_or_other_borders_excluded(self) -> None:
         interval = geometry.Interval("(", 0, 1, ")")
         numberset_or = self.numberset | geometry.NumberSet(interval)
         self.assertEqual(numberset_or._boundaries, [0, 2, 3, 5, 5, 6, 8, inf])
@@ -1612,7 +1612,7 @@ class TestNumberSet(unittest.TestCase):
         )
 
     # __xor__ should return the correct set if the other set is empty.
-    def test_xor_other_empty(self):
+    def test_xor_other_empty(self) -> None:
         numberset = self.numberset ^ geometry.NumberSet()
         self.assertEqual(numberset._boundaries, self.numberset._boundaries)
         self.assertEqual(
@@ -1620,7 +1620,7 @@ class TestNumberSet(unittest.TestCase):
         )
 
     # __xor__ should return the correct set if the other set is full.
-    def test_xor_other_full(self):
+    def test_xor_other_full(self) -> None:
         interval = geometry.Interval("[", -inf, inf, "]")
         numberset = self.numberset ^ geometry.NumberSet(interval)
         inv_numberset = ~self.numberset
@@ -1631,7 +1631,7 @@ class TestNumberSet(unittest.TestCase):
 
     # __xor__ should return the correct set if the other set is a single
     # number.
-    def test_xor_other_number(self):
+    def test_xor_other_number(self) -> None:
         for number in range(9):
             numberset_number = geometry.NumberSet(number)
             numberset_xor = self.numberset ^ numberset_number
@@ -1651,7 +1651,7 @@ class TestNumberSet(unittest.TestCase):
 
     # __xor__ should return the correct set if the other set's borders are
     # included.
-    def test_xor_other_borders_included(self):
+    def test_xor_other_borders_included(self) -> None:
         interval = geometry.Interval("[", 0, 1, "]")
         numberset_or = self.numberset ^ geometry.NumberSet(interval)
         self.assertEqual(
@@ -1771,7 +1771,7 @@ class TestNumberSet(unittest.TestCase):
 
     # __xor__ should return the correct set if the other set's borders are
     # excluded.
-    def test_xor_other_borders_excluded(self):
+    def test_xor_other_borders_excluded(self) -> None:
         interval = geometry.Interval("(", 0, 1, ")")
         numberset_or = self.numberset ^ geometry.NumberSet(interval)
         self.assertEqual(numberset_or._boundaries, [0, 2, 3, 5, 5, 6, 8, inf])
@@ -1890,34 +1890,34 @@ class TestNumberSet(unittest.TestCase):
         )
 
     # __init__ with no arguments.
-    def test_init_empty(self):
+    def test_init_empty(self) -> None:
         numberset = geometry.NumberSet()
         self.assertEqual(numberset._boundaries, [])
         self.assertEqual(numberset._boundaries_included, [])
 
     # __init__ with a single number.
-    def test_init_number(self):
+    def test_init_number(self) -> None:
         number_set = geometry.NumberSet(5)
         self.assertEqual(number_set._boundaries, [5, 5])
         self.assertEqual(number_set._boundaries_included, [True, True])
 
     # __init__ should raise a ValueError if it is initialized with a single
     # number that is -inf or inf.
-    def test_init_number_inf(self):
+    def test_init_number_inf(self) -> None:
         with self.assertRaises(ValueError):
             geometry.NumberSet(-inf)
         with self.assertRaises(ValueError):
             geometry.NumberSet(inf)
 
     # __init__ with a single interval.
-    def test_init_interval(self):
+    def test_init_interval(self) -> None:
         interval = geometry.Interval("[", 1, 5, "]")
         numberset = geometry.NumberSet(interval)
         self.assertEqual(numberset._boundaries, [1, 5])
         self.assertEqual(numberset._boundaries_included, [True, True])
 
     # __init__ with a single NumberSet instance.
-    def test_init_numberset(self):
+    def test_init_numberset(self) -> None:
         interval = geometry.Interval("[", -3, 1, ")")
         numberset1 = geometry.NumberSet(interval)
         numberset2 = geometry.NumberSet(numberset1)
@@ -1925,7 +1925,7 @@ class TestNumberSet(unittest.TestCase):
         self.assertEqual(numberset2._boundaries_included, [True, False])
 
     # __init__ with multiple non-overlapping numbers.
-    def test_init_numbers(self):
+    def test_init_numbers(self) -> None:
         numberset = geometry.NumberSet(1, 2, 3, 4, 5)
         self.assertEqual(numberset._boundaries, [1, 1, 2, 2, 3, 3, 4, 4, 5, 5])
         self.assertEqual(
@@ -1934,7 +1934,7 @@ class TestNumberSet(unittest.TestCase):
         )
 
     # __init__ with multiple non-overlapping intervals.
-    def test_init_intervals(self):
+    def test_init_intervals(self) -> None:
         interval1 = geometry.Interval("[", 1, 5, ")")
         interval2 = geometry.Interval("(", 10, 15, "]")
         interval3 = geometry.Interval("[", 20, 25, "]")
@@ -1946,7 +1946,7 @@ class TestNumberSet(unittest.TestCase):
         )
 
     # __init__ with multiple non-overlapping numbersets.
-    def test_init_numbersets(self):
+    def test_init_numbersets(self) -> None:
         interval1 = geometry.Interval("[", 1, 5, ")")
         numberset1 = geometry.NumberSet(0, interval1)
         interval2 = geometry.Interval("(", 10, 15, "]")
@@ -1962,7 +1962,7 @@ class TestNumberSet(unittest.TestCase):
 
     # __init__ with multiple non-overlapping numbers, intervals, and
     # numbersets.
-    def test_init_numbers_intervals_numbersets(self):
+    def test_init_numbers_intervals_numbersets(self) -> None:
         interval = geometry.Interval("(", -3, 1, ")")
         interval1 = geometry.Interval("[", 6, 8, ")")
         numberset1 = geometry.NumberSet(5, interval1)
@@ -1974,7 +1974,7 @@ class TestNumberSet(unittest.TestCase):
         )
 
     # __init__ with multiple overlapping numbers.
-    def test_init_numbers_overlapping(self):
+    def test_init_numbers_overlapping(self) -> None:
         numberset = geometry.NumberSet(1, 2, 3, 4, 5, 1, 3, 4, 4)
         self.assertEqual(numberset._boundaries, [1, 1, 2, 2, 3, 3, 4, 4, 5, 5])
         self.assertEqual(
@@ -1983,7 +1983,7 @@ class TestNumberSet(unittest.TestCase):
         )
 
     # __init__ with multiple overlapping intervals.
-    def test_init_intervals_overlapping(self):
+    def test_init_intervals_overlapping(self) -> None:
         interval1 = geometry.Interval("[", 1, 5, "]")
         interval2 = geometry.Interval("(", 4, 10, ")")
         interval3 = geometry.Interval("[", 10, 12, ")")
@@ -1995,7 +1995,7 @@ class TestNumberSet(unittest.TestCase):
         self.assertEqual(numberset._boundaries_included, [True, False])
 
     # __init__ with multiple overlapping numbersets.
-    def test_init_numbersets_overlapping(self):
+    def test_init_numbersets_overlapping(self) -> None:
         interval1 = geometry.Interval("[", 1, 5, "]")
         numberset1 = geometry.NumberSet(0, interval1)
         interval2 = geometry.Interval("(", 4, 10, ")")
@@ -2007,7 +2007,7 @@ class TestNumberSet(unittest.TestCase):
         )
 
     # is_empty should return True iff the NumberSet is empty.
-    def test_is_empty(self):
+    def test_is_empty(self) -> None:
         numberset = geometry.NumberSet()
         self.assertTrue(numberset.is_empty())
 
@@ -2018,7 +2018,7 @@ class TestNumberSet(unittest.TestCase):
         self.assertFalse(numberset.is_empty())
 
     # is_number should return True iff the NumberSet contains a single number.
-    def test_is_number(self):
+    def test_is_number(self) -> None:
         numberset = geometry.NumberSet()
         self.assertFalse(numberset.is_number())
 
@@ -2030,7 +2030,7 @@ class TestNumberSet(unittest.TestCase):
 
     # is_interval should return True iff the NumberSet contains a single
     # interval.
-    def test_is_interval(self):
+    def test_is_interval(self) -> None:
         numberset = geometry.NumberSet()
         self.assertFalse(numberset.is_interval())
 
@@ -2047,7 +2047,7 @@ class TestNumberSet(unittest.TestCase):
         self.assertFalse(numberset.is_interval())
 
     # is_reducible should return True iff the NumberSet is reducible.
-    def test_is_reducible(self):
+    def test_is_reducible(self) -> None:
         numberset = geometry.NumberSet()
         self.assertTrue(numberset.is_reducible())
 
@@ -2070,7 +2070,7 @@ class TestNumberSet(unittest.TestCase):
         self.assertTrue(numberset.is_reducible())
 
     # reduce should return the correct object if the NumberSet is reducible.
-    def test_reduce(self):
+    def test_reduce(self) -> None:
         numberset = geometry.NumberSet()
         self.assertEqual(numberset.reduce(), None)
 
@@ -2094,7 +2094,7 @@ class TestNumberSet(unittest.TestCase):
 
     # is_overlapping should return True iff the NumberSet overlaps with another
     # NumberSet.
-    def test_is_overlapping(self):
+    def test_is_overlapping(self) -> None:
         numberset1 = geometry.NumberSet()
         numberset2 = geometry.NumberSet()
         self.assertFalse(numberset1.is_overlapping(numberset2))
@@ -2129,7 +2129,7 @@ class TestNumberSet(unittest.TestCase):
 
     # is_disjoint should return True iff the NumberSet is disjoint with another
     # NumberSet.
-    def test_is_disjoint(self):
+    def test_is_disjoint(self) -> None:
         numberset1 = geometry.NumberSet()
         numberset2 = geometry.NumberSet()
         self.assertTrue(numberset1.is_disjoint(numberset2))
@@ -2164,7 +2164,7 @@ class TestNumberSet(unittest.TestCase):
 
     # is_subset should return True iff the NumberSet is a subset of another
     # NumberSet.
-    def test_is_subset(self):
+    def test_is_subset(self) -> None:
         numberset1 = geometry.NumberSet()
         numberset2 = geometry.NumberSet()
         self.assertTrue(numberset1.is_subset(numberset2))
@@ -2203,7 +2203,7 @@ class TestNumberSet(unittest.TestCase):
 
     # is_superset should return True iff the NumberSet is a superset of another
     # NumberSet.
-    def test_is_superset(self):
+    def test_is_superset(self) -> None:
         numberset1 = geometry.NumberSet()
         numberset2 = geometry.NumberSet()
         self.assertTrue(numberset1.is_superset(numberset2))
@@ -2242,7 +2242,7 @@ class TestNumberSet(unittest.TestCase):
 
     # is_adjacent should return True iff the NumberSet is adjacent to another
     # NumberSet.
-    def test_is_adjacent(self):
+    def test_is_adjacent(self) -> None:
         numberset1 = geometry.NumberSet()
         numberset2 = geometry.NumberSet()
         self.assertFalse(numberset1.is_adjacent(numberset2))
@@ -2281,7 +2281,7 @@ class TestNumberSet(unittest.TestCase):
 
     # starts_equal should return True iff the NumberSet starts with the same
     # number as another NumberSet.
-    def test_starts_equal(self):
+    def test_starts_equal(self) -> None:
         numberset1 = geometry.NumberSet()
         numberset2 = geometry.NumberSet()
         self.assertFalse(numberset1.starts_equal(numberset2))
@@ -2320,7 +2320,7 @@ class TestNumberSet(unittest.TestCase):
 
     # ends_equal should return True iff the NumberSet ends with the same
     # number as another NumberSet.
-    def test_ends_equal(self):
+    def test_ends_equal(self) -> None:
         numberset1 = geometry.NumberSet()
         numberset2 = geometry.NumberSet()
         self.assertFalse(numberset1.ends_equal(numberset2))
@@ -2359,7 +2359,7 @@ class TestNumberSet(unittest.TestCase):
 
     # starts_left should return True iff the NumberSet starts to the left of
     # another NumberSet.
-    def test_starts_left(self):
+    def test_starts_left(self) -> None:
         numberset1 = geometry.NumberSet()
         numberset2 = geometry.NumberSet()
         self.assertFalse(numberset1.starts_left(numberset2))
@@ -2398,7 +2398,7 @@ class TestNumberSet(unittest.TestCase):
 
     # starts_right should return True iff the NumberSet starts to the right of
     # another NumberSet.
-    def test_starts_right(self):
+    def test_starts_right(self) -> None:
         numberset1 = geometry.NumberSet()
         numberset2 = geometry.NumberSet()
         self.assertFalse(numberset1.starts_right(numberset2))
@@ -2437,7 +2437,7 @@ class TestNumberSet(unittest.TestCase):
 
     # ends_left should return True iff the NumberSet ends to the left of
     # another NumberSet.
-    def test_ends_left(self):
+    def test_ends_left(self) -> None:
         numberset1 = geometry.NumberSet()
         numberset2 = geometry.NumberSet()
         self.assertFalse(numberset1.ends_left(numberset2))
@@ -2476,7 +2476,7 @@ class TestNumberSet(unittest.TestCase):
 
     # ends_right should return True iff the NumberSet ends to the right of
     # another NumberSet.
-    def test_ends_right(self):
+    def test_ends_right(self) -> None:
         numberset1 = geometry.NumberSet()
         numberset2 = geometry.NumberSet()
         self.assertFalse(numberset1.ends_right(numberset2))
@@ -2517,7 +2517,7 @@ class TestNumberSet(unittest.TestCase):
 class XiaolinWuAntiAliasing(unittest.TestCase):
     # xiaolin_wu_anti_aliasing should return the same values as the
     # xiaolin_wu_anti_aliasing_naive function.
-    def test_xialin_wu_anti_aliasing(self):
+    def test_xialin_wu_anti_aliasing(self) -> None:
         for i in range(100):
             if i < 50:
                 x0 = random.randint(-100, 100) / 2

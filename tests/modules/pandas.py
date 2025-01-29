@@ -8,7 +8,7 @@ from python_utils.modules.pandas import (
 
 
 class TestCreateFuncValues2Idcs:
-    def test_basic_functionality_no_missing(self):
+    def test_basic_functionality_no_missing(self) -> None:
         """Test basic mapping functionality without handling missing values."""
         values_unique = np.array([10, 20, 30], dtype=np.int64)
         func = create_func_values2idcs(
@@ -18,7 +18,7 @@ class TestCreateFuncValues2Idcs:
         expected = np.array([0, 1, 0, 2], dtype=np.int64)
         np.testing.assert_array_equal(func(x), expected)
 
-    def test_handle_missing_values_enabled(self):
+    def test_handle_missing_values_enabled(self) -> None:
         """Test mapping functionality with missing value handling."""
         values_unique = np.array([10, 20, 30], dtype=np.int64)
         func = create_func_values2idcs(
@@ -28,7 +28,7 @@ class TestCreateFuncValues2Idcs:
         expected = np.array([0, np.nan, 1, np.nan], dtype=np.float64)
         np.testing.assert_array_equal(func(x), expected)
 
-    def test_large_dense_integer_range(self):
+    def test_large_dense_integer_range(self) -> None:
         """Test mapping for a large, densely packed integer range."""
         values_unique = np.arange(1, 1_000_001, dtype=np.int64)
         func = create_func_values2idcs(
@@ -38,7 +38,7 @@ class TestCreateFuncValues2Idcs:
         expected = np.array([0, 499_999, 999_999], dtype=np.int64)
         np.testing.assert_array_equal(func(x), expected)
 
-    def test_large_sparse_integer_range(self):
+    def test_large_sparse_integer_range(self) -> None:
         """Test mapping for a sparse range, falling back to dict mapping."""
         values_unique = np.array([1, 10, 100, 1_000, 10_000], dtype=np.int64)
         func = create_func_values2idcs(
@@ -48,7 +48,7 @@ class TestCreateFuncValues2Idcs:
         expected = np.array([1, 2, 3], dtype=np.int64)
         np.testing.assert_array_equal(func(x), expected)
 
-    def test_non_integer_values(self):
+    def test_non_integer_values(self) -> None:
         """Test mapping for non-integer values, falling back to dictionary."""
         values_unique = np.array([1.1, 2.2, 3.3], dtype=np.float64)
         func = create_func_values2idcs(
@@ -58,7 +58,7 @@ class TestCreateFuncValues2Idcs:
         expected = np.array([2, 1], dtype=np.int64)
         np.testing.assert_array_equal(func(x), expected)
 
-    def test_empty_values_unique(self):
+    def test_empty_values_unique(self) -> None:
         """Test behavior when the input unique values array is empty."""
         values_unique = np.array([], dtype=np.int64)
         func = create_func_values2idcs(
@@ -70,7 +70,7 @@ class TestCreateFuncValues2Idcs:
 
 
 class TestRemapSeriesToIdcs:
-    def test_basic_functionality_no_values_unique(self):
+    def test_basic_functionality_no_values_unique(self) -> None:
         """Test remapping without providing values_unique."""
         series = pd.Series([10, 20, 10, 30, 20])
         expected_unique = np.array([10, 20, 30], dtype=np.int64)
@@ -83,7 +83,7 @@ class TestRemapSeriesToIdcs:
             value2idx(expected_unique), np.array([0, 1, 2])
         )
 
-    def test_provided_values_unique_no_missing(self):
+    def test_provided_values_unique_no_missing(self) -> None:
         """Test remapping with provided values_unique and no missing values."""
         series = pd.Series([10, 20, 30, 10])
         values_unique = np.array([10, 20, 30], dtype=np.int64)
@@ -98,7 +98,7 @@ class TestRemapSeriesToIdcs:
             value2idx(values_unique), np.array([0, 1, 2])
         )
 
-    def test_provided_values_unique_with_missing(self):
+    def test_provided_values_unique_with_missing(self) -> None:
         """Test remapping with provided values_unique and missing values."""
         series = pd.Series([10, 40, 20, 50])
         values_unique = np.array([10, 20, 30], dtype=np.int64)
@@ -113,7 +113,7 @@ class TestRemapSeriesToIdcs:
             value2idx(values_unique), np.array([0, 1, 2])
         )
 
-    def test_no_values_unique_with_non_integer_values(self):
+    def test_no_values_unique_with_non_integer_values(self) -> None:
         """Test remapping without values_unique for non-integer values."""
         series = pd.Series(["a", "b", "a", "c", "b"])
         expected_unique = np.array(["a", "b", "c"], dtype=object)
@@ -126,7 +126,7 @@ class TestRemapSeriesToIdcs:
             value2idx(expected_unique), np.array([0, 1, 2])
         )
 
-    def test_empty_series(self):
+    def test_empty_series(self) -> None:
         """Test behavior with an empty series."""
         series = pd.Series([], dtype=np.int64)
         expected_unique = np.array([], dtype=np.int64)
@@ -139,7 +139,7 @@ class TestRemapSeriesToIdcs:
             value2idx(expected_unique), np.array([], dtype=np.int64)
         )
 
-    def test_provided_values_unique_empty(self):
+    def test_provided_values_unique_empty(self) -> None:
         """Test behavior when provided values_unique is empty."""
         series = pd.Series([10, 20, 30])
         values_unique = np.array([], dtype=np.int64)

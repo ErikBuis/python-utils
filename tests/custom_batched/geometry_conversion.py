@@ -27,7 +27,7 @@ from python_utils.custom_batched.geometry_conversion import (
 
 
 class TestGenerateRandomPolygon(unittest.TestCase):
-    def test_generate_random_polygon(self):
+    def test_generate_random_polygon(self) -> None:
         for _ in range(16):
             polygon = generate_random_polygon()
             self.assertIsInstance(polygon, Polygon)
@@ -37,7 +37,7 @@ class TestGenerateRandomPolygon(unittest.TestCase):
 
 
 class TestGenerateRandomPolygons(unittest.TestCase):
-    def test_generate_random_polygons(self):
+    def test_generate_random_polygons(self) -> None:
         polygons = generate_random_polygons(amount=16)
         self.assertIsInstance(polygons, gpd.GeoSeries)
         self.assertEqual(len(polygons), 16)
@@ -49,7 +49,7 @@ class TestGenerateRandomPolygons(unittest.TestCase):
 
 
 class TestGenerateRandomMultiPolygon(unittest.TestCase):
-    def test_generate_random_multipolygon(self):
+    def test_generate_random_multipolygon(self) -> None:
         for _ in range(16):
             multipolygon = generate_random_multipolygon()
             self.assertIsInstance(multipolygon, MultiPolygon)
@@ -59,7 +59,7 @@ class TestGenerateRandomMultiPolygon(unittest.TestCase):
 
 
 class TestGenerateRandomMultiPolygons(unittest.TestCase):
-    def test_generate_random_multipolygons(self):
+    def test_generate_random_multipolygons(self) -> None:
         multipolygons = generate_random_multipolygons(amount=16)
         self.assertIsInstance(multipolygons, gpd.GeoSeries)
         self.assertEqual(len(multipolygons), 16)
@@ -71,7 +71,7 @@ class TestGenerateRandomMultiPolygons(unittest.TestCase):
 
 
 class TestPolygonVertices(unittest.TestCase):
-    def test_polygon_vertices(self):
+    def test_polygon_vertices(self) -> None:
         for _ in range(16):
             polygon = generate_random_polygon()
             polygon_vertices = Polygon2PolygonVertices(polygon, torch.float64)
@@ -80,7 +80,7 @@ class TestPolygonVertices(unittest.TestCase):
 
 
 class TestPolygonsVertices(unittest.TestCase):
-    def test_polygons_vertices(self):
+    def test_polygons_vertices(self) -> None:
         polygons = generate_random_polygons(amount=16)
         polygons_vertices = Polygons2PolygonsVertices(polygons, torch.float64)
         polygons2 = PolygonsVertices2Polygons(polygons_vertices)
@@ -88,7 +88,7 @@ class TestPolygonsVertices(unittest.TestCase):
 
 
 class TestMultiPolygonVertices(unittest.TestCase):
-    def test_multipolygon_vertices(self):
+    def test_multipolygon_vertices(self) -> None:
         for _ in range(16):
             multipolygon = generate_random_multipolygon()
             multipolygon_vertices = MultiPolygon2MultiPolygonVertices(
@@ -101,7 +101,7 @@ class TestMultiPolygonVertices(unittest.TestCase):
 
 
 class TestMultiPolygonsVertices(unittest.TestCase):
-    def test_multipolygons_vertices(self):
+    def test_multipolygons_vertices(self) -> None:
         multipolygons = generate_random_multipolygons(amount=16)
         multipolygons_vertices = MultiPolygons2MultiPolygonsVertices(
             multipolygons, torch.float64
@@ -115,7 +115,7 @@ class TestMultiPolygonsVertices(unittest.TestCase):
 
 
 class TestPolygonLike(unittest.TestCase):
-    def test_polygon_like(self):
+    def test_polygon_like(self) -> None:
         for _ in range(16):
             polygon_like = generate_random_polygon_like()
             polygon_vertices = PolygonLike2PolygonLikeVertices(
@@ -126,7 +126,7 @@ class TestPolygonLike(unittest.TestCase):
 
 
 class TestPolygonLikes(unittest.TestCase):
-    def test_polygon_likes(self):
+    def test_polygon_likes(self) -> None:
         polygon_likes = generate_random_polygon_likes(amount=16)
         polygon_vertices = PolygonLikes2PolygonLikesVertices(
             polygon_likes, torch.float64

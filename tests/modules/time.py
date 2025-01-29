@@ -4,7 +4,7 @@ from python_utils.modules.time import human_readable_time
 
 
 class TestHumanReadableTime(unittest.TestCase):
-    def test_shorter_than_one_minute(self):
+    def test_shorter_than_one_minute(self) -> None:
         self.assertEqual(human_readable_time(1234567890), "1.23 s")
         self.assertEqual(
             human_readable_time(1234567890, significant_digits=2), "1.2 s"
@@ -44,7 +44,7 @@ class TestHumanReadableTime(unittest.TestCase):
             "235 milliseconds",
         )
 
-    def test_over_or_equal_to_one_minute(self):
+    def test_over_or_equal_to_one_minute(self) -> None:
         self.assertEqual(
             human_readable_time(
                 (3 * 60 * 60 + 14 * 60 + 15) * 1_000_000_000,
@@ -110,7 +110,7 @@ class TestHumanReadableTime(unittest.TestCase):
             "4y 3h 7m 15.2s",
         )
 
-    def test_significant_digits(self):
+    def test_significant_digits(self) -> None:
         self.assertRaises(
             ValueError, human_readable_time, 1234567890, significant_digits=0
         )
