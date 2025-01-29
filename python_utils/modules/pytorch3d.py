@@ -18,13 +18,28 @@ class Transform3D:
 
     def __init__(
         self,
-        dtype: torch.dtype = torch.float32,
         device: torch.device | str | int | None = None,
+        dtype: torch.dtype = torch.float32,
     ) -> None:
         """Create a batch of 3D transformation matrices."""
-        self._matrix = torch.eye(4, dtype=dtype, device=device).unsqueeze(
+        self._matrix = torch.eye(4, device=device, dtype=dtype).unsqueeze(
             0
         )  # [1, 4, 4]
+
+    def __getitem__(self, b: int) -> "Transform3D":
+        """Get a single transformation matrix from the batch.
+
+        Args:
+            b: The index of the transformation matrix to get.
+
+        Returns:
+            The transformation matrix.
+        """
+        device = self._matrix.device
+        dtype = self._matrix.dtype
+        new = Transform3D(device=device, dtype=dtype)
+        new._matrix = self._matrix[b].unsqueeze(0)
+        return new
 
     def __len__(self) -> int:
         """Get the number of transformation matrices in the batch.
@@ -66,9 +81,9 @@ class Transform3D:
         Returns:
             The composite transformation matrices.
         """
-        dtype = self._matrix.dtype
         device = self._matrix.device
-        new = Transform3D(dtype=dtype, device=device)
+        dtype = self._matrix.dtype
+        new = Transform3D(device=device, dtype=dtype)
         new._matrix = self._matrix.matmul(other.matrix)
         return new
 
@@ -82,9 +97,9 @@ class Transform3D:
         Returns:
             The concatenated transformation matrices.
         """
-        dtype = transforms[0]._matrix.dtype
         device = transforms[0]._matrix.device
-        new = Transform3D(dtype=dtype, device=device)
+        dtype = transforms[0]._matrix.dtype
+        new = Transform3D(device=device, dtype=dtype)
         new._matrix = torch.concatenate([t.matrix for t in transforms])
         return new
 
@@ -106,6 +121,11 @@ class Transform3D:
         # Perform error handling.
         points_batched = True
         if points.ndim == 2:
+            if len(self._matrix) != 1:
+                raise ValueError(
+                    "If points is not batched, the transformation matrices"
+                    " must have a batch size of 1."
+                )
             points = points.unsqueeze(0)
             points_batched = False
         if points.ndim != 3 or points.shape[-1] != 3:
@@ -114,12 +134,12 @@ class Transform3D:
                 f" {points.shape}"
             )
         B, max_P_bs, _ = points.shape
-        dtype = points.dtype
         device = points.device
+        dtype = points.dtype
 
         # Transform the points.
         points = torch.concatenate(
-            [points, torch.ones((B, max_P_bs, 1), dtype=dtype, device=device)],
+            [points, torch.ones((B, max_P_bs, 1), device=device, dtype=dtype)],
             dim=2,
         )  # [B, max(P_bs), 4]
         points = points.matmul(self._matrix)  # [B, max(P_bs), 4]
@@ -135,8 +155,8 @@ class Transform3D:
 
     def to(
         self,
-        dtype: torch.dtype | None = None,
         device: torch.device | str | int | None = None,
+        dtype: torch.dtype | None = None,
     ) -> Self:
         """Move the transformation matrices to a different device or data type.
 
@@ -144,16 +164,16 @@ class Transform3D:
         the same as the object that called this method.
 
         Args:
-            dtype: The data type to move the transformation matrices to.
             device: The device to move the transformation matrices to.
+            dtype: The data type to move the transformation matrices to.
 
         Returns:
             The transformation matrices on the new device or data type.
         """
-        if dtype is None and device is None:
-            raise ValueError("Either dtype or device must be specified.")
+        if device is None and dtype is None:
+            raise ValueError("Either device or dtype must be specified.")
 
-        self._matrix = self._matrix.to(dtype=dtype, device=device)
+        self._matrix = self._matrix.to(device=device, dtype=dtype)
         return self
 
     def inverse(self) -> "Transform3D":
@@ -166,7 +186,7 @@ class Transform3D:
         """
         dtype = self._matrix.dtype
         device = self._matrix.device
-        new = Transform3D(dtype=dtype, device=device)
+        new = Transform3D(device=device, dtype=dtype)
         new._matrix = torch.inverse(self._matrix)
         return new
 
@@ -179,8 +199,8 @@ class Translate(Transform3D):
         x: torch.Tensor | float = 0,
         y: torch.Tensor | float = 0,
         z: torch.Tensor | float = 0,
-        dtype: torch.dtype = torch.float32,
         device: torch.device | str | int | None = None,
+        dtype: torch.dtype = torch.float32,
     ) -> None:
         """Create a transformation that translates 3D points.
 
@@ -191,19 +211,19 @@ class Translate(Transform3D):
                 Shape: [] or [B]
             z: The translation along the z-axis. Can be a scalar or tensor.
                 Shape: [] or [B]
-            dtype: The data type of the transformation matrix.
             device: The device to store the transformation matrix on.
+            dtype: The data type of the transformation matrix.
         """
-        super().__init__(dtype=dtype, device=device)
+        super().__init__(device=device, dtype=dtype)
 
         # Perform error handling.
-        x = torch.as_tensor(x, dtype=dtype, device=device)
+        x = torch.as_tensor(x, device=device, dtype=dtype)
         if x.ndim == 0:
             x = x.unsqueeze(0)
-        y = torch.as_tensor(y, dtype=dtype, device=device)
+        y = torch.as_tensor(y, device=device, dtype=dtype)
         if y.ndim == 0:
             y = y.unsqueeze(0)
-        z = torch.as_tensor(z, dtype=dtype, device=device)
+        z = torch.as_tensor(z, device=device, dtype=dtype)
         if z.ndim == 0:
             z = z.unsqueeze(0)
         if x.ndim != 1 or y.ndim != 1 or z.ndim != 1:
@@ -234,7 +254,7 @@ class Translate(Transform3D):
         if len(z) != B:
             z = z.expand(B)
         mat = (
-            torch.eye(4, dtype=dtype, device=device)
+            torch.eye(4, device=device, dtype=dtype)
             .unsqueeze(0)
             .repeat(B, 1, 1)
         )  # [B, 4, 4]
@@ -250,8 +270,8 @@ class Scale(Transform3D):
         x: torch.Tensor | float = 1,
         y: torch.Tensor | float = 1,
         z: torch.Tensor | float = 1,
-        dtype: torch.dtype = torch.float32,
         device: torch.device | str | int | None = None,
+        dtype: torch.dtype = torch.float32,
     ) -> None:
         """Create a transformation that scales 3D points isotropically.
 
@@ -262,19 +282,19 @@ class Scale(Transform3D):
                 Shape: [] or [B]
             z: The scaling factor along the z-axis. Can be a scalar or tensor.
                 Shape: [] or [B]
-            dtype: The data type of the transformation matrix.
             device: The device to store the transformation matrix on.
+            dtype: The data type of the transformation matrix.
         """
-        super().__init__(dtype=dtype, device=device)
+        super().__init__(device=device, dtype=dtype)
 
         # Perform error handling.
-        x = torch.as_tensor(x, dtype=dtype, device=device)
+        x = torch.as_tensor(x, device=device, dtype=dtype)
         if x.ndim == 0:
             x = x.unsqueeze(0)
-        y = torch.as_tensor(y, dtype=dtype, device=device)
+        y = torch.as_tensor(y, device=device, dtype=dtype)
         if y.ndim == 0:
             y = y.unsqueeze(0)
-        z = torch.as_tensor(z, dtype=dtype, device=device)
+        z = torch.as_tensor(z, device=device, dtype=dtype)
         if z.ndim == 0:
             z = z.unsqueeze(0)
         if x.ndim != 1 or y.ndim != 1 or z.ndim != 1:
@@ -305,7 +325,7 @@ class Scale(Transform3D):
         if len(z) != B:
             z = z.expand(B)
         mat = (
-            torch.eye(4, dtype=dtype, device=device)
+            torch.eye(4, device=device, dtype=dtype)
             .unsqueeze(0)
             .repeat(B, 1, 1)
         )  # [B, 4, 4]
@@ -321,8 +341,8 @@ class Rotate(Transform3D):
     def __init__(
         self,
         rot: torch.Tensor,
-        dtype: torch.dtype = torch.float32,
         device: torch.device | str | int | None = None,
+        dtype: torch.dtype = torch.float32,
     ) -> None:
         """Create a transformation that rotates 3D points around an axis.
 
@@ -332,10 +352,10 @@ class Rotate(Transform3D):
                     Shape: [3, 3]
                 - Multiple rotation matrices.
                     Shape: [B, 3, 3]
-            dtype: The data type of the transformation matrix.
             device: The device to store the transformation matrix on.
+            dtype: The data type of the transformation matrix.
         """
-        super().__init__(dtype=dtype, device=device)
+        super().__init__(device=device, dtype=dtype)
 
         # Perform error handling.
         if rot.ndim == 2:
@@ -344,7 +364,7 @@ class Rotate(Transform3D):
             raise ValueError(
                 f"rot must have shape [B, 3, 3] or [3, 3], but got {rot.shape}"
             )
-        rot = rot.to(dtype=dtype, device=device)
+        rot = rot.to(device=device, dtype=dtype)
         if not self.__is_valid_rotation_matrix(rot):
             raise ValueError("The matrix is not a valid rotation matrix.")
 
@@ -368,13 +388,13 @@ class Rotate(Transform3D):
         Returns:
             Whether the matrix is a valid rotation matrix.
         """
-        dtype = rot.dtype
         device = rot.device
+        dtype = rot.dtype
         B = len(rot)
 
         # Check whether the matrix is orthogonal.
         I = (  # noqa: E741
-            torch.eye(3, dtype=dtype, device=device)
+            torch.eye(3, device=device, dtype=dtype)
             .unsqueeze(0)
             .repeat(B, 1, 1)
         )  # [B, 3, 3]
@@ -382,7 +402,7 @@ class Rotate(Transform3D):
             return False
 
         # Check whether the matrix has a determinant of 1.
-        ones = torch.ones(B, dtype=dtype, device=device)
+        ones = torch.ones(B, device=device, dtype=dtype)
         if not torch.allclose(torch.det(rot), ones, atol=atol):
             return False
 
@@ -396,8 +416,8 @@ class RotateAxisAngle(Rotate):
         self,
         angle: torch.Tensor | float,
         axis: str = "X",
-        dtype: torch.dtype = torch.float32,
         device: torch.device | str | int | None = None,
+        dtype: torch.dtype = torch.float32,
     ) -> None:
         """Create a transformation that rotates 3D points around an axis.
 
@@ -405,11 +425,11 @@ class RotateAxisAngle(Rotate):
             angle: Angle to rotate by in radians. Can be a scalar or tensor.
                 Shape: [] or [B]
             axis: The axis to rotate around. Must be one of "X", "Y", or "Z".
-            dtype: The data type of the transformation matrix.
             device: The device to store the transformation matrix on.
+            dtype: The data type of the transformation matrix.
         """
         # Perform error handling.
-        angle = torch.as_tensor(angle, dtype=dtype, device=device)
+        angle = torch.as_tensor(angle, device=device, dtype=dtype)
         if angle.ndim == 0:
             angle = angle.unsqueeze(0)
         if angle.ndim != 1:
@@ -422,8 +442,8 @@ class RotateAxisAngle(Rotate):
         # Create the rotation matrix.
         c = torch.cos(angle)  # [B]
         s = torch.sin(angle)  # [B]
-        zeros = torch.zeros(B, dtype=dtype, device=device)
-        ones = torch.ones(B, dtype=dtype, device=device)
+        zeros = torch.zeros(B, device=device, dtype=dtype)
+        ones = torch.ones(B, device=device, dtype=dtype)
         if axis == "X":
             mat = torch.stack([
                 torch.stack([ones, zeros, zeros]),
@@ -455,7 +475,7 @@ class RotateAxisAngle(Rotate):
         #     [Tx,  Ty,  Tz,  1],
         # ]
         mat = mat.permute(2, 1, 0)  # [B, 3, 3]
-        super().__init__(mat, dtype=dtype, device=device)
+        super().__init__(mat, device=device, dtype=dtype)
 
 
 class ProjectToSurface(Transform3D):
@@ -464,8 +484,8 @@ class ProjectToSurface(Transform3D):
     def __init__(
         self,
         surface: torch.Tensor,
-        dtype: torch.dtype = torch.float32,
         device: torch.device | str | int | None = None,
+        dtype: torch.dtype = torch.float32,
     ) -> None:
         """Create a transformation that projects 3D points to a plane in 3D.
 
@@ -482,10 +502,10 @@ class ProjectToSurface(Transform3D):
                 - d is the distance of the surface to the origin divided by
                     the length of the normal vector.
                 - (x, y, z) are the coordinates of a point on the surface.
-            dtype: The data type of the transformation matrix.
             device: The device to store the transformation matrix on.
+            dtype: The data type of the transformation matrix.
         """
-        super().__init__(dtype=dtype, device=device)
+        super().__init__(device=device, dtype=dtype)
 
         # Perform error handling.
         if surface.ndim == 1:
@@ -495,13 +515,13 @@ class ProjectToSurface(Transform3D):
                 "surface must have shape [4] or [B, 4], but got"
                 f" {surface.shape}"
             )
-        surface = surface.to(dtype=dtype, device=device)
+        surface = surface.to(device=device, dtype=dtype)
 
         # Create the projection matrix.
         B = surface.shape[0]
         n0, n1, n2, d = surface.unbind(-1)  # [B], ...
-        zeros = torch.zeros(B, dtype=dtype, device=device)
-        ones = torch.ones(B, dtype=dtype, device=device)
+        zeros = torch.zeros(B, device=device, dtype=dtype)
+        ones = torch.ones(B, device=device, dtype=dtype)
 
         mat = torch.stack([
             torch.stack([1 - n0.square(), -n0 * n1, -n0 * n2, -n0 * d]),
@@ -527,8 +547,8 @@ class SurfaceToSurface(Transform3D):
         self,
         from_surface: torch.Tensor,
         to_surface: torch.Tensor,
-        dtype: torch.dtype = torch.float32,
         device: torch.device | str | int | None = None,
+        dtype: torch.dtype = torch.float32,
     ) -> None:
         """Create a transformation that rotates a surface onto another surface.
 
@@ -561,10 +581,10 @@ class SurfaceToSurface(Transform3D):
                 - d is the distance of the surface to the origin divided by
                     the length of the normal vector.
                 - (x, y, z) are the coordinates of a point on the surface.
-            dtype: The data type of the transformation matrix.
             device: The device to store the transformation matrix on.
+            dtype: The data type of the transformation matrix.
         """
-        super().__init__(dtype=dtype, device=device)
+        super().__init__(device=device, dtype=dtype)
 
         # Perform error handling.
         if from_surface.ndim == 1:
@@ -574,7 +594,7 @@ class SurfaceToSurface(Transform3D):
                 "from_surface must have shape [4] or [B, 4], but got"
                 f" {from_surface.shape}"
             )
-        from_surface = from_surface.to(dtype=dtype, device=device)
+        from_surface = from_surface.to(device=device, dtype=dtype)
         if to_surface.ndim == 1:
             to_surface = to_surface.unsqueeze(0)  # [1, 4]
         if to_surface.shape[-1] != 4 or to_surface.ndim > 2:
@@ -582,7 +602,7 @@ class SurfaceToSurface(Transform3D):
                 "to_surface must have shape [4] or [B, 4], but got"
                 f" {to_surface.shape}"
             )
-        to_surface = to_surface.to(dtype=dtype, device=device)
+        to_surface = to_surface.to(device=device, dtype=dtype)
         if from_surface.shape[0] == 1 and to_surface.shape[0] != 1:
             from_surface = from_surface.expand(to_surface.shape[0], -1)
         if to_surface.shape[0] == 1 and from_surface.shape[0] != 1:
@@ -607,30 +627,30 @@ class SurfaceToSurface(Transform3D):
         from_v_x, from_v_y, from_v_z = from_v.unbind(1)  # [B], [B], [B]
         self._multiply(
             Translate(
-                -from_v_x, -from_v_y, -from_v_z, dtype=dtype, device=device
+                -from_v_x, -from_v_y, -from_v_z, device=device, dtype=dtype
             )
         )
 
         # Then rotate the points from from_n to to_n.
         rot = self.__get_matrix_rotate_vec_a_to_vec_b(
-            from_n, to_n, dtype=dtype, device=device
+            from_n, to_n, device=device, dtype=dtype
         )  # [B, 3, 3]
-        self._multiply(Rotate(rot, dtype=dtype, device=device))
+        self._multiply(Rotate(rot, device=device, dtype=dtype))
 
         # Finally, translate the points from the origin to to_surface.
         # to_v is the point on to_surface closest to the origin.
         to_v = -to_n * to_d.unsqueeze(-1)  # [B, 3]
         to_v_x, to_v_y, to_v_z = to_v.unbind(1)  # [B], [B], [B]
         self._multiply(
-            Translate(to_v_x, to_v_y, to_v_z, dtype=dtype, device=device)
+            Translate(to_v_x, to_v_y, to_v_z, device=device, dtype=dtype)
         )
 
     @staticmethod
     def __get_matrix_rotate_vec_a_to_vec_b(
         from_n: torch.Tensor,
         to_n: torch.Tensor,
-        dtype: torch.dtype = torch.float32,
         device: torch.device | str | int | None = None,
+        dtype: torch.dtype = torch.float32,
     ) -> torch.Tensor:
         """Find the matrices that rotate one set of vectors onto another.
 
@@ -650,8 +670,8 @@ class SurfaceToSurface(Transform3D):
                 Shape: [B, 3]
             to_n: The vectors to rotate to. Must be normalized.
                 Shape: [B, 3]
-            dtype: The data type of the rotation matrices.
             device: The device to store the rotation matrices on.
+            dtype: The data type of the rotation matrices.
 
         Returns:
             The rotation matrices to rotate from from_n to to_n.
@@ -659,7 +679,7 @@ class SurfaceToSurface(Transform3D):
         """
         device = device if device is not None else from_n.device
         B = len(from_n)
-        zeros = torch.zeros(B, dtype=dtype, device=device)
+        zeros = torch.zeros(B, device=device, dtype=dtype)
         u = torch.cross(from_n, to_n, dim=1)  # [B, 3]
         c = torch.sum(from_n * to_n, dim=1, keepdim=True).unsqueeze(
             2
@@ -670,7 +690,7 @@ class SurfaceToSurface(Transform3D):
             torch.stack([-u[:, 1], u[:, 0], zeros]),
         ])  # [3, 3, B]
         v_x = v_x.permute(2, 1, 0)  # [B, 3, 3]
-        I = torch.eye(3, dtype=dtype, device=device)  # [3, 3]  # noqa: E741
+        I = torch.eye(3, device=device, dtype=dtype)  # [3, 3]  # noqa: E741
         return torch.where(
             # Test whether the vectors are opposites.
             (from_n + to_n).abs() > 1e-7,
@@ -699,8 +719,8 @@ def points_2D_to_3D(points: torch.Tensor) -> torch.Tensor:
             points,
             torch.zeros(
                 points.shape[:-1] + (1,),
-                dtype=points.dtype,
                 device=points.device,
+                dtype=points.dtype,
             ),
         ],
         dim=-1,

@@ -42,7 +42,7 @@ class XiaolinWuAntiAliasingBatched(unittest.TestCase):
             pixels_x_seq.append(pixels_x)
             pixels_y_seq.append(pixels_y)
             vals_seq.append(vals)
-        S_bs_seq = torch.tensor(list(map(len, vals_seq)))
+        S_bs_seq = torch.as_tensor(list(map(len, vals_seq)))
         pixels_x_seq = nn.utils.rnn.pad_sequence(
             pixels_x_seq, batch_first=True
         )

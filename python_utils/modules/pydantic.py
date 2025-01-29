@@ -159,3 +159,15 @@ try:
     ]
 except ImportError:
     pass
+
+try:
+    from .pytorch3d import Transform3D
+
+    Transform3DAnn = Annotated[
+        Transform3D,
+        GetPydanticSchema(
+            lambda tp, handler: core_schema.is_instance_schema(Transform3D)
+        ),
+    ]
+except ImportError:
+    pass

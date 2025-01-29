@@ -60,24 +60,24 @@ def ransac_batched(
 
     r, theta = lines
     B, max_L_bs = r.shape
-    dtype = theta.dtype
     device = theta.device
+    dtype = theta.dtype
 
     if not isinstance(max_iterations, torch.Tensor):
         max_iterations = torch.full(
-            (B,), max_iterations, dtype=torch.int64, device=device
+            (B,), max_iterations, device=device, dtype=torch.int64
         )
     elif max_iterations.ndim == 0:
         max_iterations = max_iterations.expand(B)
     if not isinstance(inlier_threshold, torch.Tensor):
         inlier_threshold = torch.full(
-            (B,), inlier_threshold, dtype=dtype, device=device
+            (B,), inlier_threshold, device=device, dtype=dtype
         )
     elif inlier_threshold.ndim == 0:
         inlier_threshold = inlier_threshold.expand(B)
     if not isinstance(min_inliers, torch.Tensor):
         min_inliers = torch.full(
-            (B,), min_inliers, dtype=torch.int64, device=device
+            (B,), min_inliers, device=device, dtype=torch.int64
         )
     elif min_inliers.ndim == 0:
         min_inliers = min_inliers.expand(B)
@@ -87,12 +87,12 @@ def ransac_batched(
     idcs_random = sample_unique_pairs_batched(L_bs, max_L_bs, I)  # [B, I, 2]
     arange_B = torch.arange(B, device=device)
 
-    best_intersection = torch.empty((B, 2), dtype=dtype, device=device)
-    best_num_inliers = torch.zeros(B, dtype=torch.int64, device=device)
+    best_intersection = torch.empty((B, 2), device=device, dtype=dtype)
+    best_num_inliers = torch.zeros(B, device=device, dtype=torch.int64)
 
     # This variable is used to stop the algorithm early for samples that have
     # already found a good intersection point.
-    is_running = torch.ones(B, dtype=torch.bool, device=device)
+    is_running = torch.ones(B, device=device, dtype=torch.bool)
 
     for i in range(I):
         # Only select samples that haven't yet found a good intersection point.

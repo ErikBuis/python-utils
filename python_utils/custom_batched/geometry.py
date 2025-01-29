@@ -155,7 +155,7 @@ def __is_point_in_polygon_simple_batched(
     # right and counting the number of times the ray intersects with an edge
     # of the polygon. At each intersection, the ray switches between being
     # inside and outside the polygon. This is called the Jordan curve theorem.
-    in_polygon = torch.zeros(B, dtype=torch.bool, device=device)
+    in_polygon = torch.zeros(B, device=device, dtype=torch.bool)
     # Iterate over the edges of the polygon...
     for i, j in zip(range(0, V - 1), range(1, V)):
         xi, yi = exterior[i]
@@ -219,7 +219,7 @@ def __is_point_in_polygon_complex_batched(
     # first point of each sequence to the end of the sequence. This is
     # described in the section "Concave Components, Multiple Components, and
     # Holes" of the above link.
-    zero_point = torch.zeros((1, 2), dtype=dtype, device=device)
+    zero_point = torch.zeros((1, 2), device=device, dtype=dtype)
     point_tensors = [zero_point, exterior]
     for hole in interiors:
         point_tensors.extend([zero_point, hole])
@@ -251,12 +251,12 @@ def is_point_in_polygon_batched(
         points = points.unsqueeze(0)
 
     exterior = torch.tensor(
-        polygon.exterior.coords, dtype=dtype, device=device
+        polygon.exterior.coords, device=device, dtype=dtype
     )
     if not polygon.interiors:
         return __is_point_in_polygon_simple_batched(exterior, points)
     interiors = [
-        torch.tensor(interior.coords, dtype=dtype, device=device)
+        torch.tensor(interior.coords, device=device, dtype=dtype)
         for interior in polygon.interiors
     ]
     return __is_point_in_polygon_complex_batched(exterior, interiors, points)
@@ -282,7 +282,7 @@ def is_point_in_polygon_like_batched(
 
     if isinstance(polygon_like, Polygon):
         return is_point_in_polygon_batched(polygon_like, points)
-    in_polygon = torch.zeros(len(points), dtype=torch.bool, device=device)
+    in_polygon = torch.zeros(len(points), device=device, dtype=torch.bool)
     for subpolygon in polygon_like.geoms:
         in_polygon |= is_point_in_polygon_batched(subpolygon, points)
 
@@ -399,9 +399,9 @@ def xiaolin_wu_anti_aliasing_batched(
     S_bs = 2 * (xpxl_end - xpxl_begin + 1)  # [B]
     max_S_bs = int(S_bs.max())
     B = len(S_bs)
-    pixels_x = torch.empty((B, max_S_bs), dtype=torch.int64, device=device)
-    pixels_y = torch.empty((B, max_S_bs), dtype=torch.int64, device=device)
-    vals = torch.empty((B, max_S_bs), dtype=torch.float64, device=device)
+    pixels_x = torch.empty((B, max_S_bs), device=device, dtype=torch.int64)
+    pixels_y = torch.empty((B, max_S_bs), device=device, dtype=torch.int64)
+    vals = torch.empty((B, max_S_bs), device=device, dtype=torch.float64)
 
     # Calculate values used in the main loop.
     x, _ = arange_batched(

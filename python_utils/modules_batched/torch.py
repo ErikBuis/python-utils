@@ -21,11 +21,11 @@ def mask_padding_batched(L_bs: torch.Tensor, max_L_bs: int) -> torch.Tensor:
         mask[b, i] is True if i < L_bs[b] and False otherwise.
             Shape: [B, max(L_bs)]
     """
-    dtype = L_bs.dtype
     device = L_bs.device
+    dtype = L_bs.dtype
 
     return (
-        torch.arange(max_L_bs, dtype=dtype, device=device)  # [max(L_bs)]
+        torch.arange(max_L_bs, device=device, dtype=dtype)  # [max(L_bs)]
         < L_bs.unsqueeze(1)  # [B, 1]
     )  # [B, max(L_bs)]  # fmt: skip
 
@@ -74,19 +74,19 @@ def pad_packed_batched(
             Shape: [B, max(L_bs), *]
     """
     B = len(L_bs)
-    dtype = values.dtype
     device = values.device
+    dtype = values.dtype
 
     padded_shape = (B, max_L_bs, *values.shape[1:])
     if padding_value is None:
-        values_padded = torch.empty(padded_shape, dtype=dtype, device=device)
+        values_padded = torch.empty(padded_shape, device=device, dtype=dtype)
     elif padding_value == 0:
-        values_padded = torch.zeros(padded_shape, dtype=dtype, device=device)
+        values_padded = torch.zeros(padded_shape, device=device, dtype=dtype)
     elif padding_value == 1:
-        values_padded = torch.ones(padded_shape, dtype=dtype, device=device)
+        values_padded = torch.ones(padded_shape, device=device, dtype=dtype)
     else:
         values_padded = torch.full(
-            padded_shape, padding_value, dtype=dtype, device=device
+            padded_shape, padding_value, device=device, dtype=dtype
         )
 
     mask = mask_padding_batched(L_bs, max_L_bs)  # [B, max(L_bs)]
@@ -296,8 +296,8 @@ def arange_batched(
     starts: torch.Tensor,
     ends: torch.Tensor | None = None,
     steps: torch.Tensor | None = None,
-    dtype: torch.dtype | None = None,
     device: torch.device | str | int | None = None,
+    dtype: torch.dtype | None = None,
     requires_grad: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Create a batch of tensors with values in the range [start, end).
@@ -311,8 +311,8 @@ def arange_batched(
         steps: The step value for each tensor in the batch. If None, the step
             value is set to 1.
             Shape: [B]
-        dtype: The data type of the tensor.
         device: The device of the tensor.
+        dtype: The data type of the tensor.
         requires_grad: Whether to require gradients for the tensor.
 
     Returns:
@@ -323,19 +323,19 @@ def arange_batched(
         - The number of values of any arange sequence in the batch.
             Shape: [B]
     """
-    dtype = dtype if dtype is not None else starts.dtype
     device = device if device is not None else starts.device
+    dtype = dtype if dtype is not None else starts.dtype
 
     B = len(starts)
     if ends is None:
         ends = starts
-        starts = torch.zeros(B, dtype=dtype, device=device)
+        starts = torch.zeros(B, device=device, dtype=dtype)
     if steps is None:
-        steps = torch.ones(B, dtype=dtype, device=device)
+        steps = torch.ones(B, device=device, dtype=dtype)
 
     L_bs = ((ends - starts) // steps).long()
     max_L_bs = int(L_bs.max())
-    aranges = torch.arange(max_L_bs, dtype=dtype, device=device)
+    aranges = torch.arange(max_L_bs, device=device, dtype=dtype)
     aranges = starts.unsqueeze(1) + aranges * steps.unsqueeze(1)
     aranges[aranges >= ends.unsqueeze(1)] = 0
     if requires_grad:
@@ -924,9 +924,9 @@ def unique_consecutive_batched(
     is_change = torch.concatenate(
         [
             (
-                torch.ones((B, 1), dtype=torch.bool, device=device)
+                torch.ones((B, 1), device=device, dtype=torch.bool)
                 if N_dim > 0
-                else torch.empty((B, 0), dtype=torch.bool, device=device)
+                else torch.empty((B, 0), device=device, dtype=torch.bool)
             ),  # [B, 1] or [B, 0]
             (y[:, :, :-1] != y[:, :, 1:]).any(
                 dim=1
@@ -971,11 +971,11 @@ def unique_consecutive_batched(
                     dim_idcs_padded,  # [B, max(U_bs)]
                     (
                         torch.full(
-                            (B, 1), N_dim, dtype=torch.int64, device=device
+                            (B, 1), N_dim, device=device, dtype=torch.int64
                         )
                         if N_dim > 0
                         else torch.empty(
-                            (B, 0), dtype=torch.int64, device=device
+                            (B, 0), device=device, dtype=torch.int64
                         )
                     ),  # [B, 1] or [B, 0]
                 ],

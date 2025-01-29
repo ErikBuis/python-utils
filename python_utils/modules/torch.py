@@ -144,15 +144,15 @@ def cumsum_start_0(
 
     shape = list(t.shape)
     shape[dim] = 1
-    zeros = torch.zeros(shape, dtype=dtype, device=device)
+    zeros = torch.zeros(shape, device=device, dtype=dtype)
     cumsum = torch.cumsum(t, dim=dim, dtype=dtype)
     return torch.concatenate([zeros, cumsum], dim=dim)
 
 
 def to_tensor(
     object: object,
-    dtype: torch.dtype | None = None,
     device: torch.device | str | int | None = None,
+    dtype: torch.dtype | None = None,
 ) -> torch.Tensor:
     """Convert an object to a tensor.
 
@@ -161,19 +161,19 @@ def to_tensor(
 
     Args:
         object: The object to convert to a tensor.
-        dtype: The desired data type of the returned tensor. If None, the
-            dtype of the object will be used.
         device: The desired device of the returned tensor. If None, the
             device of the object will be used.
+        dtype: The desired data type of the returned tensor. If None, the
+            dtype of the object will be used.
     """
     # Torch supported types: bool, uint8, int8, int16, int32, int64, float16,
     # float32, float64, complex64, and complex128.
     if isinstance(object, torch.Tensor):
-        return object.to(dtype=dtype, device=device)
+        return object.to(device=device, dtype=dtype)
 
     if isinstance(object, np.ndarray):
         try:
-            return torch.from_numpy(object).to(dtype=dtype, device=device)
+            return torch.from_numpy(object).to(device=device, dtype=dtype)
         except TypeError as e:
             # Try to convert to a supported type before calling from_numpy().
             np2torch_fallbacks = {
@@ -193,13 +193,13 @@ def to_tensor(
                 f" Falling back to type {fallback}."
             )
             return torch.from_numpy(object.astype(fallback)).to(
-                dtype=dtype, device=device
+                device=device, dtype=dtype
             )
 
     # Last resort: because numpy recognizes more array-like types than torch,
     # we try to convert to numpy first.
     try:
-        return to_tensor(np.array(object), dtype=dtype, device=device)
+        return to_tensor(np.array(object), device=device, dtype=dtype)
     except Exception as e:
         raise TypeError(
             f"Could not convert object of type {type(object)} to tensor."
@@ -315,11 +315,11 @@ def ravel_multi_index(
     if order == "C":
         factors = torch.concatenate([
             dims[1:].flip(0).cumprod(0, dtype=torch.int64).flip(0),
-            torch.ones(1, dtype=torch.int64, device=dims.device),
+            torch.ones(1, device=dims.device, dtype=torch.int64),
         ])  # [K]
     elif order == "F":
         factors = torch.concatenate([
-            torch.ones(1, dtype=torch.int64, device=dims.device),
+            torch.ones(1, device=dims.device, dtype=torch.int64),
             dims[:-1].cumprod(0, dtype=torch.int64),
         ])  # [K]
     else:
@@ -344,7 +344,7 @@ def ravel_multi_index(
         multi_index = multi_index % dims
     elif mode == "clip":
         # Clip the multi-index to the range.
-        multi_index = torch.clamp(multi_index, torch.tensor(0), dims - 1)
+        multi_index = torch.clamp(multi_index, torch.as_tensor(0), dims - 1)
     else:
         raise ValueError(
             "clipmode must be one of 'clip', 'raise', or 'wrap' (got"
@@ -731,9 +731,9 @@ def unique_consecutive(
     is_change = torch.concatenate(
         [
             (
-                torch.ones(1, dtype=torch.bool, device=x.device)
+                torch.ones(1, device=x.device, dtype=torch.bool)
                 if N_dim > 0
-                else torch.empty(0, dtype=torch.bool, device=x.device)
+                else torch.empty(0, device=x.device, dtype=torch.bool)
             ),  # [1] or [0]
             (y[:, :-1] != y[:, 1:]).any(dim=0),  # [N_dim - 1] or [0]
         ],
@@ -761,10 +761,10 @@ def unique_consecutive(
                     idcs,  # [U]
                     (
                         torch.full(
-                            (1,), N_dim, dtype=torch.int64, device=x.device
+                            (1,), N_dim, device=x.device, dtype=torch.int64
                         )
                         if N_dim > 0
-                        else torch.empty(0, dtype=torch.int64, device=x.device)
+                        else torch.empty(0, device=x.device, dtype=torch.int64)
                     ),  # [1] or [0]
                 ],
                 dim=0,
@@ -1098,7 +1098,7 @@ def count_freqs_until(x: torch.Tensor, high: int) -> torch.Tensor:
         The frequency of each element in x in range(0, high).
             Shape: [high]
     """
-    freqs = torch.zeros(high, dtype=torch.int64, device=x.device)
+    freqs = torch.zeros(high, device=x.device, dtype=torch.int64)
     unique, counts = unique_consecutive(x, return_counts=True, dim=0)
     freqs[unique] = counts
     return freqs
