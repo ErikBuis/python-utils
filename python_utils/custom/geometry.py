@@ -97,6 +97,8 @@ from math import pow as mpow
 from math import sin, sqrt, tan
 from typing import Any, Literal, TypeVar, cast, overload
 
+from typing_extensions import override
+
 from ..modules.bisect import bisect_right_using_left
 
 
@@ -165,18 +167,22 @@ class Matrix2D:
         else:
             raise IndexError("Matrix index out of range.")
 
+    @override
     def __repr__(self) -> str:
         """Represent the matrix as a string."""
         return f"{self.__class__.__name__}({', '.join(map(repr, self))})"
 
+    @override
     def __str__(self) -> str:
         """Represent the matrix as a string."""
         return f"| {self._a}  {self._b} |\n| {self._c}  {self._d} |"
 
+    @override
     def __hash__(self) -> int:
         """Create a hash id for the matrix."""
         return hash((self._a, self._b, self._c, self._d))
 
+    @override
     def __eq__(self, other: object) -> bool:
         """Compare two matrices.
 
@@ -309,6 +315,7 @@ class Interval:
                 return component
         raise IndexError("Interval index out of range.")
 
+    @override
     def __repr__(self) -> str:
         """Represent the interval as a string."""
         return (
@@ -323,6 +330,7 @@ class Interval:
             + ")"
         )
 
+    @override
     def __str__(self) -> str:
         """Represent the interval as a string."""
         return (
@@ -330,12 +338,14 @@ class Interval:
             f'{self._end}{"]" if self._end_included else ")"}'
         )
 
+    @override
     def __hash__(self) -> int:
         """Create a hash id for the interval."""
         return hash(
             (self._start_included, self._start, self._end, self._end_included)
         )
 
+    @override
     def __eq__(self, other: "Interval") -> bool:
         """Check if two objects represent the same set of numbers."""
         return all(
@@ -458,6 +468,7 @@ class NumberSet:
                 return component
         raise IndexError("NumberSet index out of range.")
 
+    @override
     def __repr__(self) -> str:
         """Represent the set as a string."""
         return (
@@ -466,6 +477,7 @@ class NumberSet:
             + ")"
         )
 
+    @override
     def __str__(self) -> str:
         """Represent the set as a string."""
         return (
@@ -479,6 +491,7 @@ class NumberSet:
         """Check if the set contains any numbers or intervals."""
         return bool(self._boundaries)
 
+    @override
     def __eq__(self, other: object) -> bool:
         """Check if two sets contain the same components."""
         if not isinstance(other, NumberSet):
@@ -1757,14 +1770,17 @@ class GeometricObject2D(ABC):
                 return component
         raise IndexError(f"{self.__class__.__name__} index out of range.")
 
+    @override
     def __repr__(self) -> str:
         """Represent the object as a string."""
         return f"{self.__class__.__name__}({', '.join(map(repr, self))})"
 
+    @override
     def __hash__(self) -> int:
         """Create a hash id for the geometric object."""
         return hash(tuple(self))
 
+    @override
     def __eq__(self, other: object) -> bool:
         """Compare two geometric objects.
 
@@ -1907,6 +1923,7 @@ class Vector2D(GeometricObject2D):
         self._y = y
         super().__init__()
 
+    @override
     def __iter__(self) -> Iterator[float]:
         """Iterate over the vector's components."""
         return iter((self._x, self._y))
@@ -1949,6 +1966,7 @@ class Vector2D(GeometricObject2D):
         """Perform integer division by the given scalar."""
         return Vector2D(self._x // other, self._y // other)
 
+    @override
     def copy(self) -> "Vector2D":
         """Create a copy of this vector.
 
@@ -1956,6 +1974,7 @@ class Vector2D(GeometricObject2D):
         """
         return Vector2D(self._x, self._y)
 
+    @override
     def translate(self, v: "Vector2D") -> "Vector2D":
         """Translate the vector by the given amount.
 
@@ -1963,6 +1982,7 @@ class Vector2D(GeometricObject2D):
         """
         return Vector2D(self._x + v._x, self._y + v._y)
 
+    @override
     def scale(self, x: float, y: float) -> "Vector2D":
         """Scale the vector by the given amount.
 
@@ -1970,6 +1990,7 @@ class Vector2D(GeometricObject2D):
         """
         return Vector2D(self._x * x, self._y * y)
 
+    @override
     def rotate(self, angle: float) -> "Vector2D":
         """Rotate the vector by the given angle in radians.
 
@@ -1993,6 +2014,7 @@ class Vector2D(GeometricObject2D):
             self._x * sin(angle) + self._y * cos(angle),
         )
 
+    @override
     def reflect(self, v: "Vector2D") -> "Vector2D":
         """Reflect the vector over the given vector.
 
@@ -2000,6 +2022,7 @@ class Vector2D(GeometricObject2D):
         """
         return 2 * v - self
 
+    @override
     def transform(self, matrix: Matrix2D) -> "Vector2D":
         """Transform the vector by the given matrix.
 
@@ -2010,6 +2033,7 @@ class Vector2D(GeometricObject2D):
             self._x * matrix[2] + self._y * matrix[3],
         )
 
+    @override
     def closest_to(self, v: "Vector2D") -> "Vector2D":
         """Return the closest point on the vector to the given vector.
 
@@ -2018,10 +2042,12 @@ class Vector2D(GeometricObject2D):
         """
         return self.copy()
 
+    @override
     def distance_to(self, v: "Vector2D") -> float:
         """Calculate the Euclidean distance to the given vector."""
         return dist((self._x, self._y), (v._x, v._y))
 
+    @override
     def intersections_x(
         self, x: float
     ) -> NumberSet | Iterable[float | Interval]:
@@ -2031,6 +2057,7 @@ class Vector2D(GeometricObject2D):
         """
         return NumberSet(self._y) if self._x == x else NumberSet()
 
+    @override
     def intersections_y(
         self, y: float
     ) -> NumberSet | Iterable[float | Interval]:
@@ -2548,6 +2575,7 @@ class Line2D(GeometricObject2D):
             raise ValueError("r must be non-negative.")
         return cls("polar", r, theta % (2 * pi))
 
+    @override
     def __iter__(self) -> Iterator[float | Vector2D]:
         """Iterate over the parameters of the line."""
         if self._native_repr == "standard":
@@ -2564,6 +2592,7 @@ class Line2D(GeometricObject2D):
             yield self._r
             yield self._theta
 
+    @override
     def __repr__(self) -> str:
         """Represent the line as a string."""
         return (
@@ -2571,10 +2600,12 @@ class Line2D(GeometricObject2D):
             + ", ".join(map(repr, self))
         )
 
+    @override
     def __hash__(self) -> int:
         """Returns a hash of the line."""
         return hash(tuple(self))
 
+    @override
     def __eq__(self, other: object) -> bool:
         """Check if two lines are equal.
 
@@ -2605,6 +2636,7 @@ class Line2D(GeometricObject2D):
         """
         return abs(self.a * point.x + self.b * point.y - self.c) < self.epsilon
 
+    @override
     def copy(self) -> "Line2D":
         """Create a copy of this line.
 
@@ -2612,6 +2644,7 @@ class Line2D(GeometricObject2D):
         """
         return Line2D(self._native_repr, *self)
 
+    @override
     def translate(self, v: Vector2D) -> "Line2D":
         """Translate the line by the given vector.
 
@@ -2619,6 +2652,7 @@ class Line2D(GeometricObject2D):
         """
         return self.from_vectors(self.v1 + v, self.v2)
 
+    @override
     def scale(self, x: float, y: float) -> "Line2D":
         """Scale the line by the given amount.
 
@@ -2626,6 +2660,7 @@ class Line2D(GeometricObject2D):
         """
         return self.from_standard(self.a / x, self.b / y, self.c)
 
+    @override
     def rotate(self, angle: float) -> "Line2D":
         """Rotate the line by the given angle.
 
@@ -2633,6 +2668,7 @@ class Line2D(GeometricObject2D):
         """
         return self.from_polar(self.r, self.theta + angle)
 
+    @override
     def reflect(self, v: Vector2D) -> "Line2D":
         """Reflect the line over the given point.
 
@@ -2643,6 +2679,7 @@ class Line2D(GeometricObject2D):
             self.v1 + 2 * self.normal.project(v - self.v1), self.v2
         )
 
+    @override
     def transform(self, matrix: Matrix2D) -> "Line2D":
         """Transform the line by the given matrix.
 
@@ -2650,6 +2687,7 @@ class Line2D(GeometricObject2D):
         """
         return self.from_points(matrix @ self.v1, matrix @ self.v2)
 
+    @override
     def closest_to(self, v: Vector2D) -> Vector2D:
         """Get the point on this line that is closest to the given point.
 
@@ -2657,6 +2695,7 @@ class Line2D(GeometricObject2D):
         """
         return self.v1 + self.v2.project(v - self.v1)
 
+    @override
     def distance_to(self, v: Vector2D) -> float:
         """Calculate the distance from the line to the given point.
 
@@ -2667,6 +2706,7 @@ class Line2D(GeometricObject2D):
         """
         return self.normal.dot(v - self.v1)
 
+    @override
     def intersections_x(
         self, x: float
     ) -> NumberSet | Iterable[float | Interval]:
@@ -2680,6 +2720,7 @@ class Line2D(GeometricObject2D):
             return NumberSet()
         return NumberSet((self.c - self.a * x) / self.b)
 
+    @override
     def intersections_y(
         self, y: float
     ) -> NumberSet | Iterable[float | Interval]:

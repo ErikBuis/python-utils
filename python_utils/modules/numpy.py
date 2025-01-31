@@ -2,6 +2,7 @@ from typing import Any, Generic, Literal, TypeVar, overload
 
 import numpy as np
 import numpy.typing as npt
+from typing_extensions import override
 
 
 T = TypeVar("T")
@@ -10,6 +11,7 @@ T = TypeVar("T")
 class NDArrayGeneric(np.ndarray, Generic[T]):
     """np.ndarray that allows for static type hinting of generics."""
 
+    @override
     def __getitem__(self, key: Any) -> T:
         return super().__getitem__(key)  # type: ignore
 

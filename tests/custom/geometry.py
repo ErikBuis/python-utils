@@ -7,6 +7,7 @@ import unittest
 from math import inf
 
 import numpy as np
+from typing_extensions import override
 
 from python_utils.custom import geometry
 from python_utils.modules.numpy import lexsort_along
@@ -221,6 +222,7 @@ class TestInterval(unittest.TestCase):
 
 
 class TestNumberSet(unittest.TestCase):
+    @override
     def setUp(self) -> None:
         self.numberset = geometry.NumberSet()._direct_init(
             [0, 0, 1, 2, 3, 5, 5, 6, 8, inf],

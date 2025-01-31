@@ -1,7 +1,7 @@
 import logging
 from collections.abc import Callable
 from inspect import signature
-from typing import Literal
+from typing import Literal, cast
 
 import matplotlib.axes
 import numpy as np
@@ -456,7 +456,9 @@ def voronoi_constrain_to_rect(
 
     # The ridge vertices need to be converted to the new vertex indices.
     ridge_vertices = np.array(vor.ridge_vertices)[is_ridge_selected]  # R + X
-    ridge_vertices = vertex_idcs_old2new[ridge_vertices].tolist()
+    ridge_vertices = cast(
+        list[list[int]], vertex_idcs_old2new[ridge_vertices].tolist()
+    )
 
     return (
         points,

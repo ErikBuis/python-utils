@@ -7,6 +7,8 @@ from collections.abc import Callable
 from math import inf
 from typing import TypeVar
 
+from typing_extensions import override
+
 from python_utils.custom import cheatsheet
 
 
@@ -131,6 +133,7 @@ def edge_count_heuristic(
 
 
 class TestReachableVertices(unittest.TestCase):
+    @override
     def setUp(self) -> None:
         self.undigraph = create_undigraph()
         self.digraph = create_digraph()
@@ -191,6 +194,7 @@ class TestReachableVertices(unittest.TestCase):
 
 
 class TestConnectedComponents(unittest.TestCase):
+    @override
     def setUp(self) -> None:
         self.undigraph = create_undigraph()
 
@@ -200,6 +204,7 @@ class TestConnectedComponents(unittest.TestCase):
 
 
 class TestBFS(unittest.TestCase):
+    @override
     def setUp(self) -> None:
         self.undigraph = create_undigraph()
         self.digraph = create_digraph()
@@ -279,6 +284,7 @@ class TestBFS(unittest.TestCase):
 
 
 class TestBFSVType(unittest.TestCase):
+    @override
     def setUp(self) -> None:
         self.undigraph = create_undigraph()
         self.digraph = create_digraph()
@@ -315,6 +321,7 @@ class TestBFSVType(unittest.TestCase):
 
 
 class TestReverseDigraph(unittest.TestCase):
+    @override
     def setUp(self) -> None:
         self.undigraph = create_undigraph()
         self.digraph = create_digraph()
@@ -345,6 +352,7 @@ class TestReverseDigraph(unittest.TestCase):
 
 
 class TestKahn(unittest.TestCase):
+    @override
     def setUp(self) -> None:
         self.undigraph = create_undigraph()
         self.digraph = create_digraph()
@@ -379,6 +387,7 @@ class TestKahn(unittest.TestCase):
 
 
 class TestTarjan(unittest.TestCase):
+    @override
     def setUp(self) -> None:
         self.undigraph = create_undigraph()
         self.digraph = create_digraph()
@@ -420,6 +429,7 @@ class TestTarjan(unittest.TestCase):
 
 
 class TestComponentGraph(unittest.TestCase):
+    @override
     def setUp(self) -> None:
         self.undigraph = create_undigraph()
         self.digraph = create_digraph()
@@ -496,6 +506,7 @@ class TestComponentGraph(unittest.TestCase):
 
 
 class TestDijkstra(unittest.TestCase):
+    @override
     def setUp(self) -> None:
         self.undigraph = create_undigraph()
         self.digraph = create_digraph()
@@ -607,6 +618,7 @@ class TestDijkstra(unittest.TestCase):
 
 
 class TestDijkstraVType(unittest.TestCase):
+    @override
     def setUp(self) -> None:
         self.weighted_undigraph = create_weighted_undigraph()
         self.weighted_digraph = create_weighted_digraph()
@@ -645,6 +657,7 @@ class TestDijkstraVType(unittest.TestCase):
 
 
 class TestAStar(unittest.TestCase):
+    @override
     def setUp(self) -> None:
         self.weighted_undigraph = create_weighted_undigraph()
         self.weighted_digraph = create_weighted_digraph()
@@ -722,6 +735,7 @@ class TestAStar(unittest.TestCase):
 
 
 class TestAStarVType(unittest.TestCase):
+    @override
     def setUp(self) -> None:
         self.weighted_undigraph = create_weighted_undigraph()
         self.weighted_digraph = create_weighted_digraph()
@@ -762,6 +776,7 @@ class TestAStarVType(unittest.TestCase):
 
 
 class TestPrim(unittest.TestCase):
+    @override
     def setUp(self) -> None:
         self.weighted_undigraph = create_weighted_undigraph()
 

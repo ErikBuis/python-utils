@@ -20,7 +20,9 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Typing :: Typed",
 ]
-dependencies = []
+dependencies = [
+    "typing-extensions>=4.12.2",
+]
 
 [tool.setuptools.packages]
 find = {}

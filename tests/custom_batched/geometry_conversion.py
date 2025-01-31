@@ -74,7 +74,9 @@ class TestPolygonVertices(unittest.TestCase):
     def test_polygon_vertices(self) -> None:
         for _ in range(16):
             polygon = generate_random_polygon()
-            polygon_vertices = Polygon2PolygonVertices(polygon, torch.float64)
+            polygon_vertices = Polygon2PolygonVertices(
+                polygon, dtype=torch.float64
+            )
             polygon2 = PolygonVertices2Polygon(polygon_vertices)
             self.assertTrue(polygon.equals_exact(polygon2, 1e-6))
 
@@ -82,7 +84,9 @@ class TestPolygonVertices(unittest.TestCase):
 class TestPolygonsVertices(unittest.TestCase):
     def test_polygons_vertices(self) -> None:
         polygons = generate_random_polygons(amount=16)
-        polygons_vertices = Polygons2PolygonsVertices(polygons, torch.float64)
+        polygons_vertices = Polygons2PolygonsVertices(
+            polygons, dtype=torch.float64
+        )
         polygons2 = PolygonsVertices2Polygons(polygons_vertices)
         self.assertTrue(polygons.geom_equals_exact(polygons2, 1e-6).all())
 
@@ -92,7 +96,7 @@ class TestMultiPolygonVertices(unittest.TestCase):
         for _ in range(16):
             multipolygon = generate_random_multipolygon()
             multipolygon_vertices = MultiPolygon2MultiPolygonVertices(
-                multipolygon, torch.float64
+                multipolygon, dtype=torch.float64
             )
             multipolygon2 = MultiPolygonVertices2MultiPolygon(
                 multipolygon_vertices
@@ -104,7 +108,7 @@ class TestMultiPolygonsVertices(unittest.TestCase):
     def test_multipolygons_vertices(self) -> None:
         multipolygons = generate_random_multipolygons(amount=16)
         multipolygons_vertices = MultiPolygons2MultiPolygonsVertices(
-            multipolygons, torch.float64
+            multipolygons, dtype=torch.float64
         )
         multipolygons2 = MultiPolygonsVertices2MultiPolygons(
             multipolygons_vertices
@@ -119,7 +123,7 @@ class TestPolygonLike(unittest.TestCase):
         for _ in range(16):
             polygon_like = generate_random_polygon_like()
             polygon_vertices = PolygonLike2PolygonLikeVertices(
-                polygon_like, torch.float64
+                polygon_like, dtype=torch.float64
             )
             polygon_like2 = PolygonLikeVertices2PolygonLike(polygon_vertices)
             self.assertTrue(polygon_like.equals_exact(polygon_like2, 1e-6))
@@ -129,7 +133,7 @@ class TestPolygonLikes(unittest.TestCase):
     def test_polygon_likes(self) -> None:
         polygon_likes = generate_random_polygon_likes(amount=16)
         polygon_vertices = PolygonLikes2PolygonLikesVertices(
-            polygon_likes, torch.float64
+            polygon_likes, dtype=torch.float64
         )
         polygon_likes2 = PolygonLikesVertices2PolygonLikes(polygon_vertices)
         self.assertTrue(
