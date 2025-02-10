@@ -194,3 +194,6 @@ Due to the unintended nature of global environments, you may run into issues whe
     members = ["subfolder"]
     ```
     To avoid this, you can use the `--no-workspace` flag when running `uv init` in the parent directory, or manually remove the `members` line from the `pyproject.toml` file and running `uv sync` in the subfolder.
+
+## Using `uv` with PyCharm
+There may be some additional steps required to use `uv` with PyCharm. The following guide should help you set up `uv` in PyCharm: https://www.jetbrains.com/help/pycharm/uv.html
