@@ -124,7 +124,7 @@ This subsection provides a brief overview of the most commonly used `uv` command
     ```
 - To upgrade a package, ignoring pinned versions in any existing output file:
     ```powershell
-    uv add --upgrade-package [package-name]
+    uv sync --upgrade-package [package-name]
     ```
 - To specify an optional dependency ("extras") for a package:
     ```powershell
