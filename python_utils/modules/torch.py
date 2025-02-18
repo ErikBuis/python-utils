@@ -1057,8 +1057,8 @@ def unique(
 
     out = unique_consecutive(
         x_sorted,
-        return_inverse=return_inverse,  # type: ignore
-        return_counts=return_counts,  # type: ignore
+        return_inverse=return_inverse,
+        return_counts=return_counts,
         dim=dim,
     )
 

@@ -531,8 +531,8 @@ def main(args: argparse.Namespace) -> None:
         for i, (frac_labels_pos, frac_preds_pos) in enumerate(
             zip(frac_labels_poss, frac_preds_poss)
         ):
-            TP, FN, FP, TN = (  # type: ignore
-                confusion_matrix_random_model(frac_labels_pos, frac_preds_pos)
+            TP, FN, FP, TN = confusion_matrix_random_model(
+                frac_labels_pos, frac_preds_pos
             )
             metrics = calculate_metrics_binary(TP, FN, FP, TN)
             metrics_random[i] = [
@@ -543,8 +543,8 @@ def main(args: argparse.Namespace) -> None:
         for i, (frac_labels_pos, frac_preds_pos) in enumerate(
             zip(frac_labels_poss, frac_preds_poss)
         ):
-            TP, FN, FP, TN = (  # type: ignore
-                confusion_matrix_best_model(frac_labels_pos, frac_preds_pos)
+            TP, FN, FP, TN = confusion_matrix_best_model(
+                frac_labels_pos, frac_preds_pos
             )
             metrics = calculate_metrics_binary(TP, FN, FP, TN)
             metrics_best[i] = [

@@ -1261,8 +1261,8 @@ def unique_batched(
 
     out = unique_consecutive_batched(
         x_sorted,
-        return_inverse=return_inverse,  # type: ignore
-        return_counts=return_counts,  # type: ignore
+        return_inverse=return_inverse,
+        return_counts=return_counts,
         dim=dim,
     )
 
@@ -1273,7 +1273,7 @@ def unique_batched(
         # The backmap wasn't taken into account by unique_consecutive(), so we
         # have to do it ourselves.
         backmap_inv = swap_idcs_vals_batched(backmap)  # [B, N_dim]
-        aux.append(out[2].gather(1, backmap_inv))
+        aux.append(out[2].gather(1, backmap_inv))  # type: ignore
     if return_counts:
         aux.append(out[-1])
 
