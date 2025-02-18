@@ -1,6 +1,8 @@
 # uv guide
 [uv](https://github.com/astral-sh/uv) is a package installer for Python, designed to be significantly faster and more efficient than `pip` or `conda`/`mamba` while maintaining compatibility with existing workflows. We recommend using `uv` to install Python packages wherever possible due to its superior performance and enhanced dependency resolution capabilities.
 
+![uv vs pip/conda](uv-vs-pip-conda.jpg)
+
 # Installation
 The official installation guide is available [here](https://github.com/astral-sh/uv#installation), but for convenience, the necessary commands are provided below.
 
