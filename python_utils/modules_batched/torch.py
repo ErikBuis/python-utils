@@ -428,8 +428,8 @@ def interp_batched(
     Args:
         x: The x-coordinates at which to evaluate the interpolated values.
             Shape: [B, N]
-        xp: The x-coordinates of the data points, must be increasing along the
-            last dimension.
+        xp: The x-coordinates of the data points. Must be weakly monotonically
+            increasing along the last dimension.
             Shape: [B, M]
         fp: The y-coordinates of the data points, same shape as xp.
             Shape: [B, M]
@@ -456,10 +456,11 @@ def interp_batched(
         xp, sorted_idcs = torch.sort(xp % period, dim=1)
         fp = torch.gather(fp, 1, sorted_idcs)
 
-    # Check if xp is strictly increasing.
-    if not torch.all(torch.diff(xp, dim=1) > 0):
+    # Check if xp is weakly monotonically increasing.
+    if not torch.all(torch.diff(xp, dim=1) >= 0):
         raise ValueError(
-            "xp must be strictly increasing along the last dimension."
+            "xp must be weakly monotonically increasing along the last"
+            " dimension."
         )
 
     # Find indices of neighbours in xp.
