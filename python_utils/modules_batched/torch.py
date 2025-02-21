@@ -311,9 +311,9 @@ def arange_batched(
         steps: The step value for each tensor in the batch. If None, the step
             value is set to 1.
             Shape: [B]
-        device: The device of the tensor.
-        dtype: The data type of the tensor.
-        requires_grad: Whether to require gradients for the tensor.
+        device: The device of the output tensor.
+        dtype: The data type of the output tensor.
+        requires_grad: Whether to enable gradients for the output tensor.
 
     Returns:
         Tuple containing:
@@ -324,24 +324,92 @@ def arange_batched(
             Shape: [B]
     """
     device = device if device is not None else starts.device
-    dtype = dtype if dtype is not None else starts.dtype
 
+    # Prepare the input tensors.
     B = len(starts)
+    starts = starts.to(device)
     if ends is None:
         ends = starts
-        starts = torch.zeros(B, device=device, dtype=dtype)
+        starts = torch.zeros(B, device=device)
+    else:
+        ends = ends.to(device)
     if steps is None:
-        steps = torch.ones(B, device=device, dtype=dtype)
+        steps = torch.ones(B, device=device)
+    else:
+        steps = steps.to(device)
 
-    L_bs = ((ends - starts) // steps).long()
+    # Compute the arange sequences in parallel.
+    L_bs = ((ends - starts) // steps).long()  # [B]
     max_L_bs = int(L_bs.max())
-    aranges = torch.arange(max_L_bs, device=device, dtype=dtype)
-    aranges = starts.unsqueeze(1) + aranges * steps.unsqueeze(1)
-    aranges[aranges >= ends.unsqueeze(1)] = 0
+    aranges = (
+        starts.unsqueeze(1)  # [B, 1]
+        + torch.arange(max_L_bs, device=device)  # [max(L_bs)]
+        * steps.unsqueeze(1)  # [B, 1]
+    )  # [B, max(L_bs)]  # fmt: skip
+    replace_padding_batched(aranges, L_bs, padding_value=0, in_place=True)
+    aranges = aranges.to(dtype if dtype is not None else aranges.dtype)
     if requires_grad:
         aranges.requires_grad_()
 
     return aranges, L_bs
+
+
+def linspace_batched(
+    starts: torch.Tensor,
+    ends: torch.Tensor,
+    steps: torch.Tensor,
+    device: torch.device | str | int | None = None,
+    dtype: torch.dtype | None = None,
+    requires_grad: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Create a batch of tensors with values in the range [start, end].
+
+    Args:
+        starts: The start value for each tensor in the batch.
+            Shape: [B]
+        ends: The end value for each tensor in the batch.
+            Shape: [B]
+        steps: The number of steps for each tensor in the batch.
+            Shape: [B]
+        device: The device of the output tensor.
+        dtype: The data type of the output tensor.
+        requires_grad: Whether to enable gradients for the output tensor.
+
+    Returns:
+        Tuple containing:
+        - A batch of tensors with values in the range [start, end].
+            Padded with zeros.
+            Shape: [B, max(L_bs)]
+        - The number of values of any linspace sequence in the batch.
+            Shape: [B]
+    """
+    device = device if device is not None else starts.device
+
+    # Prepare the input tensors.
+    B = len(starts)
+    starts = starts.to(device)
+    ends = ends.to(device)
+    steps = steps.to(device)
+
+    # Compute the linspace sequences in parallel.
+    L_bs = steps.long()  # [B]
+    max_L_bs = int(L_bs.max())
+    L_bs_minus_1 = L_bs - 1  # [B]
+    linspaces = (
+        starts.unsqueeze(1)  # [B, 1]
+        + torch.arange(max_L_bs, device=device)  # [max(L_bs)]
+        / L_bs_minus_1.unsqueeze(1)  # [B, 1]
+        * (ends - starts).unsqueeze(1)  # [B, 1]
+    )  # [B, max(L_bs)]  # fmt: skip
+    linspaces[torch.arange(B, device=device), L_bs_minus_1] = ends.to(
+        linspaces.dtype
+    )  # prevent floating point errors
+    replace_padding_batched(linspaces, L_bs, padding_value=0, in_place=True)
+    linspaces = linspaces.to(dtype if dtype is not None else linspaces.dtype)
+    if requires_grad:
+        linspaces.requires_grad_()
+
+    return linspaces, L_bs
 
 
 def interp_batched(
