@@ -51,6 +51,14 @@ To uninstall `uv`, run the following commands:
 
 # Usage
 
+## Essential Concepts (Please Read)
+Before using `uv`, it is important to know the following things:
+- `uv` uses a `pyproject.toml` file to keep track of the environment's dependencies. This file is automatically updated when you add/remove dependencies.
+- `uv` creates a `.venv` directory in the workspace where it stores the environment's dependencies.
+- `uv` uses a `uv.lock` file to keep track of the exact versions of the dependencies installed in the environment. This file should be checked into version control.
+
+The following subsections provide a more extensive overview of these concepts and more. For a complete list of features, refer to the [official documentation](https://docs.astral.sh/uv/).
+
 ## Project-based Workflow
 `uv` is designed to work in a workspace-based manner. This means that it will create a `.venv` in the current workspace directory where it will store all the packages you install. This is done to avoid conflicts between different projects. For creating a global environment (discouraged), please see the [section below](#use-a-global-environment). The rest of this tutorial assumes that you are working from within a workspace.
 <br><br>
@@ -74,12 +82,17 @@ This subsection provides a brief overview of the most commonly used `uv` command
     ```powershell
     uv sync
     ```
-- `uv` uses a `pyproject.toml` file to keep track of the environment's dependencies. To initialize a `uv` environment in the current working directory, use the following command. If you already have a `pyproject.toml` file, you can skip this step.
+- To install optional extra dependencies (that are already present in the `pyproject.toml` file), use:
+    ```powershell
+    uv sync --extras [extra-name]
+    ```
+    Replace `[extra-name]` with the name of the extra dependency you want to install.
+- To initialize an empty `uv` environment in the current working directory, use:
     ```powershell
     uv init --bare --python '>=3.11, <3.12'
     ```
-    Please replace `example` with the name of your project, and `'>=3.11, <3.12'` with the desired Python version.<br>
-    To change the Python version of an existing project, change the `python` field in the `pyproject.toml` file and run `uv sync`.
+    Please replace `example` with the name of your project, and `'>=3.11, <3.12'` with the desired Python version.
+- To change the Python version of an existing project, change the `python` field in the `pyproject.toml` file and run `uv sync`.
 
 ### Using the environment
 - We recommend activating your `uv` environment in the terminal, so that you don't have to specify the environment in all subsequent commands. To activate the `uv` environment, run the following command:<br>
@@ -91,6 +104,55 @@ This subsection provides a brief overview of the most commonly used `uv` command
     ```bash
     source .venv/bin/activate
     ```
+    At the time of writing, there is no alias for this command. An open GitHub issue exists to make an alias, see [here](https://github.com/astral-sh/uv/issues/1910). However, if you already want a solution, you can add the following to your PowerShell profile (at `$HOME\Documents\PowerShell\Microsoft.PowerShell_profile.ps1`, create it if it doesn't exist):
+    ```powershell
+    # Activate the currently active uv env
+    function uvsh {
+        param([string]$venv_name = ".venv")
+        $venv_name = $venv_name -replace '[\\/]+$', ''
+
+        if ($env:WINDIR) {
+            $venv_bin = "Scripts\Activate"
+        } else {
+            $venv_bin = "bin/activate"
+        }
+
+        $activator = Join-Path $venv_name $venv_bin
+
+        if (-Not (Test-Path $activator)) {
+            Write-Host "[ERROR] Python venv not found: $venv_name" -ForegroundColor Red
+            return
+        }
+        Write-Host "[INFO] Activate Python venv: $venv_name (via $activator)"
+
+        . $activator
+    }
+    ```
+    Or for bash (at `$HOME/.bashrc`):
+    ```bash
+    uvsh() {
+        local venv_name=${1:-'.venv'}
+        venv_name=${venv_name//\//}
+
+        local venv_bin=
+        if [[ -d ${WINDIR} ]]; then
+            venv_bin='Scripts/activate'
+        else
+            venv_bin='bin/activate'
+        fi
+
+        local activator="${venv_name}/${venv_bin}"
+
+        if [[ ! -f ${activator} ]]; then
+            echo "[ERROR] Python venv not found: ${venv_name}"
+            return
+        fi
+        echo "[INFO] Activate Python venv: ${venv_name} (via ${activator})"
+
+        . "${activator}"
+    }
+    ```
+    After adding this, you can run `uvsh` to activate the environment. If you want to activate an environment with a cutsom name, you can run `uvsh .my_env` instead.
 - To deactivate the `uv` environment, run the following command:
     ```powershell
     deactivate
@@ -110,6 +172,12 @@ This subsection provides a brief overview of the most commonly used `uv` command
         uv run --python 3.10 my_script.py
         ```
         Replace `3.10` with your desired Python version.
+- To enable shell completion for `uv` commands, add the following to your shell profile (at `$HOME\Documents\PowerShell\Microsoft.PowerShell_profile.ps1`, create it if it doesn't exist):
+    ```powershell
+    # Activate uv shell completion
+    (& uv generate-shell-completion powershell) | Out-String | Invoke-Expression
+    ```
+
 
 ### Installing, updating and removing packages
 - You can install packages from different sources:
@@ -132,7 +200,8 @@ This subsection provides a brief overview of the most commonly used `uv` command
     ```powershell
     uv add [package-name] --optional [extra-name]
     ```
-    Users can install the optional dependencies of your project by running e.g. `uv add package-name[extra-name]` or `pip install package-name[extra-name]`.
+    Users can install the optional dependencies of your project by running e.g. `uv add package-name[extra-name]` or `pip install package-name[extra-name]` (if they don't use `uv`).<br>
+    To install an extra of your current project locally, use `uv sync --extras [extra-name]`.
 - To specify a development dependency, which are local-only and will *not* be included in the project requirements when published to PyPI or other indexes:
     ```powershell
     uv add --dev [package-name]
@@ -162,7 +231,7 @@ This subsection provides a brief overview of the most commonly used `uv` command
         uv cache clean
         ```
 
-## Use a "global" environment
+## Using a "global" environment
 Using a global environment is not recommended since it undermines the point of virtual environments. What you should do instead is create a new virtual environment for each project. Note that this does not cost much in terms of disk space, as the environment dependencies *are* installed globally by `uv` and only the project-specific dependencies are stored in the `.venv` directory.
 
 However, if you have a use case where you might want the same environment for multiple projects and you really want to use a global environment, you can use the following trick:
