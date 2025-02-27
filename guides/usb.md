@@ -152,7 +152,7 @@ This subsection provides a brief overview of the most commonly used `uv` command
         . "${activator}"
     }
     ```
-    After adding this, you can run `uvsh` to activate the environment. If you want to activate an environment with a cutsom name, you can run `uvsh .my_env` instead.
+    After adding this, you can run `uvsh` to activate the environment. If you want to activate an environment with a custom name, you can run `uvsh .my_env` instead.
 - To deactivate the `uv` environment, run the following command:
     ```powershell
     deactivate
