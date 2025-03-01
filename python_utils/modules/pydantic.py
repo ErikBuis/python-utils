@@ -69,6 +69,44 @@ except ImportError:
     pass
 
 try:
+    import pandas as pd
+
+    DataFrameAnn = Annotated[
+        pd.DataFrame,
+        GetPydanticSchema(
+            lambda tp, handler: core_schema.is_instance_schema(pd.DataFrame)
+        ),
+    ]
+    SeriesAnn = Annotated[
+        pd.Series,
+        GetPydanticSchema(
+            lambda tp, handler: core_schema.is_instance_schema(pd.Series)
+        ),
+    ]
+except ImportError:
+    pass
+
+try:
+    import geopandas as gpd
+
+    GeoSeriesAnn = Annotated[
+        gpd.GeoSeries,
+        GetPydanticSchema(
+            lambda tp, handler: core_schema.is_instance_schema(gpd.GeoSeries)
+        ),
+    ]
+    GeoDataFrameAnn = Annotated[
+        gpd.GeoDataFrame,
+        GetPydanticSchema(
+            lambda tp, handler: core_schema.is_instance_schema(
+                gpd.GeoDataFrame
+            )
+        ),
+    ]
+except ImportError:
+    pass
+
+try:
     import shapely
 
     PointAnn = Annotated[
@@ -132,28 +170,6 @@ try:
         GetPydanticSchema(
             lambda tp, handler: core_schema.is_instance_schema(
                 shapely.geometry.GeometryCollection
-            )
-        ),
-    ]
-except ImportError:
-    pass
-
-try:
-    import geopandas
-
-    GeoSeriesAnn = Annotated[
-        geopandas.GeoSeries,
-        GetPydanticSchema(
-            lambda tp, handler: core_schema.is_instance_schema(
-                geopandas.GeoSeries
-            )
-        ),
-    ]
-    GeoDataFrameAnn = Annotated[
-        geopandas.GeoDataFrame,
-        GetPydanticSchema(
-            lambda tp, handler: core_schema.is_instance_schema(
-                geopandas.GeoDataFrame
             )
         ),
     ]
