@@ -95,32 +95,12 @@ def pad_packed_batched(
     return values_padded
 
 
-@overload
-def replace_padding_batched(  # type: ignore
-    values: torch.Tensor,
-    L_bs: torch.Tensor,
-    padding_value: Any = 0,
-    in_place: Literal[False] = ...,
-) -> torch.Tensor:
-    pass
-
-
-@overload
-def replace_padding_batched(
-    values: torch.Tensor,
-    L_bs: torch.Tensor,
-    padding_value: Any = 0,
-    in_place: Literal[True] = ...,
-) -> None:
-    pass
-
-
 def replace_padding_batched(
     values: torch.Tensor,
     L_bs: torch.Tensor,
     padding_value: Any = 0,
     in_place: bool = False,
-) -> torch.Tensor | None:
+) -> torch.Tensor:
     """Pad the values with padding_value to create a tensor with a fixed size.
 
     Args:
@@ -128,19 +108,79 @@ def replace_padding_batched(
             Shape: [B, max(L_bs), *]
         L_bs: The number of valid values in each sample.
             Shape: [B]
-        padding_value: The value to pad the values with.
+        padding_value: The value to pad the values with. Can be one of:
+            - A scalar value, a tensor of shape [] or one of shape [1].
+            - A tensor of shape [*], containing the value to pad all elements
+              with.
+            - A tensor of shape [B, max(L_bs), *], containing the value to pad
+              each element with if it is part of the padding mask.
+            - A tensor of shape [B, 1, *], containing the value to pad each row
+              with.
+            - A tensor of shape [1, max(L_bs), *], containing the value to pad
+              each column with.
+            - A tensor of shape [B * max(L_bs) - L, *], containing the value to
+              pad each element in the padding mask with.
         in_place: Whether to perform the operation in-place.
 
     Returns:
         The padded values. Padded with padding_value.
-        If in_place is True, this is None.
             Shape: [B, max(L_bs), *]
     """
-    max_L_bs = values.shape[1]
+    B, max_L_bs, *star = values.shape
     mask = mask_padding_batched(L_bs, max_L_bs)  # [B, max(L_bs)]
     values_padded = values if in_place else values.clone()
-    values_padded[~mask] = padding_value
+    if isinstance(padding_value, torch.Tensor):
+        if padding_value.shape == () or padding_value.shape == (1,):
+            values_padded[~mask] = padding_value
+        elif padding_value.shape == tuple(star):
+            values_padded[~mask] = padding_value
+        elif padding_value.shape == values.shape:
+            values_padded[~mask] = padding_value[~mask]
+        elif padding_value.shape == (B, 1, *star):
+            values_padded[~mask] = padding_value.squeeze(1).repeat_interleave(
+                max_L_bs - L_bs, dim=0
+            )
+        elif padding_value.shape == (1, max_L_bs, *star):
+            values_padded[~mask] = padding_value.expand(B, -1)[~mask]
+        elif padding_value.shape == (B * max_L_bs - L_bs.sum(), *star):
+            values_padded[~mask] = padding_value
+        else:
+            raise ValueError(
+                "Shape of padding_value did not match any of the expected"
+                f" shapes. Got {list(padding_value.shape)}, but expected one"
+                f" of: [], [1], {star}, {list(values.shape)}, {[B, 1, *star]},"
+                f" {[1, max_L_bs, *star]}, or"
+                f" {[B * max_L_bs - L_bs.sum(), *star]}"
+            )
+    else:
+        values_padded[~mask] = padding_value
     return values_padded
+
+
+def apply_replicate_padding_batched(
+    values: torch.Tensor, L_bs: torch.Tensor, in_place: bool = False
+) -> torch.Tensor:
+    """Pad the values by replicating the last valid value along the inner dims.
+
+    Args:
+        values: The values to pad. Padding could be arbitrary.
+            Shape: [B, max(L_bs), *]
+        L_bs: The number of valid values in each sample.
+            Shape: [B]
+        in_place: Whether to perform the operation in-place.
+
+    Returns:
+        The padded values. Padded with the last valid value.
+            Shape: [B, max(L_bs), *]
+    """
+    B = len(L_bs)
+    arange_B = torch.arange(B, device=values.device)  # [B]
+    return replace_padding_batched(
+        values,
+        L_bs,
+        padding_value=values[arange_B, L_bs - 1].unsqueeze(1),  # [B, 1, *]
+        in_place=in_place,
+    )  # [B, max(L_bs), *]
 
 
 def mean_padding_batched(
