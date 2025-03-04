@@ -300,22 +300,31 @@ def max_padding_batched(
     return values.amax(dim=1)  # [B, *]
 
 
-def move_mask_to_front_batched(
+def apply_mask_batched(
     values: torch.Tensor,
     mask: torch.Tensor,
     L_bs: torch.Tensor,
     max_L_bs: int,
     padding_value: Any | None = 0,
-) -> torch.Tensor:
-    """Move the masked values to the front of the tensor.
+) -> tuple[torch.Tensor, torch.Tensor, int]:
+    """Apply an additonal mask to a batch of values.
+
+    All values that are not marked as valid in the given mask will be removed,
+    while the remaining values will be moved to the front of the tensor. Since
+    the number of valid values in each sample can change, this function will
+    also return the new number of valid values in each sample (new_L_bs) and
+    the new maximum number of valid values of any element in the batch
+    (new_max_L_bs).
 
     Args:
-        values: The values to move the masked values to the front of.
-            Shape: [B, N, *]
-        mask: The mask that indicates which values are valid.
-            Shape: [B, N]
+        values: The values to apply the mask to. Padding could be arbitrary.
+            Shape: [B, max(L_bs), *]
+        mask: The mask to apply. Padding could be arbitrary, since this
+            function will apply the original mask internally in addition to
+            the new mask.
+            Shape: [B, max(L_bs)]
         L_bs: The number of valid values in each sample.
-            Must be equal to mask.sum(dim=1).
+            Shape: [B]
         max_L_bs: The maximum number of values of any element in the batch.
             Must be equal to max(L_bs).
         padding_value: The value to pad the values with. If None, the values
@@ -323,13 +332,25 @@ def move_mask_to_front_batched(
             a specific value.
 
     Returns:
-        The values with the masked values moved to the front. Padded with
-        padding_value.
-            Shape: [B, max(L_bs), *]
+        Tuple containing:
+        - The values with the condition added. Padded with padding_value.
+            Shape: [B, max(new_L_bs), *]
+        - The new number of valid values in each sample.
+            Shape: [B]
+        - The new maximum number of values of any element in the batch.
+            Must be equal to max(new_L_bs).
     """
-    return pad_packed_batched(
-        values[mask], L_bs, max_L_bs, padding_value=padding_value
-    )  # [B, max(L_bs), *]
+    # Create a mask that indicates which values are valid in each sample.
+    mask = mask & mask_padding_batched(L_bs, max_L_bs)  # [B, max(L_bs)]
+    new_L_bs = mask.sum(dim=1)  # [B]
+    new_max_L_bs = int(new_L_bs.max())
+
+    # Move the masked values to the front of the tensor.
+    values = pad_packed_batched(
+        values[mask], new_L_bs, new_max_L_bs, padding_value=padding_value
+    )  # [B, max(new_L_bs), *]
+
+    return values, L_bs, max_L_bs
 
 
 def arange_batched(
