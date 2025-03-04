@@ -157,7 +157,7 @@ def replace_padding_batched(
     return values_padded
 
 
-def last_value_padding(
+def last_valid_value_padding_batched(
     values: torch.Tensor, L_bs: torch.Tensor, in_place: bool = False
 ) -> torch.Tensor:
     """Pad the values with the last valid value for each sample.
