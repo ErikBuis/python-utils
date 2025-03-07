@@ -14,19 +14,19 @@ class XiaolinWuAntiAliasingBatched(unittest.TestCase):
     # xiaolin_wu_anti_aliasing function, but in a batched manner.
     def test_xiaolin_wu_anti_aliasing_batched(self) -> None:
         # Generate random line segments.
-        x0s = torch.concatenate([
+        x0s = torch.concat([
             torch.randint(-100, 101, (50,)) / 2,
             torch.rand(50, dtype=torch.float64) * 100 - 50,
         ])
-        y0s = torch.concatenate([
+        y0s = torch.concat([
             torch.randint(-100, 101, (50,)) / 2,
             torch.rand(50, dtype=torch.float64) * 100 - 50,
         ])
-        x1s = torch.concatenate([
+        x1s = torch.concat([
             torch.randint(-100, 101, (50,)) / 2,
             torch.rand(50, dtype=torch.float64) * 100 - 50,
         ])
-        y1s = torch.concatenate([
+        y1s = torch.concat([
             torch.randint(-100, 101, (50,)) / 2,
             torch.rand(50, dtype=torch.float64) * 100 - 50,
         ])

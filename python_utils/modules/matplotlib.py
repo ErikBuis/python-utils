@@ -102,7 +102,7 @@ def get_scalar_mappable(
     # Create a mapping from values to colors.
     name = "_".join(colors)
     if color_values is not None:
-        all_norms = np.concatenate([[0], norm(color_values).data, [1]])
+        all_norms = np.concat([[0], norm(color_values).data, [1]])
     else:
         all_norms = np.linspace(0, 1, len(colors))
     color_list = list(zip(all_norms, colors))
@@ -150,9 +150,9 @@ def get_scalar_mappable_middle_white(
         vmin = values.min()
         vmax = values.max()
         if vmin > 0:
-            values = np.concatenate([values, [-vmin]])
+            values = np.concat([values, [-vmin]])
         elif vmax < 0:
-            values = np.concatenate([values, [-vmax]])
+            values = np.concat([values, [-vmax]])
 
     return get_scalar_mappable(
         values,

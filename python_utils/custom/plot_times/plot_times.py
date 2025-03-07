@@ -130,9 +130,7 @@ def plot_times(
 
     # Get color map for both matrices.
     scalar_mappable = get_scalar_mappable_middle_white(
-        np.concatenate(
-            (matrix_time_algorithm1, matrix_time_algorithm2)
-        ).flatten(),
+        np.concat([matrix_time_algorithm1, matrix_time_algorithm2]).flatten(),
         from_color="green",
         to_color="red",
         use_log_scale=use_log_scale,

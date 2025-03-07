@@ -59,7 +59,7 @@ class TestRavelMultiIndex(unittest.TestCase):
             )
         )
         multi_index = torch.stack([
-            torch.concatenate([
+            torch.concat([
                 torch.randint(-2 * int(dim), -int(dim), (5, 10)),
                 torch.randint(int(dim), 2 * int(dim), (5, 10)),
             ])

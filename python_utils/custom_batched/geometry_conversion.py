@@ -410,7 +410,10 @@ def LinearRings2LinearRingsVertices(
         device=device, dtype=dtype
     )  # [V, 2]
     vertices = pad_packed_batched(
-        vertices_packed, V_bs, int(V_bs.max()) if len(V_bs) > 0 else 0
+        vertices_packed,
+        V_bs,
+        int(V_bs.max()) if len(V_bs) > 0 else 0,
+        padding_value=0,
     )  # [B, max(V_bs), 2]
     return LinearRingsVertices(vertices, V_bs)
 
@@ -474,7 +477,7 @@ def Polygon2PolygonInteriors(
         The interiors of the Polygon as a PolygonInteriors object.
     """
     interiors, V_is = LinearRings2LinearRingsVertices(
-        gpd.GeoSeries(polygon.interiors), device, dtype
+        gpd.GeoSeries(polygon.interiors), device, dtype  # type: ignore
     )  # [I, max(V_is), 2], [I]
     return PolygonInteriors(interiors, V_is)
 
@@ -504,9 +507,11 @@ def Polygons2PolygonsInteriors(
     )  # [I, max(V_is), 2], [I]
     max_I_bs = int(I_bs.max())
     interiors = pad_packed_batched(
-        interiors_packed, I_bs, max_I_bs
+        interiors_packed, I_bs, max_I_bs, padding_value=0
     )  # [B, max(I_bs), max(V_is), 2]
-    V_is = pad_packed_batched(V_is_packed, I_bs, max_I_bs)  # [B, max(I_bs)]
+    V_is = pad_packed_batched(
+        V_is_packed, I_bs, max_I_bs, padding_value=0
+    )  # [B, max(I_bs)]
     return PolygonsInteriors(interiors, I_bs, V_is)
 
 
@@ -569,7 +574,7 @@ def MultiPolygon2MultiPolygonExterior(
         The exterior of the MultiPolygon as a MultiPolygonExterior object.
     """
     exterior, V_ps = Polygons2PolygonsExterior(
-        gpd.GeoSeries(multipolygon.geoms), device, dtype
+        gpd.GeoSeries(multipolygon.geoms), device, dtype  # type: ignore
     )  # [P, max(V_ps), 2], [P]
     return MultiPolygonExterior(exterior, V_ps)
 
@@ -602,9 +607,11 @@ def MultiPolygons2MultiPolygonsExterior(
     )  # [P, max(V_ps), 2], [P]
     max_P_bs = int(P_bs.max())
     exteriors = pad_packed_batched(
-        exterior_packed, P_bs, max_P_bs
+        exterior_packed, P_bs, max_P_bs, padding_value=0
     )  # [B, max(P_bs), max(V_ps), 2]
-    V_ps = pad_packed_batched(V_ps_packed, P_bs, max_P_bs)  # [B, max(P_bs)]
+    V_ps = pad_packed_batched(
+        V_ps_packed, P_bs, max_P_bs, padding_value=0
+    )  # [B, max(P_bs)]
     return MultiPolygonsExterior(exteriors, P_bs, V_ps)
 
 
@@ -624,7 +631,7 @@ def MultiPolygon2MultiPolygonInteriors(
         The interiors of the MultiPolygon as a MultiPolygonInteriors object.
     """
     interiors, I_ps, V_is = Polygons2PolygonsInteriors(
-        gpd.GeoSeries(multipolygon.geoms), device, dtype
+        gpd.GeoSeries(multipolygon.geoms), device, dtype  # type: ignore
     )  # [P, max(I_ps), max(V_is), 2], [P], [P, max(I_ps)]
     return MultiPolygonInteriors(interiors, I_ps, V_is)
 
@@ -661,11 +668,13 @@ def MultiPolygons2MultiPolygonsInteriors(
     )
     max_P_bs = int(P_bs.max())
     interiors = pad_packed_batched(
-        interiors_packed, P_bs, max_P_bs
+        interiors_packed, P_bs, max_P_bs, padding_value=0
     )  # [B, max(P_bs), max(I_ps), max(V_is), 2]
-    I_ps = pad_packed_batched(I_ps_packed, P_bs, max_P_bs)  # [B, max(P_bs)]
+    I_ps = pad_packed_batched(
+        I_ps_packed, P_bs, max_P_bs, padding_value=0
+    )  # [B, max(P_bs)]
     V_is = pad_packed_batched(
-        V_is_packed, P_bs, max_P_bs
+        V_is_packed, P_bs, max_P_bs, padding_value=0
     )  # [B, max(P_bs), max(I_ps)]
     return MultiPolygonsInteriors(interiors, P_bs, I_ps, V_is)
 
@@ -1037,6 +1046,7 @@ def PolygonLikesVertices2PolygonLikes(
         )
     )
     for i, multipolygon in enumerate(multipolygons):
+        multipolygon = cast(MultiPolygon, multipolygon)
         if len(multipolygon.geoms) == 1:
             multipolygons[i] = multipolygon.geoms[0]
     return multipolygons

@@ -110,10 +110,13 @@ def load_best_model(
     # should be equal to the monitor and mode of the given Trainer's
     # ModelCheckpoint. If this is not the case, we will issue a warning or
     # error and use the most appropriate model.
-    monitor_mode_trainer = (
-        trainer.checkpoint_callback.monitor,
-        trainer.checkpoint_callback.mode,
-    )
+    monitor_trainer = trainer.checkpoint_callback.monitor
+    if monitor_trainer is None:
+        raise ValueError(
+            "The Trainer's ModelCheckpoint has no monitor set. Please set"
+            " the monitor argument to a valid value."
+        )
+    monitor_mode_trainer = (monitor_trainer, trainer.checkpoint_callback.mode)
     if monitor_mode_trainer in models_dict:
         candidate_models = models_dict[monitor_mode_trainer]
         if len(models_dict) > 1:

@@ -1,5 +1,3 @@
-from typing import cast
-
 import geopandas as gpd
 import torch
 from shapely import GeometryCollection, MultiPolygon, Polygon
@@ -225,7 +223,7 @@ def __is_point_in_polygon_complex_batched(
         point_tensors.extend([zero_point, hole])
     point_tensors.append(zero_point)
     return __is_point_in_polygon_simple_batched(
-        torch.concatenate(point_tensors), points
+        torch.concat(point_tensors), points
     )
 
 
@@ -324,7 +322,7 @@ def cut_polygon_around_points(
     polygons = []
     for pr in point_region:
         polygons.append(Polygon(vertices[regions[pr]]))
-    polygons = cast(gpd.GeoSeries, gpd.GeoSeries(polygons))
+    polygons = gpd.GeoSeries(polygons)
 
     # Perform an intersection with the original polygon to remove the parts
     # that lie outside of it.
@@ -406,7 +404,7 @@ def xiaolin_wu_anti_aliasing_batched(
     # Calculate values used in the main loop.
     x, _ = arange_batched(
         xpxl_begin, xpxl_end + 1, dtype=torch.int64
-    )  # [B, max(S_bs) // 2]
+    )  # [B, max(S_bs) // 2], _
     intery = y0.unsqueeze(1) + gradient.unsqueeze(1) * (
         x.double() - x0.unsqueeze(1)
     )  # [B, max(S_bs) // 2]

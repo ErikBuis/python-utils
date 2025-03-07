@@ -2538,7 +2538,7 @@ class XiaolinWuAntiAliasing(unittest.TestCase):
             )
 
             # Remove empty pixels and sort to ensure the order is the same.
-            ret = np.stack((pixels_x_1, pixels_y_1, vals_1), axis=1)
+            ret = np.stack([pixels_x_1, pixels_y_1, vals_1], axis=1)
             ret = ret[~np.isclose(vals_1, 0)]
             ret, _ = lexsort_along(ret, axis=0)
             pixels_x_1, pixels_y_1, vals_1 = ret[:, 0], ret[:, 1], ret[:, 2]
@@ -2549,7 +2549,7 @@ class XiaolinWuAntiAliasing(unittest.TestCase):
             )
 
             # Remove empty pixels and sort to ensure the order is the same.
-            ret = np.stack((pixels_x_2, pixels_y_2, vals_2), axis=1)
+            ret = np.stack([pixels_x_2, pixels_y_2, vals_2], axis=1)
             ret = ret[~np.isclose(vals_2, 0)]
             ret, _ = lexsort_along(ret, axis=0)
             pixels_x_2, pixels_y_2, vals_2 = ret[:, 0], ret[:, 1], ret[:, 2]

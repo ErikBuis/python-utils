@@ -137,7 +137,9 @@ def ransac_batched(
             L_rs, dim=0
         )  # [L]
         is_inlier = distances_packed <= inlier_threshold_packed  # [L]
-        num_inliers = pad_packed_batched(is_inlier, L_rs, max_L_rs).sum(
+        num_inliers = pad_packed_batched(
+            is_inlier, L_rs, max_L_rs, padding_value=0
+        ).sum(
             dim=1
         )  # [R]
 

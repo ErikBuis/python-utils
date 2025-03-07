@@ -146,7 +146,7 @@ def cumsum_start_0(
     shape[dim] = 1
     zeros = torch.zeros(shape, device=device, dtype=dtype)
     cumsum = torch.cumsum(t, dim=dim, dtype=dtype)
-    return torch.concatenate([zeros, cumsum], dim=dim)
+    return torch.concat([zeros, cumsum], dim=dim)
 
 
 def to_tensor(
@@ -310,15 +310,15 @@ def ravel_multi_index(
             Shape: [N_0, ..., N_{D-1}]
     """
     if isinstance(multi_index, tuple):
-        multi_index = torch.stack(multi_index, dim=0)
+        multi_index = torch.stack(multi_index)  # [K, N_0, ..., N_{D-1}]
 
     if order == "C":
-        factors = torch.concatenate([
+        factors = torch.concat([
             dims[1:].flip(0).cumprod(0, dtype=torch.int64).flip(0),
             torch.ones(1, device=dims.device, dtype=torch.int64),
         ])  # [K]
     elif order == "F":
-        factors = torch.concatenate([
+        factors = torch.concat([
             torch.ones(1, device=dims.device, dtype=torch.int64),
             dims[:-1].cumprod(0, dtype=torch.int64),
         ])  # [K]
@@ -398,7 +398,7 @@ def lexsort(
         tensor([2, 0, 4, 6, 5, 3, 1])
     """
     if isinstance(keys, tuple):
-        keys = torch.stack(keys, dim=0)
+        keys = torch.stack(keys)  # [K, N_0, ..., N_dim, ..., N_{D-1}]
 
     # If the tensor is an integer tensor, first try sorting by representing
     # each of the "tuples" as a single integer. This is much faster than
@@ -728,17 +728,14 @@ def unique_consecutive(
         )  # [N_0 * ... * N_{dim-1} * N_{dim+1} * ... * N_{D-1}, N_dim]
 
     # Find the indices where the values change.
-    is_change = torch.concatenate(
-        [
-            (
-                torch.ones(1, device=x.device, dtype=torch.bool)
-                if N_dim > 0
-                else torch.empty(0, device=x.device, dtype=torch.bool)
-            ),  # [1] or [0]
-            (y[:, :-1] != y[:, 1:]).any(dim=0),  # [N_dim - 1] or [0]
-        ],
-        dim=0,
-    )  # [N_dim]
+    is_change = torch.concat([
+        (
+            torch.ones(1, device=x.device, dtype=torch.bool)
+            if N_dim > 0
+            else torch.empty(0, device=x.device, dtype=torch.bool)
+        ),  # [1] or [0]
+        (y[:, :-1] != y[:, 1:]).any(dim=0),  # [N_dim - 1] or [0]
+    ])  # [N_dim]
 
     # Find the unique values.
     idcs = is_change.nonzero(as_tuple=True)[0]  # [U]
@@ -756,19 +753,14 @@ def unique_consecutive(
     if return_counts:
         # Find the counts for each unique element.
         counts = torch.diff(
-            torch.concatenate(
-                [
-                    idcs,  # [U]
-                    (
-                        torch.full(
-                            (1,), N_dim, device=x.device, dtype=torch.int64
-                        )
-                        if N_dim > 0
-                        else torch.empty(0, device=x.device, dtype=torch.int64)
-                    ),  # [1] or [0]
-                ],
-                dim=0,
-            )
+            torch.concat([
+                idcs,  # [U]
+                (
+                    torch.full((1,), N_dim, device=x.device, dtype=torch.int64)
+                    if N_dim > 0
+                    else torch.empty(0, device=x.device, dtype=torch.int64)
+                ),  # [1] or [0]
+            ])
         )  # [U]
         aux.append(counts)
 

@@ -500,10 +500,10 @@ def main(args: argparse.Namespace) -> None:
     )  # [R-1, R-1], [R-1, R-1]
     frac_labels_poss_odd = frac_labels_poss_odd.flatten()  # [(R-1)^2]
     frac_preds_poss_odd = frac_preds_poss_odd.flatten()  # [(R-1)^2]
-    frac_labels_poss = np.concatenate(
+    frac_labels_poss = np.concat(
         [frac_labels_poss_even, frac_labels_poss_odd]
     )  # [R^2 + (R-1)^2]
-    frac_preds_poss = np.concatenate(
+    frac_preds_poss = np.concat(
         [frac_preds_poss_even, frac_preds_poss_odd]
     )  # [R^2 + (R-1)^2]
 

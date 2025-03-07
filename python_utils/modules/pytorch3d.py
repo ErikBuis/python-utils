@@ -100,7 +100,7 @@ class Transform3D:
         device = transforms[0]._matrix.device
         dtype = transforms[0]._matrix.dtype
         new = Transform3D(device=device, dtype=dtype)
-        new._matrix = torch.concatenate([t.matrix for t in transforms])
+        new._matrix = torch.concat([t.matrix for t in transforms])
         return new
 
     def transform_points(
@@ -138,7 +138,7 @@ class Transform3D:
         dtype = points.dtype
 
         # Transform the points.
-        points = torch.concatenate(
+        points = torch.concat(
             [points, torch.ones((B, max_P_bs, 1), device=device, dtype=dtype)],
             dim=2,
         )  # [B, max(P_bs), 4]
@@ -714,7 +714,7 @@ def points_2D_to_3D(points: torch.Tensor) -> torch.Tensor:
         The converted points. Represents x, y, and z coordinates.
             Shape: [..., 3]
     """
-    return torch.concatenate(
+    return torch.concat(
         [
             points,
             torch.zeros(

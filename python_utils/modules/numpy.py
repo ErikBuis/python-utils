@@ -64,7 +64,7 @@ def cumsum_start_0(
     shape[axis] = 1
     zeros = np.zeros(shape, dtype=dtype)
     cumsum = np.cumsum(a, axis=axis, dtype=dtype)
-    return np.concatenate([zeros, cumsum], axis=axis)
+    return np.concat([zeros, cumsum], axis=axis)
 
 
 def pad_sequence(
@@ -77,7 +77,9 @@ def pad_sequence(
     Note: This function is the numpy equivalent of
     torch.nn.utils.rnn.pad_sequence(). It is slower than the torch
     implementation, so please use the latter if you are working with PyTorch
-    tensors.
+    tensors. (Even better is .modules_batched.torch.pad_sequence_batched()
+    from this repository, since that function is faster than torch's version.
+    See the docstring of that function for more details.)
 
     Args:
         sequences: A sequence of variable length arrays.
@@ -373,7 +375,7 @@ def unique_consecutive(
         )  # [N_0 * ... * N_{axis-1} * N_{axis+1} * ... * N_{D-1}, N_axis]
 
     # Find the indices where the values change.
-    is_change = np.concatenate(
+    is_change = np.concat(
         [np.array([True]), np.any(y[:, :-1] != y[:, 1:], axis=0)], axis=0
     )  # [N_axis]
 
@@ -393,7 +395,7 @@ def unique_consecutive(
     if return_counts:
         # Find the counts for each unique element.
         counts = np.diff(
-            np.concatenate([idcs, np.array([x.shape[axis]])], axis=0)
+            np.concat([idcs, np.array([x.shape[axis]])], axis=0)
         )  # [N_unique]
         aux.append(counts)
 

@@ -54,7 +54,7 @@ def pad_packed_batched(
     values: torch.Tensor,
     L_bs: torch.Tensor,
     max_L_bs: int,
-    padding_value: Any | None = 0,
+    padding_value: Any = None,
 ) -> torch.Tensor:
     """Pad a batch of packed values to create a tensor with a fixed size.
 
@@ -93,6 +93,45 @@ def pad_packed_batched(
     values_padded[mask] = values
 
     return values_padded
+
+
+def pad_sequence_batched(
+    values: tuple[torch.Tensor] | list[torch.Tensor],
+    L_bs: torch.Tensor,
+    max_L_bs: int,
+    padding_value: Any = None,
+) -> torch.Tensor:
+    """Pad a batch of sequences to create a tensor with a fixed size.
+
+    This function is equivalent to torch.nn.utils.rnn.pad_sequence(), but
+    surprisingly it is a bit faster, even if the padding value is not set to
+    None! And if the padding value is set to None, the function will be even
+    faster, since it will not need to overwriting the allocated memory. The
+    former is because torch.nn.utils.rnn.pad_sequence() performs some extra
+    checks that we skip here. It is also a bit more flexible, since it allows
+    for the batch dimension to be at dim=1 instead of dim=0.
+
+    In conclusion, you should almost always use this function instead.
+
+    Args:
+        values: The sequence values to pad. Padding could be arbitrary.
+            Length: B
+            Shape of inner tensors: [L_b, *]
+        L_bs: The number of valid values in each sample.
+            Shape: [B]
+        max_L_bs: The maximum number of values of any element in the batch.
+            Must be equal to max(L_bs).
+        padding_value: The value to pad the values with. If None, the values
+            are padded with random values. This is faster than padding with
+            a specific value.
+
+    Returns:
+        The padded values. Padded with padding_value.
+            Shape: [B, max(L_bs), *]
+    """
+    return pad_packed_batched(
+        torch.concat(values), L_bs, max_L_bs, padding_value=padding_value
+    )  # [B, max(L_bs), *]
 
 
 def replace_padding_batched(
@@ -160,7 +199,7 @@ def replace_padding_batched(
 def last_valid_value_padding_batched(
     values: torch.Tensor,
     L_bs: torch.Tensor,
-    padding_value: Any = 0,
+    padding_value: Any = None,
     in_place: bool = False,
 ) -> torch.Tensor:
     """Pad the values with the last valid value for each sample.
@@ -171,7 +210,7 @@ def last_valid_value_padding_batched(
         L_bs: The number of valid values in each sample.
             Shape: [B]
         padding_value: The value to pad empty rows with (i.e. when L_b == 0
-            for some b). If None, the values are padded with random values.
+            for some b). If None, empty rows are padded with random values.
             This is faster than padding with a specific value.
         in_place: Whether to perform the operation in-place.
 
@@ -181,14 +220,14 @@ def last_valid_value_padding_batched(
     """
     B = len(L_bs)
     arange_B = torch.arange(B, device=values.device)  # [B]
-    padding_value = values[arange_B, L_bs - 1]  # [B, *]
+    padding_value_new = values[arange_B, L_bs - 1]  # [B, *]
     if padding_value is not None:
-        padding_value.masked_fill_(
+        padding_value_new.masked_fill_(
             L_bs.reshape(-1, *[1] * (values.ndim - 2)) == 0,  # [B, *]
             padding_value,
         )  # [B, *]
     return replace_padding_batched(
-        values, L_bs, padding_value=padding_value, in_place=in_place
+        values, L_bs, padding_value=padding_value_new, in_place=in_place
     )  # [B, max(L_bs), *]
 
 
@@ -314,7 +353,7 @@ def apply_mask_batched(
     mask: torch.Tensor,
     L_bs: torch.Tensor,
     max_L_bs: int,
-    padding_value: Any | None = 0,
+    padding_value: Any = None,
 ) -> tuple[torch.Tensor, torch.Tensor, int]:
     """Apply an additonal mask to a batch of values.
 
@@ -366,6 +405,7 @@ def arange_batched(
     starts: torch.Tensor,
     ends: torch.Tensor | None = None,
     steps: torch.Tensor | None = None,
+    padding_value: Any = None,
     device: torch.device | str | int | None = None,
     dtype: torch.dtype | None = None,
     requires_grad: bool = False,
@@ -381,6 +421,9 @@ def arange_batched(
         steps: The step value for each tensor in the batch. If None, the step
             value is set to 1.
             Shape: [B]
+        padding_value: The value to pad the values with. If None, the values
+            are padded with random values. This is faster than padding with
+            a specific value.
         device: The device of the output tensor.
         dtype: The data type of the output tensor.
         requires_grad: Whether to enable gradients for the output tensor.
@@ -388,7 +431,7 @@ def arange_batched(
     Returns:
         Tuple containing:
         - A batch of tensors with values in the range [start, end).
-            Padded with zeros.
+            Padded with padding_value.
             Shape: [B, max(L_bs)]
         - The number of values of any arange sequence in the batch.
             Shape: [B]
@@ -416,7 +459,10 @@ def arange_batched(
         + torch.arange(max_L_bs, device=device)  # [max(L_bs)]
         * steps.unsqueeze(1)  # [B, 1]
     )  # [B, max(L_bs)]  # fmt: skip
-    replace_padding_batched(aranges, L_bs, padding_value=0, in_place=True)
+    if padding_value is not None:
+        replace_padding_batched(
+            aranges, L_bs, padding_value=padding_value, in_place=True
+        )
     aranges = aranges.to(dtype if dtype is not None else aranges.dtype)
     if requires_grad:
         aranges.requires_grad_()
@@ -428,6 +474,7 @@ def linspace_batched(
     starts: torch.Tensor,
     ends: torch.Tensor,
     steps: torch.Tensor,
+    padding_value: Any = None,
     device: torch.device | str | int | None = None,
     dtype: torch.dtype | None = None,
     requires_grad: bool = False,
@@ -441,6 +488,9 @@ def linspace_batched(
             Shape: [B]
         steps: The number of steps for each tensor in the batch.
             Shape: [B]
+        padding_value: The value to pad the values with. If None, the values
+            are padded with random values. This is faster than padding with
+            a specific value.
         device: The device of the output tensor.
         dtype: The data type of the output tensor.
         requires_grad: Whether to enable gradients for the output tensor.
@@ -448,7 +498,7 @@ def linspace_batched(
     Returns:
         Tuple containing:
         - A batch of tensors with values in the range [start, end].
-            Padded with zeros.
+            Padded with padding_value.
             Shape: [B, max(L_bs)]
         - The number of values of any linspace sequence in the batch.
             Shape: [B]
@@ -474,7 +524,10 @@ def linspace_batched(
     linspaces[torch.arange(B, device=device), L_bs_minus_1] = ends.to(
         linspaces.dtype
     )  # prevent floating point errors
-    replace_padding_batched(linspaces, L_bs, padding_value=0, in_place=True)
+    if padding_value is not None:
+        replace_padding_batched(
+            linspaces, L_bs, padding_value=padding_value, in_place=True
+        )
     linspaces = linspaces.to(dtype if dtype is not None else linspaces.dtype)
     if requires_grad:
         linspaces.requires_grad_()
@@ -1060,7 +1113,7 @@ def unique_consecutive_batched(
         )  # [B, N_0 * ... * N_{dim-1} * N_{dim+1} * ... * N_{D-1}, N_dim]
 
     # Find the indices where the values change.
-    is_change = torch.concatenate(
+    is_change = torch.concat(
         [
             (
                 torch.ones((B, 1), device=device, dtype=torch.bool)
@@ -1079,7 +1132,7 @@ def unique_consecutive_batched(
     U_bs = count_freqs_until(batch_idcs, B)  # [B]
     max_U_bs = int(U_bs.max())
     dim_idcs_padded = pad_packed_batched(
-        dim_idcs, U_bs, max_U_bs
+        dim_idcs, U_bs, max_U_bs, padding_value=0
     )  # [B, max(U_bs)]
     uniques = index_select_batched(
         x, dim, dim_idcs_padded
@@ -1105,7 +1158,7 @@ def unique_consecutive_batched(
     if return_counts:
         # Find the counts for each unique element.
         counts = torch.diff(
-            torch.concatenate(
+            torch.concat(
                 [
                     dim_idcs_padded,  # [B, max(U_bs)]
                     (

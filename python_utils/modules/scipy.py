@@ -398,7 +398,7 @@ def voronoi_constrain_to_rect(
     points_voronoi_lower[:, 1] = 2 * rect[1] - points_voronoi_lower[:, 1]
     points_voronoi_upper = points_voronoi.copy()
     points_voronoi_upper[:, 1] = 2 * rect[3] - points_voronoi_upper[:, 1]
-    points_voronoi_all = np.concatenate(
+    points_voronoi_all = np.concat(
         (
             points_voronoi,
             points_voronoi_left,
