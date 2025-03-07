@@ -158,7 +158,10 @@ def replace_padding_batched(
 
 
 def last_valid_value_padding_batched(
-    values: torch.Tensor, L_bs: torch.Tensor, in_place: bool = False
+    values: torch.Tensor,
+    L_bs: torch.Tensor,
+    padding_value: Any = 0,
+    in_place: bool = False,
 ) -> torch.Tensor:
     """Pad the values with the last valid value for each sample.
 
@@ -167,6 +170,8 @@ def last_valid_value_padding_batched(
             Shape: [B, max(L_bs), *]
         L_bs: The number of valid values in each sample.
             Shape: [B]
+        padding_value: The value to pad empty rows with (i.e. when L_b == 0
+            for some b).
         in_place: Whether to perform the operation in-place.
 
     Returns:
@@ -175,11 +180,11 @@ def last_valid_value_padding_batched(
     """
     B = len(L_bs)
     arange_B = torch.arange(B, device=values.device)  # [B]
+    padding_value = torch.where(
+        L_bs, values[arange_B, L_bs - 1], padding_value
+    ).unsqueeze(1)  # [B, 1, *]  # fmt: skip
     return replace_padding_batched(
-        values,
-        L_bs,
-        padding_value=values[arange_B, L_bs - 1].unsqueeze(1),  # [B, 1, *]
-        in_place=in_place,
+        values, L_bs, padding_value=padding_value, in_place=in_place
     )  # [B, max(L_bs), *]
 
 
