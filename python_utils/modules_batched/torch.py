@@ -398,7 +398,7 @@ def apply_mask_batched(
         values[mask], new_L_bs, new_max_L_bs, padding_value=padding_value
     )  # [B, max(new_L_bs), *]
 
-    return values, L_bs, max_L_bs
+    return values, new_L_bs, new_max_L_bs
 
 
 def arange_batched(
