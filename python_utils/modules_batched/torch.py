@@ -186,7 +186,7 @@ def last_valid_value_padding_batched(
     B = len(L_bs)
     arange_B = torch.arange(B, device=values.device)  # [B]
     padding_value = torch.where(
-        L_bs.reshape(-1, *[1] * (values.ndim - 2)),  # [B, *]
+        L_bs.reshape(-1, *[1] * (values.ndim - 2)) != 0,  # [B, *]
         values[arange_B, L_bs - 1],  # [B, *]
         padding_value,  # [] or [1] or [*] or [B, *]
     ).unsqueeze(1)  # [B, 1, *]  # fmt: skip
