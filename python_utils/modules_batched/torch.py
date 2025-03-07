@@ -171,12 +171,8 @@ def last_valid_value_padding_batched(
         L_bs: The number of valid values in each sample.
             Shape: [B]
         padding_value: The value to pad empty rows with (i.e. when L_b == 0
-            for some b). Can be one of:
-            - A scalar value, a tensor of shape [] or one of shape [1].
-            - A tensor of shape [*], containing the value to pad all elements
-              with.
-            - A tensor of shape [B, *], containing the value to pad each row
-              with.
+            for some b). If None, the values are padded with random values.
+            This is faster than padding with a specific value.
         in_place: Whether to perform the operation in-place.
 
     Returns:
@@ -185,11 +181,12 @@ def last_valid_value_padding_batched(
     """
     B = len(L_bs)
     arange_B = torch.arange(B, device=values.device)  # [B]
-    padding_value = torch.where(
-        L_bs.reshape(-1, *[1] * (values.ndim - 2)) != 0,  # [B, *]
-        values[arange_B, L_bs - 1],  # [B, *]
-        padding_value,  # [] or [1] or [*] or [B, *]
-    ).unsqueeze(1)  # [B, 1, *]  # fmt: skip
+    padding_value = values[arange_B, L_bs - 1]  # [B, *]
+    if padding_value is not None:
+        padding_value.masked_fill_(
+            L_bs.reshape(-1, *[1] * (values.ndim - 2)) == 0,  # [B, *]
+            padding_value,
+        )  # [B, *]
     return replace_padding_batched(
         values, L_bs, padding_value=padding_value, in_place=in_place
     )  # [B, max(L_bs), *]
