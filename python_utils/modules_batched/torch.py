@@ -226,6 +226,7 @@ def last_valid_value_padding_batched(
             L_bs.reshape(-1, *[1] * (values.ndim - 2)) == 0,  # [B, *]
             padding_value,
         )  # [B, *]
+    padding_value_new = padding_value_new.unsqueeze(1)  # [B, 1, *]
     return replace_padding_batched(
         values, L_bs, padding_value=padding_value_new, in_place=in_place
     )  # [B, max(L_bs), *]
