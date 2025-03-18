@@ -88,7 +88,7 @@ class Transform3D:
         return new
 
     @staticmethod
-    def concatenate(transforms: list["Transform3D"]) -> "Transform3D":
+    def concat(transforms: list["Transform3D"]) -> "Transform3D":
         """Concatenate a list of transformation matrices into a single batch.
 
         Args:
