@@ -84,7 +84,7 @@ This subsection provides a brief overview of the most commonly used `uv` command
     ```
 - To install optional extra dependencies (that are already present in the `pyproject.toml` file), use:
     ```powershell
-    uv sync --extras [extra-name]
+    uv sync --extra [extra-name]
     ```
     Replace `[extra-name]` with the name of the extra dependency you want to install.
 - To initialize an empty `uv` environment in the current working directory, use:
@@ -196,12 +196,12 @@ This subsection provides a brief overview of the most commonly used `uv` command
     ```powershell
     uv sync --upgrade-package [package-name]
     ```
-- To specify an optional dependency ("extras") for a package:
+- To specify an optional dependency ("extra") for a package:
     ```powershell
     uv add [package-name] --optional [extra-name]
     ```
     Users can install the optional dependencies of your project by running e.g. `uv add package-name[extra-name]` or `pip install package-name[extra-name]` (if they don't use `uv`).<br>
-    To install an extra of your current project locally, use `uv sync --extras [extra-name]`.
+    To install an extra of your current project locally, use `uv sync --extra [extra-name]`.
 - To specify a development dependency, which are local-only and will *not* be included in the project requirements when published to PyPI or other indexes:
     ```powershell
     uv add --dev [package-name]
