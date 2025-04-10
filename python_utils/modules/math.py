@@ -6,7 +6,6 @@ from math import pow as mpow
 from math import sqrt
 from typing import TypeVar
 
-
 NumberT = TypeVar("NumberT", int, float)  # used for typing dependent vars
 
 
@@ -355,8 +354,12 @@ def optimal_grid_layout(
     - ncols * nrows >= n
     - ncols * nrows is minimal
 
+    If there are multiple solutions, the one with ncols < nrows is preferred if
+    max_cols <= max_rows, otherwise the one with ncols > nrows is preferred.
+    If max_cols or max_rows is None, they are set to n internally.
+
     Args:
-        n: The number of subplots.
+        n: The minimum number of cells in the grid.
         max_cols: The maximum number of columns. If None, there is no limit.
         max_rows: The maximum number of rows. If None, there is no limit.
 
@@ -365,7 +368,6 @@ def optimal_grid_layout(
         - The number of columns ncols.
         - The number of rows nrows.
     """
-
     if max_cols is None:
         max_cols = n
     if max_rows is None:
@@ -375,16 +377,16 @@ def optimal_grid_layout(
 
     # Calculate the optimal amount of rows and columns so that the grid will
     # be filled as much as possible with plots.
-    min_cells = min(max_cols, max_rows)
-    max_cells = max(max_cols, max_rows)
+    small_side = min(max_cols, max_rows)
+    large_side = max(max_cols, max_rows)
     for m in range(n, max_cols * max_rows + 1):
         factors_m = sorted(factors(m))
         for i in range((len(factors_m) - 1) // 2, -1, -1):
             f1 = factors_m[i]  # middle left factor
-            f2 = n // f1  # middle right factor
+            f2 = m // f1  # middle right factor
 
-            if f1 <= min_cells and f2 <= max_cells:  # optimal grid found
-                if max_cols < max_rows:
+            if f1 <= small_side and f2 <= large_side:  # optimal grid found
+                if max_cols <= max_rows:
                     return f1, f2
                 else:
                     return f2, f1

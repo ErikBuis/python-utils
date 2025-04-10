@@ -18,7 +18,6 @@
     "isort.args": [
         "--line-length=79",  // Same line length as Black
         "--profile=black",  // Prevent conflicts with Black
-        "--lines-after-imports=2"  // Use 2 lines after import instead of 1
     ],
 
     // Black formatter
