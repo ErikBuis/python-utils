@@ -1,9 +1,7 @@
 import itertools
 import operator
 from collections.abc import Iterable, Iterator
-from math import ceil, exp, floor, gcd, isqrt, pi
-from math import pow as mpow
-from math import sqrt
+from math import ceil, exp, floor, gcd, isqrt, pi, sqrt
 from typing import TypeVar
 
 NumberT = TypeVar("NumberT", int, float)  # used for typing dependent vars
@@ -313,7 +311,7 @@ def gaussian(x: float, mu: float, sigma: float) -> float:
     Returns:
         The value of the Gaussian distribution at x.
     """
-    return exp(-mpow((x - mu) / sigma, 2) / 2) / (sigma * sqrt(2 * pi))
+    return exp(-(((x - mu) / sigma) ** 2) / 2) / (sigma * sqrt(2 * pi))
 
 
 def monotonic_hyperbolic_rescaling(x: float, r: float) -> float:
@@ -339,7 +337,7 @@ def monotonic_hyperbolic_rescaling(x: float, r: float) -> float:
     Returns:
         The rescaled number. Will be between 0 and 1.
     """
-    f = (r + 2 - sqrt(mpow(r, 2) + 4)) / 2
+    f = (r + 2 - sqrt(r**2 + 4)) / 2
     return x / (1 - f + f * x)
 
 

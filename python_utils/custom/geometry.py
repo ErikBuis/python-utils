@@ -92,15 +92,25 @@ from abc import ABC, abstractmethod
 from bisect import bisect_left
 from collections.abc import Iterable, Iterator, Sequence
 from heapq import heapify, heappop
-from math import acos, atan2, cos, dist, floor, hypot, inf, isinf, pi
-from math import pow as mpow
-from math import sin, sqrt, tan
+from math import (
+    acos,
+    atan2,
+    cos,
+    dist,
+    floor,
+    hypot,
+    inf,
+    isinf,
+    pi,
+    sin,
+    sqrt,
+    tan,
+)
 from typing import Any, Literal, TypeVar, cast, overload
 
 from typing_extensions import override
 
 from ..modules.bisect import bisect_right_using_left
-
 
 number_type = (int, float)  # used for isinstance() checks
 NumberT = TypeVar("NumberT", int, float)  # used for typing dependent vars
@@ -2069,9 +2079,7 @@ class Vector2D(GeometricObject2D):
 
     def distance_squared_to(self, other: "Vector2D") -> float:
         """Calculate the squared Euclidean distance to the given vector."""
-        # Yes, for some reason this is faster than the following:
-        # mpow(self._x - other._x, 2) + mpow(self._y - other._y, 2)
-        return mpow(dist((self._x, self._y), (other._x, other._y)), 2)
+        return (self._x - other._x) ** 2 + (self._y - other._y) ** 2
 
     def dot(self, other: "Vector2D") -> float:
         """Calculate the dot product with the given vector."""
@@ -2099,9 +2107,7 @@ class Vector2D(GeometricObject2D):
         x^2 + y^2
         This is faster than .length() because it avoids the square root.
         """
-        # Now in contrast to distance_squared_to(), the following is slower:
-        # mpow(hypot(self._x, self._y), 2)
-        return mpow(self._x, 2) + mpow(self._y, 2)
+        return self._x**2 + self._y**2
 
     def normalize(self) -> "Vector2D":
         """Normalize the vector.
@@ -2422,7 +2428,7 @@ class Line2D(GeometricObject2D):
         elif self._native_repr == "standard":
             self._r = abs(self._c) / hypot(self._a, self._b)
         elif self._native_repr == "slope_intercept":
-            self._r = abs(self._intercept) / sqrt(1 + mpow(self._slope, 2))
+            self._r = abs(self._intercept) / sqrt(1 + self._slope**2)
         elif self._native_repr == "vectors":
             self._r = abs(self._v1.cross(self._v2)) / self._v2.length()
         else:
@@ -2860,8 +2866,8 @@ def get_circle_interceptions(
     # https://math.stackexchange.com/questions/256100/
     # how-can-i-find-the-points-at-which-two-circles-intercept says:
     d = get_line_length(x1, y1, x2, y2)
-    l = (mpow(r1, 2) - mpow(r2, 2) + mpow(d, 2)) / (2 * d)
-    h = sqrt(mpow(r1, 2) - mpow(l, 2))
+    l = (r1**2 - r2**2 + d**2) / (2 * d)
+    h = sqrt(r1**2 - l**2)
 
     x_base = x1 + l / d * (x2 - x1)
     y_base = y1 + l / d * (y2 - y1)
@@ -2902,7 +2908,7 @@ def get_tangent_point(
     # Step 1.
     mr = r
     pm = get_line_length(xl, yl, xc, yc)
-    pr = sqrt(mpow(pm, 2) - mpow(mr, 2))
+    pr = sqrt(pm**2 - mr**2)
 
     # Step 2.
     return get_circle_interceptions(xc, yc, r, xl, yl, pr)
@@ -2924,7 +2930,7 @@ def get_angle_general_triangle(a: float, b: float, c: float) -> float:
     # Met deze twee regels kun je vanuit drie gegevens alle zijden en hoeken
     # van een willekeurige driehoek berekenen. Dat heet "triangulatie"
     # (driehoeksmeting).
-    return acos((mpow(b, 2) + mpow(c, 2) - mpow(a, 2)) / (2 * b * c))
+    return acos((b**2 + c**2 - a**2) / (2 * b * c))
 
 
 import torch  # noqa: E402
