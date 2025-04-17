@@ -17,7 +17,7 @@ def ransac_batched(
     max_iterations: torch.Tensor | int,
     inlier_threshold: torch.Tensor | float,
     min_inliers: torch.Tensor | int,
-) -> torch.Tensor:
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Determine the best intersection point of multiple lines.
 
     This function uses the Random Sample Consensus (RANSAC) algorithm to
@@ -49,8 +49,11 @@ def ransac_batched(
             Shape: [B] or [] or int
 
     Returns:
-        The best intersection point of the lines.
+        Tuple containing:
+        - The best intersection point of the lines.
             Shape: [B, 2]
+        - The number of inliers for each sample.
+            Shape: [B]
     """
     if L_bs.min() < 2:
         raise ValueError(
@@ -158,4 +161,4 @@ def ransac_batched(
             | (i >= max_iterations_running - 1)  # [R]
         )
 
-    return best_intersection
+    return best_intersection, best_num_inliers
