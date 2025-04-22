@@ -6,7 +6,6 @@ from typing import Annotated
 from pydantic import BaseModel, GetPydanticSchema
 from pydantic_core import core_schema
 
-
 try:
     import numpy as np
 

@@ -6,7 +6,6 @@ See https://github.com/facebookresearch/pytorch3d for the original code.
 
 import torch
 
-
 try:
     from typing import Self
 except ImportError:

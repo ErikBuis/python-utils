@@ -11,7 +11,6 @@ from torch.utils.data._utils.collate import (
 )
 from torch.utils.data.dataloader import default_collate
 
-
 # Allow the dataset to return None when a sample is corrupted. When it does,
 # make torch's default collate function replace it with another sample.
 default_collate_fn_map.update({type(None): collate_str_fn})

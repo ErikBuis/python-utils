@@ -11,7 +11,6 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable, Iterator
 from typing import TypeVar
 
-
 VertexT = TypeVar("VertexT")
 
 

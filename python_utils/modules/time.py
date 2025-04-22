@@ -2,7 +2,6 @@ import logging
 import time
 from typing import Any
 
-
 logger = logging.getLogger(__name__)
 
 __timers: dict[int, dict[str, Any]] = {}

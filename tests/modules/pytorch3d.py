@@ -6,7 +6,6 @@ import torch
 
 from python_utils.modules.pytorch3d import SurfaceToSurface
 
-
 # fmt: off
 get_matrix_rotate_vec_a_to_vec_b = SurfaceToSurface.\
     _SurfaceToSurface__get_matrix_rotate_vec_a_to_vec_b  # type: ignore

@@ -9,7 +9,6 @@ import numpy.typing as npt
 import scipy.optimize
 from scipy.spatial import Voronoi
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -30,6 +29,13 @@ def plot_fitted_curve(
 
     Note: The plotted data will be given labels. Make sure to call ax.legend()
     after this function if you want to display these labels.
+
+    Warning: Be careful with setting the y-scale to "log" when also enabling
+    the confidence interval; even if the y values are all positive, the
+    confidence interval may cross the x-axis in specific cases (e.g. when the
+    y values are close to zero). In this case, the plot can't be displayed
+    correctly when using a logarithmic scale. Instead, please apply a
+    symmetric logarithmic scale using ax.set_yscale("symlog").
 
     Args:
         ax: The axes to plot on.
@@ -184,7 +190,7 @@ def plot_fitted_curve(
 
     for i, x_val in enumerate(x_space):
         # Find the data points close to the current x_val. We do this in a way
-        # such that the overall time complexity is O(n) instead if checking
+        # such that the overall time complexity is O(n) instead of checking
         # all values at each iteration, because this would be O(n^2).
         left_bound = x_val - sliding_window_left[i]  # inclusive
         right_bound = x_val + sliding_window_right[i]  # exclusive

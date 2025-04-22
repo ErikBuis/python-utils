@@ -4,7 +4,6 @@ import numpy as np
 import numpy.typing as npt
 from typing_extensions import override
 
-
 T = TypeVar("T")
 
 

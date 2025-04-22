@@ -3,7 +3,6 @@ from collections.abc import Callable, Sequence
 from timeit import timeit
 from typing import Any
 
-
 logger = logging.getLogger(__name__)
 
 

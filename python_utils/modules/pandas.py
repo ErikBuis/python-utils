@@ -5,7 +5,6 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 
-
 NPGeneric = TypeVar("NPGeneric", bound=np.generic)
 
 

@@ -10,7 +10,6 @@ import lightning.pytorch.callbacks as pl_callbacks
 import lightning.pytorch.loggers as pl_loggers
 import torch
 
-
 logger = logging.getLogger(__name__)
 
 

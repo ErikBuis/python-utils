@@ -12,7 +12,6 @@ from ..modules_batched.random import (
 )
 from ..modules_batched.torch import pad_packed_batched
 
-
 # ############################### TENSOR TYPES ################################
 
 LinearRingVertices = NamedTuple(

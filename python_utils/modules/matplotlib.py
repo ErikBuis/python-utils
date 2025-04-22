@@ -1,10 +1,8 @@
 from typing import Any, Sequence
 
 import matplotlib
-import matplotlib.axes
 import matplotlib.cm
 import matplotlib.colors
-import matplotlib.figure
 import numpy as np
 import numpy.typing as npt
 from matplotlib.patches import FancyArrowPatch

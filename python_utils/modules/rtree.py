@@ -3,7 +3,6 @@ from typing import TypeVar
 
 from rtree import index
 
-
 T = TypeVar("T")
 
 

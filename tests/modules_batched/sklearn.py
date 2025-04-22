@@ -31,7 +31,7 @@ class TestRansacBatched(unittest.TestCase):
         max_t = ceil(max_view * sqrt(2))
 
         # Calculate a good intersection point using RANSAC.
-        intersections = ransac_batched(
+        intersections, _ = ransac_batched(
             lines,
             L_bs,
             max_iterations=L_bs,
