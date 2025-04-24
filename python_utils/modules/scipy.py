@@ -1,12 +1,14 @@
 import logging
 from collections.abc import Callable
 from inspect import signature
+from math import ceil
 from typing import Literal, cast
 
 import matplotlib.axes
 import numpy as np
 import numpy.typing as npt
 import scipy.optimize
+from scipy.signal import savgol_filter
 from scipy.spatial import Voronoi
 
 logger = logging.getLogger(__name__)
@@ -57,7 +59,8 @@ def plot_fitted_curve(
             calculating the standard deviation of the residuals. Based on the
             standard deviation, the confidence interval will be calculated.
             A smaller value will result in a more accurate but less smooth
-            confidence interval.
+            confidence interval. For example, a value of 0.05 means that the
+            sliding window width will be 5% of the range of x values.
         log_scale: Whether the x-axis is scaled logarithmically. Will be used
             to adjust the sliding window dynamically with the x values. This
             argument should be set to True if you are calling either
@@ -153,10 +156,11 @@ def plot_fitted_curve(
     )
 
     # Create a linear/logarithmic space for plotting the curve.
+    amount_samples = ceil(2 / sliding_window) + 1
     x_space = (
-        np.logspace(np.log10(x[0]), np.log10(x[-1]), 100)
+        np.logspace(np.log10(x[0]), np.log10(x[-1]), amount_samples)
         if log_scale
-        else np.linspace(x[0], x[-1], 100)
+        else np.linspace(x[0], x[-1], amount_samples)
     )
     y_fitted = func(x_space, *popt)
 
@@ -173,12 +177,12 @@ def plot_fitted_curve(
         np.log10(x[-1]) - np.log10(x[0]) if log_scale else x[-1] - x[0]
     )
     sliding_window_half_width = full_width * sliding_window / 2
-    sliding_window_left = (
+    left_bounds = (
         10 ** (np.log10(x_space) - sliding_window_half_width)
         if log_scale
         else x_space - sliding_window_half_width
     )
-    sliding_window_right = (
+    right_bounds = (
         10 ** (np.log10(x_space) + sliding_window_half_width)
         if log_scale
         else x_space + sliding_window_half_width
@@ -192,11 +196,9 @@ def plot_fitted_curve(
         # Find the data points close to the current x_val. We do this in a way
         # such that the overall time complexity is O(n) instead of checking
         # all values at each iteration, because this would be O(n^2).
-        left_bound = x_val - sliding_window_left[i]  # inclusive
-        right_bound = x_val + sliding_window_right[i]  # exclusive
-        while from_idx < len(x) and x[from_idx] < left_bound:
+        while from_idx < len(x) and x[from_idx] < left_bounds[i]:
             from_idx += 1
-        while to_idx < len(x) and x[to_idx] < right_bound:
+        while to_idx < len(x) and x[to_idx] < right_bounds[i]:
             to_idx += 1
 
         # Calculate the residuals in the sliding window.
@@ -251,15 +253,8 @@ def plot_fitted_curve(
     y_lower[prev_non_nan_idx_lower + 1 :] = y_lower[prev_non_nan_idx_lower]
 
     # Approximate the confidence interval's bounds.
-    kwargs_optimize_curve_fit["p0"] = popt
-    popt_upper, _ = scipy.optimize.curve_fit(
-        func, x_space, y_upper, **kwargs_optimize_curve_fit
-    )
-    popt_lower, _ = scipy.optimize.curve_fit(
-        func, x_space, y_lower, **kwargs_optimize_curve_fit
-    )
-    y_upper = func(x_space, *popt_upper)
-    y_lower = func(x_space, *popt_lower)
+    y_upper = savgol_filter(y_upper, min(amount_samples, 25), 2)
+    y_lower = savgol_filter(y_lower, min(amount_samples, 25), 2)
 
     # Fill the confidence interval area.
     ax.fill_between(x_space, y_lower, y_upper, **kwargs_fill_between)
