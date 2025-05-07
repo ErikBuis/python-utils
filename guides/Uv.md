@@ -196,17 +196,19 @@ This subsection provides a brief overview of the most commonly used `uv` command
     ```powershell
     uv sync --upgrade-package [package-name]
     ```
-- To specify an optional dependency ("extra") for a package:
+- To add a package as an optional dependency ("extra"):
     ```powershell
     uv add [package-name] --optional [extra-name]
     ```
     Users can install the optional dependencies of your project by running e.g. `uv add package-name[extra-name]` or `pip install package-name[extra-name]` (if they don't use `uv`).<br>
     To install an extra of your current project locally, use `uv sync --extra [extra-name]`.
-- To specify a development dependency, which are local-only and will *not* be included in the project requirements when published to PyPI or other indexes:
+- To add a development dependency, which are local-only and will *not* be included in the project requirements when published to PyPI or other indexes:
     ```powershell
     uv add --dev [package-name]
     ```
-    This option should be used for packages that are only needed during development, such as `pytest`, `ipython` or `black`.
+    This option should be used for packages that are only needed during development, such as `pytest`, `ipython` or `black`.<br>
+    Note that the package will automatically be added under the `dev` group. If you want to install a package as a development dependency in a custom group, you should use `--group [group-name]` instead of `--dev`.<br>
+    Once groups are defined, the `--all-groups`, `--no-default-groups`, `--group`, `--only-group`, and `--no-group` options can be used together with `uv sync` to include or exclude their dependencies. `uv` requires that all dependency groups are compatible with each other and resolves all groups together when creating the lockfile.
 - You can also edit the `pyproject.toml` file directly to add or remove dependencies. After editing the file, you must syncronize the environment with the new dependencies:
     ```powershell
     uv sync
