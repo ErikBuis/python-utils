@@ -463,7 +463,13 @@ class NumberSet:
                     self._boundaries_included[idx + 1],
                 )
 
-    def __init__(self, *components: "float | Interval | NumberSet") -> None:
+    def __init__(
+        self,
+        *components: float
+        | Interval
+        | NumberSet
+        | Iterable[float | Interval | NumberSet],
+    ) -> None:
         """Create a NumberSet instance.
 
         Note that -inf or inf cannot be added to the set directly, as they are
@@ -476,10 +482,9 @@ class NumberSet:
         of the set.
 
         Args:
-            *components: A list of numbers, intervals, or other NumberSets to
-                add to the set. If a component is a NumberSet, its components
-                are added to the set by reference. If a component is an
-                Interval, it is added to the set as a separate component.
+            *components: Numbers, Intervals, other NumberSets, or iterables of
+                such objects to add to the set. If a component is a NumberSet,
+                its inner components are added to the set by reference.
 
         Examples:
         >>> NumberSet(0, 10, Interval("[", 1, 5, ")"))
@@ -523,7 +528,11 @@ class NumberSet:
 
         # Add the components to the set.
         for component in components:
-            self |= component
+            if isinstance(component, (number_type, Interval, NumberSet)):
+                self |= component
+            else:  # component is an iterable
+                for subcomponent in component:
+                    self |= subcomponent
 
     @classmethod
     def __direct_init(
@@ -2509,7 +2518,7 @@ class Vector2D(GeometricObject2D):
 
         See GeometricObject2D.intersections_x() for more information.
         """
-        return NumberSet(self._y) if self._x == x else NumberSet()
+        return NumberSet([self._y]) if self._x == x else NumberSet()
 
     @override
     def intersections_y(
@@ -2519,7 +2528,7 @@ class Vector2D(GeometricObject2D):
 
         See GeometricObject2D.intersections_y() for more information.
         """
-        return NumberSet(self._x) if self._y == y else NumberSet()
+        return NumberSet([self._x]) if self._y == y else NumberSet()
 
     def distance_squared_to(self, other: "Vector2D") -> float:
         """Calculate the squared Euclidean distance to the given vector."""
@@ -3166,9 +3175,9 @@ class Line2D(GeometricObject2D):
         """
         if self.b == 0:  # the line is vertical
             if self.a * x == self.c:
-                return NumberSet(Interval(True, -inf, inf, True))
+                return NumberSet([Interval(True, -inf, inf, True)])
             return NumberSet()
-        return NumberSet((self.c - self.a * x) / self.b)
+        return NumberSet([(self.c - self.a * x) / self.b])
 
     @override
     def intersections_y(
@@ -3180,9 +3189,9 @@ class Line2D(GeometricObject2D):
         """
         if self.a == 0:  # the line is horizontal
             if self.b * y == self.c:
-                return NumberSet(Interval(True, -inf, inf, True))
+                return NumberSet([Interval(True, -inf, inf, True)])
             return NumberSet()
-        return NumberSet((self.c - self.b * y) / self.a)
+        return NumberSet([(self.c - self.b * y) / self.a])
 
     def reflect_point(self, point: Vector2D) -> Vector2D:
         """Reflect a point over the line.

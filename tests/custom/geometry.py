@@ -495,6 +495,18 @@ class TestNumberSet(unittest.TestCase):
             numberset._boundaries_included, [True, True, True, False]
         )
 
+    # __init__ with an iterable of numbers, intervals, and numbersets.
+    def test_init_iterable(self) -> None:
+        interval = geometry.Interval("(", -3, 1, ")")
+        interval1 = geometry.Interval("[", 6, 8, ")")
+        numberset1 = geometry.NumberSet(set([5, interval1]))
+        numberset = geometry.NumberSet((-4, interval, numberset1))
+        self.assertEqual(numberset._boundaries, [-4, -4, -3, 1, 5, 5, 6, 8])
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, False, False, True, True, True, False],
+        )
+
     # __iter__ should return an iterator over the set's components.
     def test_iter(self) -> None:
         components = list(self.numberset)
