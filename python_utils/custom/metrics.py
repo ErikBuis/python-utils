@@ -6,6 +6,8 @@ positive with a fixed probability is used, what would its metrics be on
 average?
 """
 
+from __future__ import annotations
+
 import argparse
 import math
 import sys
@@ -428,7 +430,6 @@ def main(args: argparse.Namespace) -> None:
     import matplotlib.colors
     import matplotlib.patches
     import matplotlib.pyplot as plt
-    import matplotlib.tri
     import mpl_toolkits.mplot3d
     import numpy as np
 

@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import unittest
 
 import torch
 import torch.nn as nn
 
-from python_utils.custom.geometry import xiaolin_wu_anti_aliasing
-from python_utils.custom_batched.geometry import (
+from python_utils.custom.graphics import xiaolin_wu_anti_aliasing
+from python_utils.custom_batched.graphics import (
     xiaolin_wu_anti_aliasing_batched,
 )
 

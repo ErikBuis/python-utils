@@ -7,6 +7,8 @@ The imports present at the top of functions should be put at the top of your
 file, they should not stay in the function itself.
 """
 
+from __future__ import annotations
+
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Iterator
 from typing import TypeVar

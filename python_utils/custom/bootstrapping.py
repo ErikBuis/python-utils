@@ -1,5 +1,7 @@
 # TODO Actually make this code a usable util function
 
+from __future__ import annotations
+
 import inspect
 from typing import Callable
 

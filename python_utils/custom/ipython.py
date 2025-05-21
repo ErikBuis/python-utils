@@ -1,5 +1,7 @@
 # pyright: reportUnusedImport=false
 
+from __future__ import annotations
+
 
 def init_ipython() -> None:
     """Initialize the IPython environment."""

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import unittest
 
 from python_utils.modules.math import optimal_grid_layout

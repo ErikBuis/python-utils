@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import geopandas as gpd
 import torch
 from shapely import GeometryCollection, MultiPolygon, Polygon

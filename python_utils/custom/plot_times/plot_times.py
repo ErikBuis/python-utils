@@ -5,6 +5,8 @@ The results are cached in "plot_times_{task_name}.pkl", and the plot is saved
 as "plot_times_{task_name}.png".
 """
 
+from __future__ import annotations
+
 import pickle
 import sys
 from collections.abc import Callable

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import unittest
 from math import ceil, isqrt, sqrt
 from typing import cast

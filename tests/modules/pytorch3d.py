@@ -1,5 +1,7 @@
 # pyright: reportConstantRedefinition=false
 
+from __future__ import annotations
+
 import unittest
 
 import torch

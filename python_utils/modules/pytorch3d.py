@@ -4,6 +4,8 @@ The structure of the classes is inspired by the Transform3d class in PyTorch3D.
 See https://github.com/facebookresearch/pytorch3d for the original code.
 """
 
+from __future__ import annotations
+
 import torch
 
 try:

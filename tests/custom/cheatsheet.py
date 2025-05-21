@@ -1,6 +1,7 @@
 # pyright: reportPrivateUsage=false
 # pyright: reportUninitializedInstanceVariable=false
 
+from __future__ import annotations
 
 import unittest
 from collections.abc import Callable

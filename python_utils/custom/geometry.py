@@ -88,6 +88,7 @@ This cheatsheet does not use any external libraries.
 # !     - Overridden methods from ABCs
 # !     - Other methods
 
+from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from bisect import bisect_left

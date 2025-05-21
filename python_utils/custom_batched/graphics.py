@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import torch
 
 from ..modules_batched.torch import arange_batched, replace_padding_batched

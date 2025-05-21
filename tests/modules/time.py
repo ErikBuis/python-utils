@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import unittest
 
 from python_utils.modules.time import human_readable_time

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Any, Generic, Literal, TypeVar, overload
 
 import numpy as np
