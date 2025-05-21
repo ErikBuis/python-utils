@@ -27,9 +27,9 @@ This cheatsheet does not use any external libraries.
 # ! - Use triple double quotes (""") for docstrings. Directly after the
 # !   opening quotes, there should be one line explaining what the function
 # !   does.
-# ! - This one line should not start with "The" or "Return". It should start
-# !   with a verb's base form in the present tense, e.g. "Create", "Perform",
-# !   "Calculate", etc. Do not use the singlular form of the verb, e.g.
+# ! - This one line should not start with "Return". It should start with a
+# !   verb's dictionary form in the present tense, e.g. "Create", "Perform",
+# !   "Calculate", etc. Do not use the singular form of the verb, e.g.
 # !   "Creates", "Performs", "Calculates", etc.
 # ! - After that, there should be a blank line.
 # ! - Then, the rest of the docstring further explains the function. If the
@@ -84,6 +84,7 @@ This cheatsheet does not use any external libraries.
 # !         - __slots__
 # !         - __subclasshook__
 # ! - Then, the class's other methods should be defined in the following order:
+# !     - Private methods
 # !     - Overridden methods from ABCs
 # !     - Other methods
 
@@ -113,7 +114,6 @@ from typing_extensions import override
 from ..modules.bisect import bisect_right_using_left
 
 number_type = (int, float)  # used for isinstance() checks
-NumberT = TypeVar("NumberT", int, float)  # used for typing dependent vars
 
 # This alias is mainly meant for functions where multiple arguments or an
 # argument and the return value must be of the same subclass of
@@ -164,15 +164,15 @@ class Matrix2D:
         """Iterate over the matrix's components."""
         return iter((self._a, self._b, self._c, self._d))
 
-    def __getitem__(self, index: int) -> float:
+    def __getitem__(self, idx: int) -> float:
         """Get the component at the given index."""
-        if index == 0:
+        if idx == 0:
             return self._a
-        elif index == 1:
+        elif idx == 1:
             return self._b
-        elif index == 2:
+        elif idx == 2:
             return self._c
-        elif index == 3:
+        elif idx == 3:
             return self._d
         else:
             raise IndexError("Matrix index out of range.")
@@ -234,49 +234,76 @@ class Interval:
     The interval could be open or closed on either side. Possible formats are:
     - [a, b] = closed interval
     - (a, b) = open interval
-    - (a, b] = half-open interval
-    - [a, b) = half-open interval
+    - (a, b] = half-open interval on the left
+    - [a, b) = half-open interval on the right
 
     a and b can be any real number, including -inf and +inf. However, due to
     implementation details, if a is -inf, the left bracket must be '[', and if
     b is +inf, the right bracket must be ']'. We do this for algorithmic
     efficiency reasons.
 
-    The interval cannot start and end at the same point and it also cannot be
-    empty.
+    The interval's starting point (a) must be less than its ending point (b).
+    Therefore, by extension, the interval cannot represent a point. We chose
+    this intentionally to avoid complications with the implementation.
 
     Once created, an Interval is immutable.
     """
 
     @property
     def start_included(self) -> bool:
-        """Whether the start of the interval is included."""
+        """Whether the start of the interval is included.
+
+        Returns:
+            True if the starting point of the interval is included, False
+            otherwise.
+        """
         return self._start_included
 
     @property
+    def end_included(self) -> bool:
+        """Whether the end of the interval is included.
+
+        Returns:
+            True if the ending point of the interval is included, False
+            otherwise.
+        """
+        return self._end_included
+
+    @property
     def left_bracket(self) -> Literal["[", "("]:
-        """The left bracket of the interval."""
+        """The left bracket of the interval.
+
+        Returns:
+            '[' if the start of the interval is included, '(' otherwise.
+        """
         return "[" if self._start_included else "("
 
     @property
+    def right_bracket(self) -> Literal["]", ")"]:
+        """The right bracket of the interval.
+
+        Returns:
+            ']' if the end of the interval is included, ')' otherwise.
+        """
+        return "]" if self._end_included else ")"
+
+    @property
     def start(self) -> float:
-        """The start of the interval."""
+        """The start of the interval.
+
+        Returns:
+            The starting point of the interval.
+        """
         return self._start
 
     @property
     def end(self) -> float:
-        """The end of the interval."""
+        """The end of the interval.
+
+        Returns:
+            The ending point of the interval.
+        """
         return self._end
-
-    @property
-    def end_included(self) -> bool:
-        """Whether the end of the interval is included."""
-        return self._end_included
-
-    @property
-    def right_bracket(self) -> Literal["]", ")"]:
-        """The right bracket of the interval."""
-        return "]" if self._end_included else ")"
 
     def __init__(
         self,
@@ -285,7 +312,28 @@ class Interval:
         end: float,
         right_bracket: bool | Literal["]", ")"],
     ) -> None:
-        """Create an Interval instance."""
+        """Create an Interval instance.
+
+        The interval is defined by its start and end points, and whether the
+        start and end points are included in the interval. The start and end
+        points can be any real number, including -inf and +inf. However, due
+        to implementation details, if the start is -inf, the left bracket must
+        be '[', and if the end is +inf, the right bracket must be ']'. We do
+        this for algorithmic efficiency reasons.
+
+        The start point must be less than the end point. Thus, the interval
+        cannot be empty, i.e. the start and end points cannot be equal.
+
+        Args:
+            left_bracket: Whether the start of the interval is included. If '['
+                or True, the start is included. If '(', or False, the start is
+                not excluded.
+            start: The start of the interval.
+            end: The end of the interval.
+            right_bracket: Whether the end of the interval is included. If ']'
+                or True, the end is included. If ')', or False, the end is not
+                excluded.
+        """
         if left_bracket not in ("[", "(", True, False):
             raise ValueError("Left bracket must be '[', '(', or bool.")
         if right_bracket not in ("]", ")", True, False):
@@ -312,37 +360,41 @@ class Interval:
             else right_bracket == "]"
         )
 
-    def __iter__(self) -> Iterator[bool | float]:
-        """Iterate over the interval's components."""
-        return iter(
-            (self._start_included, self._start, self._end, self._end_included)
-        )
-
-    def __getitem__(self, index: int) -> bool | float:
-        """Get the component at the given index."""
-        for i, component in enumerate(self):
-            if i == index:
-                return component
-        raise IndexError("Interval index out of range.")
-
     @override
     def __repr__(self) -> str:
-        """Represent the interval as a string."""
+        """Represent the interval as a string.
+
+        Returns:
+            A python representation of the Interval. The format is:
+            "Interval(left_bracket, start, end, right_bracket)"
+
+        Examples:
+        >>> repr(Interval("[", 1, 2, ")"))
+        "Interval('[', 1, 2, ')')"
+        """
         return (
             f"{self.__class__.__name__}("
-            + repr(self.left_bracket)
-            + ", "
-            + repr(self._start)
-            + ", "
-            + repr(self._end)
-            + ", "
-            + repr(self.right_bracket)
-            + ")"
+            f"{repr(self.left_bracket)}, "
+            f"{repr(self._start)}, "
+            f"{repr(self._end)}, "
+            f"{repr(self.right_bracket)})"
         )
 
     @override
     def __str__(self) -> str:
-        """Represent the interval as a string."""
+        """Represent the interval as a string.
+
+        Returns:
+            A human-readable representation of the Interval. The format is:
+            - "[start, end]" if the interval is closed.
+            - "(start, end)" if the interval is open.
+            - "(start, end]" if the interval is half-open on the left.
+            - "[start, end)" if the interval is half-open on the right.
+
+        Examples:
+        >>> str(Interval("[", 1, 2, ")"))
+        "[1, 2)"
+        """
         return (
             f'{"[" if self._start_included else "("}{self._start}, '
             f'{self._end}{"]" if self._end_included else ")"}'
@@ -350,47 +402,67 @@ class Interval:
 
     @override
     def __hash__(self) -> int:
-        """Create a hash id for the interval."""
+        """Create a hash id for the interval.
+
+        Returns:
+            A hash id for the interval. The hash id is created by hashing the
+            components of the interval.
+        """
         return hash(
             (self._start_included, self._start, self._end, self._end_included)
         )
 
     @override
-    def __eq__(self, other: "Interval") -> bool:
-        """Check if two objects represent the same set of numbers."""
-        return all(
-            component_self == component_other
-            for component_self, component_other in zip(self, other)
+    def __eq__(self, other: object) -> bool:
+        """Check if two objects represent the same set of numbers.
+
+        Args:
+            other: The other object to compare to.
+
+        Returns:
+            True if the two objects represent the same set of numbers, False
+            otherwise.
+        """
+        if not isinstance(other, Interval):
+            return False
+        return (
+            self._start_included == other._start_included
+            and self._start == other._start
+            and self._end == other._end
+            and self._end_included == other._end_included
         )
 
 
 class NumberSet:
-    """A set of non-overlapping numbers and intervals.
+    """A set of disjoint numbers and intervals.
 
     The set efficiently stores a subset of the real number line. It internally
-    maintains a set of numbers and Interval objects.
-
-    As long as the amount of non-adjacent objects in the set is finite, the
-    set is guaranteed to contain no overlapping numbers or intervals. Note that
-    intervals are allowed to contain an infinite amount of numbers, as long as
-    the amount of non-adjacent intervals/numbers is finite.
-
-    However, if the amount of non-adjacent objects in the set is infinite,
-    this may not be the case. This is because in general, we would have to go
-    through all the objects in the set. For example, for the following set:
-    >>> Numberset(1, 1/2, 1/3, 1/4, 1/5, ...)
-    we would have to check all the numbers in the set to see if e.g. there are
-    any overlapping numbers or intervals, which is infeasible. Hence, a
-    NumberSet only stores a finite amount of non-adjacent objects.
+    maintains a finite set of numbers and Interval objects, which are kept
+    disjoint (non-overlapping and non-adjacent) at all times by merging
+    overlapping and adjacent numbers and intervals. Note that while the set can
+    contain an infinite amount of *real numbers* (since an interval on the real
+    number line contains an infinite amount of real numbers), the amount of
+    *objects* in the set is finite.
 
     A NumberSet is mutable after creation.
+
+    TODO Write something general about which operations are supported and
+    TODO what this class is useful for. The main aim should be to provide
+    TODO an introduction for users who are not familiar with the class.
     """
 
     @property
-    def components(self) -> Iterator[Interval | float]:
-        """An iterator of numbers and interval objects stored in the set.
+    def components(self) -> Iterator[float | Interval]:
+        """All numbers and interval objects stored in the set.
 
-        The componets are returned in a sorted manner (ascending).
+        Returns:
+            An iterator of numbers and interval objects stored in the set.
+            The components are returned in a sorted manner (ascending).
+
+        Examples:
+        >>> ns = NumberSet(0, 10, Interval("[", 1, 5, ")"))
+        >>> list(ns.components)
+        [0, Interval('[', 1, 5, ')'), 10]
         """
         for idx in range(0, len(self._boundaries), 2):
             if self._boundaries[idx] == self._boundaries[idx + 1]:
@@ -405,105 +477,205 @@ class NumberSet:
 
     @property
     def amount_components(self) -> int:
-        """The amount of numbers and intervals contained in the set."""
+        """The amount of numbers and intervals contained in the set.
+
+        Returns:
+            The amount of numbers and intervals contained in the set. Each
+            standalone number counts as one component, and each interval counts
+            as one component.
+
+        Examples:
+        >>> ns = NumberSet(0, 10, Interval("[", 1, 5, ")"))
+        >>> ns.amount_components
+        3
+        """
         return len(self._boundaries) // 2
 
-    def __init__(self, *components: "NumberSet | Interval | float") -> None:
+    def __init__(self, *components: "float | Interval | NumberSet") -> None:
         """Create a NumberSet instance.
 
-        If the set contains an interval from -inf or to inf, then the class
-        will classify -inf or inf as being in the set respectively.
+        Note that -inf or inf cannot be added to the set directly, as they are
+        not valid numbers. However, they can be added to the set indirectly by
+        adding an interval that contains them.
+
+        Overlapping and adjacent numbers and intervals will automatically be
+        merged into one interval. By doing this, we internally maintain an
+        efficient data structure that allows for fast lookup and modification
+        of the set.
+
+        Args:
+            *components: A list of numbers, intervals, or other NumberSets to
+                add to the set. If a component is a NumberSet, its components
+                are added to the set by reference. If a component is an
+                Interval, it is added to the set as a separate component.
+
+        Examples:
+        >>> NumberSet(0, 10, Interval("[", 1, 5, ")"))
+        NumberSet(0, Interval('[', 1, 5, ')'), 10)
+
+        >>> NumberSet(
+        >>>     Interval("(", 3, 4, "]"),
+        >>>     8.7,
+        >>>     Interval("(", 3.1, 10, ")"),
+        >>>     2.4,
+        >>>     3,
+        >>> )
+        NumberSet(2.4, Interval('[', 3, 10, ')'))
         """
         # We maintain a sorted list of boundary values for fast lookup.
         # It is accompanied by a list of booleans that indicate whether each
         # boundary is included in the set or not.
-        # Since the NumberSet always contains non-overlapping numbers and
-        # intervals, the boundaries represent points at which the number line
-        # switches between in the set and out of the set. For example, if:
+        # Since the NumberSet always contains disjoint numbers and intervals,
+        # the boundaries represent points at which the number line switches
+        # between in the set and out of the set. For example, if:
         # > self._boundaries = [-inf, -2, 1, 1, 3, 4]
-        # > self._boundaries_included = [False, True, True, True, False, True]
+        # > self._boundaries_included = [True, False, True, True, False, True]
         # Then the set contains all numbers in the intervals:
-        # (-inf, -2], [1, 1], and (3, 4].
+        # [-inf, -2), [1, 1], and (3, 4].
         # We can note multiple things from this example:
         # - A point is represented by two adjancent equal boundaries, both of
         #   which are included in the set.
         # - The amount of boundaries is always a multiple of two, since both
-        #   Interval objects as numbers have a start and an end boundary.
-        # - The boundary for -inf and inf are always excluded from the set.
-        # - A number x can be in the set at most twice, since the only possible
-        #   ways to have two equal numbers in the set is if:
+        #   Interval objects and numbers have a start and an end boundary.
+        # - The boundary for -inf and inf is always included in the set.
+        # - A number x can be in the _boundaries list at most twice, since the
+        #   only possible ways to have two equal numbers in the list is if:
         #   (1) They are from a point at x "[ ]".
         #   (2) They are from two separate non-adjacent intervals ") (".
         #       One ends with x, the other starts with x, but both exclude it.
         #   In all other cases, the two numbers/intervals would be adjacent,
-        #   which is guaranteed to never happen.
+        #   which is guaranteed to never happen since we always merge
+        #   overlapping and adjacent intervals and numbers.
         self._boundaries: list[float] = []
         self._boundaries_included: list[bool] = []
 
-        # Add the numbers and intervals to the set.
+        # Add the components to the set.
         for component in components:
-            if isinstance(component, number_type):
-                self.add_number(component)
-            elif isinstance(component, Interval):
-                self |= NumberSet._direct_init(
-                    [component.start, component.end],
-                    [component.start_included, component.end_included],
-                )
-            else:
-                self |= component
+            self |= component
 
     @classmethod
-    def _direct_init(
+    def __direct_init(
         cls, boundaries: list[float], boundaries_included: list[bool]
     ) -> "NumberSet":
         """Create a NumberSet instance directly.
 
-        Warning: do not call this method directly! If the boundaries are not
-        properly sorted and aligned with the boundaries_included list,
-        undefined behaviour will occur.
+        Warning: Do not call this method as an end user! It is meant for
+        internal use only.
+
+        Args:
+            boundaries: A list of boundaries for the set.
+            boundaries_included: A list of booleans that indicate whether each
+                boundary is included in the set or not.
+
+        Returns:
+            A NumberSet instance with the given attribute values.
         """
         self = cls.__new__(cls)
         self._boundaries = boundaries
         self._boundaries_included = boundaries_included
         return self
 
-    def __iter__(self) -> Iterator[Interval | float]:
-        """Iterate over the set's components."""
+    @classmethod
+    def __from_interval(cls, interval: Interval) -> "NumberSet":
+        """Create a NumberSet instance from an interval.
+
+        Args:
+            interval: The Interval object to create the NumberSet from.
+
+        Returns:
+            A NumberSet instance with the given interval as its only component.
+        """
+        return cls.__direct_init(
+            [interval.start, interval.end],
+            [interval.start_included, interval.end_included],
+        )
+
+    def __iter__(self) -> Iterator[float | Interval]:
+        """Iterate over the set's components.
+
+        See the `components` property for more information.
+        """
         return self.components
 
-    def __getitem__(self, index: int) -> Interval | float:
-        """Get the component at the given index."""
-        for i, component in enumerate(self):
-            if i == index:
-                return component
-        raise IndexError("NumberSet index out of range.")
+    def __getitem__(self, idx: int) -> float | Interval:
+        """Get the component at the given index.
+
+        Args:
+            idx: The index of the component to get. Indexing from the end is
+                supported by using negative indices. The components are:
+
+        Returns:
+            The component at the given index, assuming all components are
+            sorted in ascending order.
+        """
+        idx = self.amount_components + idx if idx < 0 else idx
+        if not 0 <= idx < self.amount_components:
+            raise IndexError("NumberSet index out of range.")
+
+        comp_idx = idx * 2
+        if self._boundaries[comp_idx] == self._boundaries[comp_idx + 1]:
+            return self._boundaries[comp_idx]
+        return Interval(
+            self._boundaries_included[comp_idx],
+            self._boundaries[comp_idx],
+            self._boundaries[comp_idx + 1],
+            self._boundaries_included[comp_idx + 1],
+        )
 
     @override
     def __repr__(self) -> str:
-        """Represent the set as a string."""
+        """Represent the number set as a string.
+
+        Returns:
+            A python representation of the NumberSet. The format is:
+            "NumberSet(component1, component2, ...)"
+            The components are returned in a sorted manner (ascending).
+
+        Examples:
+        >>> ns = NumberSet(0, 10, Interval("[", 1, 5, ")"))
+        >>> repr(ns)
+        "NumberSet(0, Interval('[', 1, 5, ')'), 10)"
+        """
         return (
             f"{self.__class__.__name__}("
-            + ", ".join(map(repr, self.components))
-            + ")"
+            f"{', '.join(map(repr, self.components))})"
         )
 
     @override
     def __str__(self) -> str:
-        """Represent the set as a string."""
-        return (
-            self.__class__.__name__
-            + "{"
-            + ", ".join(map(str, self.components))
-            + "}"
-        )
+        """Represent the number set as a string.
+
+        Returns:
+            A human-readable representation of the NumberSet. The format is:
+            "NumberSet(component1, component2, ...)"
+            The components are returned in a sorted manner (ascending).
+
+        Examples:
+        >>> ns = NumberSet(0, 10, Interval("[", 1, 5, ")"))
+        >>> str(ns)
+        "{0, [1, 5), 10}"
+        """
+        return f"{{{', '.join(map(str, self.components))}}}"
 
     def __bool__(self) -> bool:
-        """Check if the set contains any numbers or intervals."""
+        """Check if the set contains any numbers or intervals.
+
+        Returns:
+            True if the set contains any numbers or intervals, False otherwise.
+            This is equivalent to checking if the set is empty.
+        """
         return bool(self._boundaries)
 
     @override
     def __eq__(self, other: object) -> bool:
-        """Check if two sets contain the same components."""
+        """Check if two sets contain the same components.
+
+        Args:
+            other: The object to compare to.
+
+        Returns:
+            True if the two sets contain the same components, False otherwise.
+        """
         if not isinstance(other, NumberSet):
             return False
         return (
@@ -512,7 +684,15 @@ class NumberSet:
         )
 
     def __lt__(self, other: "NumberSet") -> bool:
-        """Check if all numbers in the set are left of all in other."""
+        """Check if all components in this set are smaller than all in other.
+
+        Args:
+            other: The other NumberSet to compare to.
+
+        Returns:
+            True if all components in the set are smaller than all in other,
+            False otherwise.
+        """
         return (
             self._boundaries[-1] < other._boundaries[0]
             or self._boundaries[-1] == other._boundaries[0]
@@ -523,7 +703,15 @@ class NumberSet:
         )
 
     def __gt__(self, other: "NumberSet") -> bool:
-        """Return if all numbers in the set are right of all in other."""
+        """Check if all components in this set are larger than all in other.
+
+        Args:
+            other: The other NumberSet to compare to.
+
+        Returns:
+            True if all components in the set are larger than all in other,
+            False otherwise.
+        """
         return (
             other._boundaries[-1] < self._boundaries[0]
             or other._boundaries[-1] == self._boundaries[0]
@@ -533,36 +721,79 @@ class NumberSet:
             )
         )
 
-    def __contains__(self, number: float) -> bool:
-        """Check if the set contains the given number."""
-        idx = bisect_left(self._boundaries, number)
-        return idx != len(self._boundaries) and (
-            self._boundaries[idx] != number
-            and idx % 2 == 1
-            or self._boundaries[idx] == number
-            and self._boundaries_included[idx]
-        )
+    def __contains__(self, other: "float | Interval | NumberSet") -> bool:
+        """Check if other is completely contained in this set.
 
-    def __add__(self, other: "NumberSet") -> "NumberSet":
-        """Add two NumberSets."""
-        return self | other
+        This is equivalent to checking if other is a subset of this set.
+        Note that -inf and inf are considered to be included in this set if
+        they are the start or end of an interval, respectively.
 
-    def __iadd__(self, other: "NumberSet") -> "NumberSet":
-        """Add another NumberSet to the set."""
-        self |= other
-        return self
+        Args:
+            other: The object to check for containment. Can be a number, an
+                interval, or another NumberSet.
 
-    def __sub__(self, other: "NumberSet") -> "NumberSet":
-        """Return the difference of two NumberSets."""
+        Returns:
+            True if other is completely contained in this set, False otherwise.
+        """
+        if isinstance(other, number_type):
+            return self.__contains_number(other)
+        if isinstance(other, NumberSet) and other.is_number():
+            return self.__contains_number(other._boundaries[0])
+        if isinstance(other, Interval):
+            other = NumberSet.__from_interval(other)
+        return self & other == other
+
+    def __sub__(self, other: "float | Interval | NumberSet") -> "NumberSet":
+        """Subtract another object from this set.
+
+        This is equivalent to taking the difference between this set and the
+        other object. The result is a new NumberSet instance that contains all
+        components in this set that are not in the other object.
+
+        Args:
+            other: The object to subtract from this set. Can be a number, an
+                interval, or another NumberSet.
+
+        Returns:
+            A new NumberSet instance with the result of the subtraction.
+        """
+        if isinstance(other, number_type):
+            return self.copy().__isub_number(other)
+        if isinstance(other, NumberSet) and other.is_number():
+            return self.copy().__isub_number(other._boundaries[0])
+        if isinstance(other, Interval):
+            other = NumberSet.__from_interval(other)
         return self & ~other
 
-    def __isub__(self, other: "NumberSet") -> "NumberSet":
-        """Remove another NumberSet from the set."""
+    def __isub__(self, other: "float | Interval | NumberSet") -> "NumberSet":
+        """Subtract another object from this set in place.
+
+        This is equivalent to taking the difference between this set and the
+        other object. The result is a new NumberSet instance that contains all
+        components in this set that are not in the other object.
+
+        Args:
+            other: The object to subtract from this set. Can be a number, an
+                interval, or another NumberSet.
+
+        Returns:
+            The NumberSet instance with the result of the subtraction.
+        """
+        if isinstance(other, number_type):
+            return self.__isub_number(other)
+        if isinstance(other, NumberSet) and other.is_number():
+            return self.__isub_number(other._boundaries[0])
+        if isinstance(other, Interval):
+            other = NumberSet.__from_interval(other)
         self &= ~other
         return self
 
     def __invert__(self) -> "NumberSet":
-        """Return the complement of the set."""
+        """Take the complement of the set.
+
+        Returns:
+            A new NumberSet instance with the complement of the set.
+        """
         contains_minus_inf = self._boundaries and self._boundaries[0] == -inf
         contains_plus_inf = self._boundaries and self._boundaries[-1] == inf
         start_idx = 1 if contains_minus_inf else 0
@@ -577,266 +808,328 @@ class NumberSet:
         if not contains_plus_inf:
             boundaries.append(inf)
             boundaries_included.append(True)
-        return NumberSet._direct_init(boundaries, boundaries_included)
+        return NumberSet.__direct_init(boundaries, boundaries_included)
 
-    def __and__(self, other: "NumberSet") -> "NumberSet":
-        """Return the intersection of two NumberSets."""
+    def __and__(self, other: "float | Interval | NumberSet") -> "NumberSet":
+        """Take the intersection between this set and another object.
+
+        Args:
+            other: The object to intersect with. Can be a number, an interval,
+                or another NumberSet.
+
+        Returns:
+            A new NumberSet instance with the intersection of the two objects.
+        """
+        if isinstance(other, number_type):
+            return self.copy().__iand_number(other)
+        if isinstance(other, NumberSet) and other.is_number():
+            return self.copy().__iand_number(other._boundaries[0])
+        if isinstance(other, Interval):
+            other = NumberSet.__from_interval(other)
         return self._perform_boolean_operation(other, True, "01", "00")
 
-    def __iand__(self, other: "NumberSet") -> "NumberSet":
-        """Intersect the set with another NumberSet."""
+    def __iand__(self, other: "float | Interval | NumberSet") -> "NumberSet":
+        """Take the intersection between this set and another object in place.
+
+        Args:
+            other: The object to intersect with. Can be a number, an interval,
+                or another NumberSet.
+
+        Returns:
+            The NumberSet instance with the intersection of the two objects.
+        """
+        if isinstance(other, number_type):
+            return self.__iand_number(other)
+        if isinstance(other, NumberSet) and other.is_number():
+            return self.__iand_number(other._boundaries[0])
+        if isinstance(other, Interval):
+            other = NumberSet.__from_interval(other)
         self._perform_boolean_operation_ip(other, True, "01", "00")
         return self
 
-    def __or__(self, other: "NumberSet") -> "NumberSet":
-        """Return the union of two NumberSets."""
+    def __or__(self, other: "float | Interval | NumberSet") -> "NumberSet":
+        """Take the union between this set and another object.
+
+        Args:
+            other: The object to union with. Can be a number, an interval, or
+                another NumberSet.
+
+        Returns:
+            A new NumberSet instance with the union of the two objects.
+        """
+        if isinstance(other, number_type):
+            return self.copy().__ior_number(other)
+        if isinstance(other, NumberSet) and other.is_number():
+            return self.copy().__ior_number(other._boundaries[0])
+        if isinstance(other, Interval):
+            other = NumberSet.__from_interval(other)
         return self._perform_boolean_operation(other, True, "11", "01")
 
-    def __ior__(self, other: "NumberSet") -> "NumberSet":
-        """Union the set with another NumberSet."""
+    def __ior__(self, other: "float | Interval | NumberSet") -> "NumberSet":
+        """Take the union between this set and another object in place.
+
+        Args:
+            other: The object to union with. Can be a number, an interval, or
+                another NumberSet.
+
+        Returns:
+            The NumberSet instance with the union of the two objects.
+        """
+        if isinstance(other, number_type):
+            return self.__ior_number(other)
+        if isinstance(other, NumberSet) and other.is_number():
+            return self.__ior_number(other._boundaries[0])
+        if isinstance(other, Interval):
+            other = NumberSet.__from_interval(other)
         self._perform_boolean_operation_ip(other, True, "11", "01")
         return self
 
-    def __xor__(self, other: "NumberSet") -> "NumberSet":
-        """Return the symmetric difference of two NumberSets."""
+    def __xor__(self, other: "float | Interval | NumberSet") -> "NumberSet":
+        """Take the symmetric difference between this set and another object.
+
+        Args:
+            other: The object to symmetric difference with. Can be a number,
+                an interval, or another NumberSet.
+
+        Returns:
+            A new NumberSet instance with the symmetric difference of the two
+            objects.
+        """
+        if isinstance(other, number_type):
+            return self.copy().__ixor_number(other)
+        if isinstance(other, NumberSet) and other.is_number():
+            return self.copy().__ixor_number(other._boundaries[0])
+        if isinstance(other, Interval):
+            other = NumberSet.__from_interval(other)
         return self._perform_boolean_operation(other, True, "10", "01")
 
-    def __ixor__(self, other: "NumberSet") -> "NumberSet":
-        """Symmetric difference the set with another NumberSet."""
+    def __ixor__(self, other: "float | Interval | NumberSet") -> "NumberSet":
+        """Take the symmetric difference between this set and another object
+        in place.
+
+        Args:
+            other: The object to symmetric difference with. Can be a number,
+                an interval, or another NumberSet.
+
+        Returns:
+            The NumberSet instance with the symmetric difference of the two
+            objects.
+        """
+        if isinstance(other, number_type):
+            return self.__ixor_number(other)
+        if isinstance(other, NumberSet) and other.is_number():
+            return self.__ixor_number(other._boundaries[0])
+        if isinstance(other, Interval):
+            other = NumberSet.__from_interval(other)
         self._perform_boolean_operation_ip(other, True, "10", "01")
         return self
 
-    def __lshift__(self, other: float) -> "NumberSet":
-        """Return the set shifted to the left by the given amount."""
-        return NumberSet._direct_init(
-            [x - other for x in self._boundaries], self._boundaries_included
+    def __lshift__(self, shift: float) -> "NumberSet":
+        """Shift the set to the left by the given amount.
+
+        Args:
+            shift: The amount to shift the set to the left.
+
+        Returns:
+            A new NumberSet instance with the shifted components.
+        """
+        return NumberSet.__direct_init(
+            [x - shift for x in self._boundaries], self._boundaries_included
         )
 
-    def __ilshift__(self, other: float) -> "NumberSet":
-        """Shift the set to the left by the given amount."""
+    def __ilshift__(self, shift: float) -> "NumberSet":
+        """Shift the set to the left by the given amount in place.
+
+        Args:
+            shift: The amount to shift the set to the left.
+
+        Returns:
+            The NumberSet instance with the shifted components.
+        """
         for idx in range(0, len(self._boundaries)):
-            self._boundaries[idx] -= other
+            self._boundaries[idx] -= shift
         return self
 
-    def __rshift__(self, other: float) -> "NumberSet":
-        """Return the set shifted to the right by the given amount."""
-        return NumberSet._direct_init(
-            [x + other for x in self._boundaries], self._boundaries_included
+    def __rshift__(self, shift: float) -> "NumberSet":
+        """Shift the set to the right by the given amount.
+
+        Args:
+            shift: The amount to shift the set to the right.
+
+        Returns:
+            A new NumberSet instance with the shifted components.
+        """
+        return NumberSet.__direct_init(
+            [x + shift for x in self._boundaries], self._boundaries_included
         )
 
-    def __irshift__(self, other: float) -> "NumberSet":
-        """Shift the set to the right by the given amount."""
+    def __irshift__(self, shift: float) -> "NumberSet":
+        """Shift the set to the right by the given amount in place.
+
+        Args:
+            shift: The amount to shift the set to the right.
+
+        Returns:
+            The NumberSet instance with the shifted components.
+        """
         for idx in range(0, len(self._boundaries)):
-            self._boundaries[idx] += other
+            self._boundaries[idx] += shift
         return self
+
+    def __contains_number(self, number: float) -> bool:
+        """Check if the given number is in the set.
+
+        Args:
+            number: The number to check for.
+
+        Returns:
+            True if the number is in the set, False otherwise.
+        """
+        in_set, _, _, _ = self.lookup(number)
+        return in_set
+
+    def __isub_number(
+        self, number: float, idx: int | None = None
+    ) -> "NumberSet":
+        """Remove the given number from the set in place.
+
+        Args:
+            number: The number to remove from the set.
+            idx: The index of the number in the set as returned by
+                bisect_left(). If not given, it will be calculated by the
+                function.
+
+        Returns:
+            The NumberSet instance with the removed number.
+        """
+        if isinf(number):
+            raise ValueError(
+                "Cannot remove inf from a NumberSet directly. If you want to"
+                " remove inf, use an Interval instead."
+            )
+
+        in_set, on_start, on_end, idx = self.lookup(number, idx=idx)
+        if not in_set:
+            # The number is not in the set.
+            return self
+        # The number is in the set.
+        if not on_start and not on_end:
+            # The number is in an interval.
+            self._boundaries.insert(idx, number)
+            self._boundaries.insert(idx + 1, number)
+            self._boundaries_included.insert(idx, False)
+            self._boundaries_included.insert(idx + 1, False)
+            return self
+        if on_start and on_end:
+            # The number is on a point.
+            self._boundaries.pop(idx + 1)
+            self._boundaries.pop(idx)
+            self._boundaries_included.pop(idx + 1)
+            self._boundaries_included.pop(idx)
+            return self
+        # The number is on an included boundary.
+        self._boundaries_included[idx] = False
+        return self
+
+    def __iand_number(self, number: float) -> "NumberSet":
+        """Take the intersection of the set and the given number in place.
+
+        Args:
+            number: The number to intersect with.
+
+        Returns:
+            The NumberSet instance with the intersection of the two objects.
+        """
+        if isinf(number):
+            raise ValueError(
+                "Cannot intersect with inf directly. If you want to take the"
+                " intersection with inf, use an Interval instead."
+            )
+
+        in_set, _, _, _ = self.lookup(number)
+        if in_set:
+            # The number is in the set.
+            self._boundaries = [number, number]
+            self._boundaries_included = [True, True]
+        else:
+            # The number is not in the set.
+            self._boundaries = []
+            self._boundaries_included = []
+        return self
+
+    def __ior_number(
+        self, number: float, idx: int | None = None
+    ) -> "NumberSet":
+        """Add the given number to the set in place.
+
+        Args:
+            number: The number to add to the set.
+            idx: The index of the number in the set as returned by
+                bisect_left(). If not given, it will be calculated by the
+                function.
+
+        Returns:
+            The NumberSet instance with the added number.
+        """
+        if isinf(number):
+            raise ValueError(
+                "Cannot add inf to a NumberSet directly. If you want to add"
+                " inf, use an Interval instead."
+            )
+
+        in_set, on_start, on_end, idx = self.lookup(number, idx=idx)
+        if in_set:
+            # The number is already in the set.
+            return self
+        # The number is not in the set yet.
+        if not on_start and not on_end:
+            # The number is outside all components.
+            self._boundaries.insert(idx, number)
+            self._boundaries.insert(idx + 1, number)
+            self._boundaries_included.insert(idx, True)
+            self._boundaries_included.insert(idx + 1, True)
+            return self
+        if on_start and on_end:
+            # The number fills a hole between two intervals.
+            self._boundaries.pop(idx + 1)
+            self._boundaries.pop(idx)
+            self._boundaries_included.pop(idx + 1)
+            self._boundaries_included.pop(idx)
+            return self
+        # The number is on an excluded boundary.
+        self._boundaries_included[idx] = True
+        return self
+
+    def __ixor_number(self, number: float) -> "NumberSet":
+        """Take the symmetric difference of the set and the given number in
+        place.
+
+        Args:
+            number: The number to symmetric difference with.
+
+        Returns:
+            The NumberSet instance with the symmetric difference of the two
+            objects.
+        """
+        if isinf(number):
+            raise ValueError(
+                "Cannot symmetric difference with inf directly. If you want to"
+                " take the symmetric difference with inf, use an Interval"
+                " instead."
+            )
+
+        in_set, _, _, idx = self.lookup(number)
+        if in_set:
+            # The number is in the set.
+            return self.__isub_number(number, idx=idx)
+        # The number is not in the set yet.
+        return self.__ior_number(number, idx=idx)
 
     def copy(self) -> "NumberSet":
         """Return a copy of the set."""
-        return NumberSet._direct_init(
+        return NumberSet.__direct_init(
             self._boundaries.copy(), self._boundaries_included.copy()
         )
-
-    @staticmethod
-    def contains_parallel(
-        numbersets: Sequence["NumberSet"], numbers: Sequence[float]
-    ) -> list[list[int]]:
-        """Return which sets the numbers are contained in.
-
-        Returns in which sets the numbers are contained. More specifically,
-        contains_parallel(numbersets, numbers)[i] contains a list of indices j
-        such that numbers[i] is in numbersets[j].
-
-        The returned list of indices j is in no particular order. If a number
-        is not in any of the sets, the corresponding list will be empty.
-
-        This function is faster than calling contains() for each set and number
-        pair individually. Given:
-        n = amount of numbers
-        m = amount of components in the sets
-        z = amount of returned results (can be n*m in the worst case)
-        The naive approach would have a runtime of O(n*m), while this function
-        has a runtime of O(n*log(m) + m^2 + z). Hence, this function is faster
-        under the assumptions that there are not too many results returned and
-        that n > m. However, please note that m^2 is a very pessimistic
-        estimate which will only be reached if all components overlap. To
-        estimate the runtime more accurately in practice, you should look at
-        how many components overlap each other at most.
-        """
-        # First, we build a lookup table that stores all boundaries of the
-        # sets. To clear up how the data structure is built, consider the
-        # following example:
-        # numbersets = [
-        #     NumberSet(Interval("(", -1, 2, ")"), Interval("[", 4, 5, "]")),
-        #     NumberSet(Interval("[", -inf, -1, ")"), 4),
-        #     NumberSet(Interval("[", -2, 1, "]")),
-        # ]
-        # Then the numbersets can be visualized as follows:
-        # (0)             (-----------------)           [-----]
-        # (1) <-----------)                             .
-        # (2)       [-----------------]
-        # And the lookup table will be:
-        #   -inf   -2    -1     0     1     2     3     4     5   inf
-        #     <-----|-----|-----|-----|-----|-----|-----|-----|----->
-        #    c1    b1    _1          b0    _0          a1    a0
-        #          c2    b2          a2                c0
-        #                d0
-        # where the numbers are the numberset indices, and the letters are:
-        # _ = interval ends here and bound is excluded, NOT stored in lookup!
-        # a = interval ends here and bound is included
-        # b = interval continues here, thus bound is always included
-        # c = interval starts here and bound is included
-        # d = interval starts here and bound is excluded
-        # Now, we can easily find the sets that contain a number by using the
-        # following pseudocode:
-        # ```
-        # idx = bisect_left(lookup, number)
-        # if number == lookup[idx].number:  # number is on a boundary
-        #     return [s for s, letter in lookup[idx].sets if letter in "abc"]
-        # else:  # number is between two boundaries
-        #     return [s for s, letter in lookup[idx-1].sets if letter in "bcd"]
-        # ```
-        # In the actual code, the letters are not stored in the lookup table,
-        # but instead the entries will be added in sorted order already so that
-        # we can use this algorithm without having to filter and check for
-        # "a", "b", "c", and "d". In order to do this, we only need to keep
-        # track of where the "c" entries end and where the "b" entries start.
-        # Example:
-        # lookup[idx].sets = [0, 9, 7, 4, 2, 1, 8]
-        # (hidden)            a, a, b, c, c, c, d
-        # if number on boundary, return lookup[idx].sets[:lookup[idx].abc_end]
-        # else, return lookup[idx-1].sets[lookup[idx-1].bcd_start:]
-
-        # Go through all the sets and add their boundaries to a priority queue
-        # so we can easily extract them in sorted order. Runtime: O(m).
-        prioq: list[tuple[float, str, int]] = []
-        for j, numberset in enumerate(numbersets):
-            for component in numberset.components:
-                if isinstance(component, number_type):
-                    prioq.append((component, "c", j))
-                else:
-                    letter = "c" if component.start_included else "d"
-                    prioq.append((component.start, letter, j))
-                    # "_" won't be included in the lookup table, but we need
-                    # it so we don't miss a boundary and can delete the
-                    # interval from the continued_entries when it ends.
-                    letter = "a" if component.end_included else "_"
-                    prioq.append((component.end, letter, j))
-        heapify(prioq)  # runtime is linear, see docs
-
-        # Go through all the boundaries and build the lookup table. In
-        # addition to the lookup table being sorted by number, the tuples
-        # (str, int) are also sorted. This way, we can easily extract which
-        # sets the number is in without actually having to filter through all
-        # the sets in lookup[idx] as in the naive pseudocode above.
-        # Runtime: O(m^2).
-        lookup: list[tuple[float, list[int], int, int]] = []
-        curr_lookup_number: float | None = None
-        curr_lookup_list: list[int] = []
-        curr_lookup_abc_ends_idx: int | None = None  # exclusive
-        curr_lookup_bcd_starts_idx: int | None = None  # inclusive
-        continued_js: set[int] = set()
-        while prioq:
-            number, letter, j = heappop(prioq)
-
-            # If we are at a new number, add the previous number to the lookup
-            # table and reset the current lookup variables.
-            if curr_lookup_number is None:
-                curr_lookup_number = number
-            elif number != curr_lookup_number:
-                # Update the list variables if we haven't done so already.
-                if curr_lookup_bcd_starts_idx is None:
-                    curr_lookup_bcd_starts_idx = len(curr_lookup_list)
-                    curr_lookup_list.extend(continued_js)
-                if curr_lookup_abc_ends_idx is None:
-                    curr_lookup_abc_ends_idx = len(curr_lookup_list)
-
-                # Add the current number to the lookup table.
-                lookup.append((
-                    curr_lookup_number,
-                    curr_lookup_list,
-                    curr_lookup_abc_ends_idx,
-                    curr_lookup_bcd_starts_idx,
-                ))
-
-                # Reset the current lookup variables.
-                curr_lookup_number = number
-                curr_lookup_list = []
-                curr_lookup_abc_ends_idx = None
-                curr_lookup_bcd_starts_idx = None
-
-            # Process entries that end here.
-            if letter == "_":
-                continued_js.remove(j)
-                continue
-
-            if letter == "a":
-                curr_lookup_list.append(j)
-                continued_js.remove(j)
-                continue
-
-            # Update the location where bcd starts and add the continued j's to
-            # the lookup table if we haven't done so already.
-            if curr_lookup_bcd_starts_idx is None:
-                curr_lookup_bcd_starts_idx = len(curr_lookup_list)
-                curr_lookup_list.extend(continued_js)
-
-            # Process entries that start here.
-            if letter == "c":
-                curr_lookup_list.append(j)
-                continued_js.add(j)
-                continue
-
-            # Update the location where abc ends if we haven't done so already.
-            if curr_lookup_abc_ends_idx is None:
-                curr_lookup_abc_ends_idx = len(curr_lookup_list)
-
-            if letter == "d":
-                curr_lookup_list.append(j)
-                continued_js.add(j)
-
-        # Add the last number to the lookup table.
-        if curr_lookup_number is not None:
-            # Update the list variables if we haven't done so already.
-            if curr_lookup_bcd_starts_idx is None:
-                curr_lookup_bcd_starts_idx = len(curr_lookup_list)
-                curr_lookup_list.extend(continued_js)
-            if curr_lookup_abc_ends_idx is None:
-                curr_lookup_abc_ends_idx = len(curr_lookup_list)
-
-            # Add the current number to the lookup table.
-            lookup.append((
-                curr_lookup_number,
-                curr_lookup_list,
-                curr_lookup_abc_ends_idx,
-                curr_lookup_bcd_starts_idx,
-            ))
-
-        # Now, we can easily find the sets that contain a number.
-        # Runtime: O(n*log(m) + z).
-        results: list[list[int]] = []
-        for number in numbers:
-            idx = bisect_left(lookup, (number,))  # tuple to allow comparison
-            if idx == len(lookup) or idx == 0 and lookup[idx][0] != number:
-                results.append([])
-            elif lookup[idx][0] == number:
-                results.append(lookup[idx][1][: lookup[idx][2]])
-            else:
-                results.append(lookup[idx - 1][1][lookup[idx - 1][3] :])
-
-        return results
-
-    @staticmethod
-    def contains_parallel_naive(
-        numbersets: Sequence["NumberSet"], numbers: Sequence[float]
-    ) -> list[list[int]]:
-        results: list[list[int]] = []
-        for number in numbers:
-            results.append([
-                i
-                for i, numberset in enumerate(numbersets)
-                if number in numberset
-            ])
-        return results
 
     def lookup(
         self, number: float, idx: int | None = None
@@ -909,65 +1202,244 @@ class NumberSet:
         # The number lies in a hole between 2 intervals.
         return False, True, True, idx
 
-    def add_number(self, number: float) -> None:
-        """Add the given number to the set."""
-        if isinf(number):
-            raise ValueError(
-                "Cannot add inf to a NumberSet directly. If you want to add"
-                " inf, use an Interval instead."
-            )
+    @staticmethod
+    def contains_parallel(
+        numbersets: Sequence["NumberSet"], numbers: Sequence[float]
+    ) -> list[list[int]]:
+        """Check in which sets the numbers are contained.
 
-        in_set, on_start, on_end, idx = self.lookup(number)
-        if in_set:
-            # The number is already in the set.
-            return
-        # The number is not in the set yet.
-        if not on_start and not on_end:
-            # The number is outside all components.
-            self._boundaries.insert(idx, number)
-            self._boundaries.insert(idx + 1, number)
-            self._boundaries_included.insert(idx, True)
-            self._boundaries_included.insert(idx + 1, True)
-            return
-        if on_start and on_end:
-            # The number fills a hole between two intervals.
-            self._boundaries.pop(idx + 1)
-            self._boundaries.pop(idx)
-            self._boundaries_included.pop(idx + 1)
-            self._boundaries_included.pop(idx)
-            return
-        # The number is on an excluded boundary.
-        self._boundaries_included[idx] = True
+        This function uses a specialized algorithm to check for containment
+        in multiple NumberSet objects at once. Thus, it is faster when
+        checking for containment in multiple sets at once. However, it still
+        scales linearly with the amount of numbers, so it is not recommended to
+        use this function if you only need to check for containment in one set.
 
-    def remove_number(self, number: float) -> None:
-        """Remove the given number from the set."""
-        if isinf(number):
-            raise ValueError(
-                "Cannot remove inf from a NumberSet directly. If you want to"
-                " remove inf, use an Interval instead."
-            )
+        Formally, when:
+        N = amount of numbers
+        S = amount of numbersets
+        C = amount of components over all numbersets
+        A naive approach of looping over all numbersets and numbers would have
+        a runtime of O(N * S * log(C)), while this function has a runtime of
+        O((C + N) * (log(C) + S)). In most cases, log(C) is much smaller than
+        S, so the runtime is approximately O((C + N) * S).
 
-        in_set, on_start, on_end, idx = self.lookup(number)
-        if not in_set:
-            # The number is not in the set.
-            return
-        # The number is in the set.
-        if not on_start and not on_end:
-            # The number is in an interval.
-            self._boundaries.insert(idx, number)
-            self._boundaries.insert(idx + 1, number)
-            self._boundaries_included.insert(idx, False)
-            self._boundaries_included.insert(idx + 1, False)
-            return
-        if on_start and on_end:
-            # The number is on a point.
-            self._boundaries.pop(idx + 1)
-            self._boundaries.pop(idx)
-            self._boundaries_included.pop(idx + 1)
-            self._boundaries_included.pop(idx)
-            return
-        # The number is on an included boundary.
-        self._boundaries_included[idx] = False
+        Hence, this function is faster under the assumption that N > C.
+        (In this case, the complexity can be reduced to O(N * S).)
+        Note, however, that this is still pessimistic, since this estimate
+        which will only be reached if all numbersets overlap. In practice, the
+        less overlap there is between the nunmbersets, the faster this function
+        will be.
+
+        Args:
+            numbersets: A list of NumberSet objects to check for containment.
+                Length: S
+            numbers: A list of numbers to check for containment.
+                Length: N
+
+        Returns:
+            A list of lists of indices representing the indices of the sets
+            that contain the corresponding number. The n-th element of the
+            returned outer list contains a list of indices s such that
+            numbers[n] is in numbersets[s]. The inner lists of indices s are in
+            no particular order. If a number is not in any of the sets, the
+            corresponding list will be empty.
+                Length: N
+                Length of inner lists: <= S
+        """
+        # First, we build a lookup table that stores all boundaries of the
+        # sets. To clear up how the data structure is built, consider the
+        # following example:
+        # numbersets = [
+        #     NumberSet(Interval("(", -1, 2, ")"), Interval("[", 4, 5, "]")),
+        #     NumberSet(Interval("[", -inf, -1, ")"), 4),
+        #     NumberSet(Interval("[", -2, 1, "]")),
+        # ]
+        # Then the numbersets can be visualized as follows:
+        # (0)             (-----------------)           [-----]
+        # (1) <-----------)                             .
+        # (2)       [-----------------]
+        #
+        # In this case, the lookup table will be:
+        #   -inf   -2    -1     0     1     2     3     4     5   inf
+        #     <-----|-----|-----|-----|-----|-----|-----|-----|----->
+        #                d0          b0    _0          c0    a0
+        #    c1    b1    _1                            a1
+        #          c2    b2          a2
+        # Here, I have used a {letter}{digit} notation to indicate:
+        # - For the {letter}:
+        #   _ = interval ends here and bound is excluded, NOT stored in lookup!
+        #   a = interval ends here and bound is included
+        #   b = interval continues here, thus bound is always included
+        #   c = interval starts here and bound is included
+        #   d = interval starts here and bound is excluded
+        # - The {digit} corresponds to the numberset index s.
+        #
+        # Now, we can easily find the sets that contain a number by using the
+        # following pseudocode:
+        # ```
+        # idx = bisect_left(lookup, number)
+        # if number == lookup[idx].number:  # number is on a boundary
+        #     return [s for s, letter in lookup[idx].sets if letter in "abc"]
+        # else:  # number is between two boundaries
+        #     return [s for s, letter in lookup[idx-1].sets if letter in "bcd"]
+        # ```
+        #
+        # In the actual code, the letters are not stored in the lookup table.
+        # Instead, for every number in the lookup table, its corresponding
+        # {letter}{digit} entries will be added one-by-one in alphabetical
+        # order. We can use this fact to our advantage, since we only need to
+        # know which sets belong to group "abc" and which to group "bcd". For
+        # example, if our lookup table for a certain number looks like this:
+        # lookup[idx].sets   = [0, 9, 7, 4, 2, 1, 8]
+        # lookup[idx].letter = [a, a, b, c, c, c, d]  # not actually stored!
+        # Then we can see that the first 6 entries belong to group "abc" and
+        # the last 5 entries belong to group "bcd". This means that if we just
+        # store the list [0, 9, 7, 4, 2, 1, 8] and the index at which group
+        # "abc" ends and "bcd" starts, we can quickly select the sets from one
+        # of the two groups whenever we need to using Python slicing.
+        #
+        # The updated pseudocode would look like this:
+        # ```
+        # idx = bisect_left(lookup, number)
+        # if number == lookup[idx].number:  # number is on a boundary
+        #     return lookup[idx].sets[: lookup[idx].abc_ends]
+        # else:  # number is between two boundaries
+        #     return lookup[idx-1].sets[lookup[idx-1].bcd_starts :]
+        # ```
+
+        # Go through all the sets and add their boundaries to a priority queue
+        # so we can easily extract them in sorted order.
+        # Runtime: O(C)
+        prioq: list[tuple[float, str, int]] = []
+        for s, numberset in enumerate(numbersets):
+            for component in numberset.components:
+                if isinstance(component, number_type):
+                    prioq.append((component, "c", s))
+                else:
+                    letter = "c" if component.start_included else "d"
+                    prioq.append((component.start, letter, s))
+                    # "_" won't be included in the lookup table, but we need
+                    # it here so we don't miss a boundary and can delete the
+                    # interval from the continued_entries when it ends.
+                    letter = "a" if component.end_included else "_"
+                    prioq.append((component.end, letter, s))
+        heapify(prioq)  # O(C), see docs
+
+        # Go through all the boundaries and build the lookup table. In addition
+        # to the lookup table being sorted by number, the tuples (str, int)
+        # are also sorted. This way, we can easily extract which sets the
+        # number is in without actually having to filter through all the sets
+        # in lookup[idx] as in the naive pseudocode above.
+        # Runtime: O(C * (S + log C))
+        lookup: list[tuple[float, list[int], int, int]] = []
+        curr_number: float | None = None
+        curr_sets: list[int] = []
+        curr_abc_ends_idx: int | None = None  # exclusive
+        curr_bcd_starts_idx: int | None = None  # inclusive
+        ongoing_b_sets: set[int] = set()
+        while prioq:
+            number, letter, s = heappop(prioq)  # O(log(C))
+
+            # If we are at a new number, add the previous number to the lookup
+            # table and reset the current lookup variables.
+            if curr_number is None:
+                curr_number = number
+            elif number != curr_number:
+                # If we did not get to the point where the "bcd" group starts,
+                # we will start it now.
+                if curr_bcd_starts_idx is None:
+                    curr_bcd_starts_idx = len(curr_sets)
+                    curr_sets.extend(ongoing_b_sets)  # O(S)
+
+                # If we did not get to the point where the "abc" group ends,
+                # we will end it now.
+                if curr_abc_ends_idx is None:
+                    curr_abc_ends_idx = len(curr_sets)
+
+                # Add the current number to the lookup table.
+                lookup.append((
+                    curr_number,
+                    curr_sets,
+                    curr_abc_ends_idx,
+                    curr_bcd_starts_idx,
+                ))
+
+                # Reset the current lookup variables.
+                curr_number = number
+                curr_sets = []
+                curr_abc_ends_idx = None
+                curr_bcd_starts_idx = None
+
+            # Process entries that end here.
+            if letter == "_":
+                ongoing_b_sets.remove(s)
+                continue
+
+            if letter == "a":
+                curr_sets.append(s)
+                ongoing_b_sets.remove(s)
+                continue
+
+            # If we get here, we are at a "b", "c", or "d" entry.
+            # Thus, the "bcd" group starts here.
+            if curr_bcd_starts_idx is None:
+                curr_bcd_starts_idx = len(curr_sets)
+                curr_sets.extend(ongoing_b_sets)  # O(S)
+
+            # Process entries that start here.
+            if letter == "c":
+                curr_sets.append(s)
+                ongoing_b_sets.add(s)
+                continue
+
+            # If we get here, we are at a "d" entry.
+            # Thus, the "abc" group ends here.
+            if curr_abc_ends_idx is None:
+                curr_abc_ends_idx = len(curr_sets)
+
+            if letter == "d":
+                curr_sets.append(s)
+                ongoing_b_sets.add(s)
+
+        # Add the last number to the lookup table.
+        if curr_number is not None:
+            # If we did not get to the point where the "bcd" group starts,
+            # we will start it now.
+            if curr_bcd_starts_idx is None:
+                curr_bcd_starts_idx = len(curr_sets)
+                curr_sets.extend(ongoing_b_sets)  # O(S)
+
+            # If we did not get to the point where the "abc" group ends,
+            # we will end it now.
+            if curr_abc_ends_idx is None:
+                curr_abc_ends_idx = len(curr_sets)
+
+            # Add the current number to the lookup table.
+            lookup.append((
+                curr_number,
+                curr_sets,
+                curr_abc_ends_idx,
+                curr_bcd_starts_idx,
+            ))
+
+        # Now, we can easily find the sets that contain a number.
+        # Runtime: O(N * (log(C) + S))
+        results: list[list[int]] = []
+        for number in numbers:
+            idx = bisect_left(lookup, (number,))  # tuple to allow comparison
+            if idx == len(lookup) or idx == 0 and lookup[idx][0] != number:
+                results.append([])
+            elif lookup[idx][0] == number:
+                results.append(lookup[idx][1][: lookup[idx][2]])
+            else:
+                results.append(lookup[idx - 1][1][lookup[idx - 1][3] :])
+
+        return results
+
+    # TODO Refactor this class. I have refactored all the above code already
+    # TODO by improving the docstrings, making it more streamlined and
+    # TODO readable, and improving the corresponding docstrings. However, the
+    # TODO code below has not been refactored yet.
 
     @staticmethod
     def __closest_bound_right_if_kept(
@@ -1311,7 +1783,7 @@ class NumberSet:
 
         See __extract_subset_helper() for more information.
         """
-        return NumberSet._direct_init(
+        return NumberSet.__direct_init(
             *self.__extract_subset_helper(
                 a,
                 b,
@@ -1408,8 +1880,6 @@ class NumberSet:
                 raise RuntimeError("This should never happen.")
             # fmt: on
 
-            print(f"{left_type=}, {right_type=}, {idx_start=}, {idx_end=}")
-
             boundaries.extend(subset_left._boundaries[idx_start : idx_end + 1])
             boundaries_included.extend(
                 subset_left._boundaries_included[idx_start : idx_end + 1]
@@ -1432,7 +1902,7 @@ class NumberSet:
 
         See __concat_subsets_helper() for more information.
         """
-        return NumberSet._direct_init(
+        return NumberSet.__direct_init(
             *NumberSet.__concat_subsets_helper(subsets, transitions)
         )
 
@@ -1501,10 +1971,6 @@ class NumberSet:
             boundaries_included.append(False)  # will be inverted later
             idcs.append(len(self._boundaries))
 
-        print(f"{boundaries=}")
-        print(f"{boundaries_included=}")
-        print(f"{exists_on_even_idcs=}")
-
         # Cut out the subsets between the boundaries of the other set.
         subsets = [
             self._extract_subset(
@@ -1531,9 +1997,6 @@ class NumberSet:
             for i in range(len(boundaries) - 1)
         ]
 
-        for i, subset in enumerate(subsets):
-            print(f"subset #{i} = {subset}")
-
         # Concatenate the subsets.
         return NumberSet.__concat_subsets_helper(subsets, boundaries[1:-1])
 
@@ -1548,7 +2011,7 @@ class NumberSet:
 
         See __perform_boolean_operation_helper() for more information.
         """
-        return NumberSet._direct_init(
+        return NumberSet.__direct_init(
             *self.__perform_boolean_operation_helper(
                 other,
                 is_symmetric,
@@ -1773,10 +2236,10 @@ class GeometricObject2D(ABC):
         """Iterate over the object's components."""
         ...
 
-    def __getitem__(self, index: int) -> Any:
+    def __getitem__(self, idx: int) -> Any:
         """Get the component at the given index."""
         for i, component in enumerate(self):
-            if i == index:
+            if i == idx:
                 return component
         raise IndexError(f"{self.__class__.__name__} index out of range.")
 

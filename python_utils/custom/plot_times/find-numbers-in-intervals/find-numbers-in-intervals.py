@@ -10,6 +10,17 @@ from ...geometry import Interval, NumberSet
 from ..plot_times import plot_times
 
 
+def contains_parallel_naive(
+    numbersets: Sequence[NumberSet], numbers: Sequence[float]
+) -> list[list[int]]:
+    results: list[list[int]] = []
+    for number in numbers:
+        results.append([
+            i for i, numberset in enumerate(numbersets) if number in numberset
+        ])
+    return results
+
+
 def map_to_inputs(
     amount_numbers: int, amount_intervals: int
 ) -> tuple[tuple[Sequence[NumberSet], Sequence[int | float]], dict[str, Any]]:
@@ -54,7 +65,7 @@ def main(args: argparse.Namespace) -> None:
         amount_numbers,
         amount_intervals,
         map_to_inputs,
-        NumberSet.contains_parallel_naive,
+        contains_parallel_naive,
         NumberSet.contains_parallel,
         "Find Numbers in Intervals",
         "Naive algorithm",

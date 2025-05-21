@@ -101,13 +101,63 @@ class TestMatrix2D(unittest.TestCase):
 
 
 class TestInterval(unittest.TestCase):
+    # start_included should return True if the interval starts with a square
+    # bracket, False otherwise.
+    def test_start_included(self) -> None:
+        interval = geometry.Interval("[", 1, 5, ")")
+        self.assertTrue(interval.start_included)
+
+        interval = geometry.Interval("(", 1, 5, "]")
+        self.assertFalse(interval.start_included)
+
+    # end_included should return True if the interval ends with a square
+    # bracket, False otherwise.
+    def test_end_included(self) -> None:
+        interval = geometry.Interval("[", 1, 5, ")")
+        self.assertFalse(interval.end_included)
+
+        interval = geometry.Interval("(", 1, 5, "]")
+        self.assertTrue(interval.end_included)
+
+    # left_bracket should return the left bracket of the interval.
+    def test_left_bracket(self) -> None:
+        interval = geometry.Interval("[", 1, 5, ")")
+        self.assertEqual(interval.left_bracket, "[")
+
+        interval = geometry.Interval("(", 1, 5, "]")
+        self.assertEqual(interval.left_bracket, "(")
+
+    # right_bracket should return the right bracket of the interval.
+    def test_right_bracket(self) -> None:
+        interval = geometry.Interval("[", 1, 5, ")")
+        self.assertEqual(interval.right_bracket, ")")
+
+        interval = geometry.Interval("(", 1, 5, "]")
+        self.assertEqual(interval.right_bracket, "]")
+
+    # start should return the start of the interval.
+    def test_start(self) -> None:
+        interval = geometry.Interval("[", 1, 5, ")")
+        self.assertEqual(interval.start, 1)
+
+        interval = geometry.Interval("(", -3, 7, "]")
+        self.assertEqual(interval.start, -3)
+
+    # end should return the end of the interval.
+    def test_end(self) -> None:
+        interval = geometry.Interval("[", 1, 5, ")")
+        self.assertEqual(interval.end, 5)
+
+        interval = geometry.Interval("(", -3, 7, "]")
+        self.assertEqual(interval.end, 7)
+
     # __init__ should initialize the interval with the given components.
     def test_init(self) -> None:
-        interval = geometry.Interval("[", 1, 5, "]")
+        interval = geometry.Interval("[", 1, 5, ")")
         self.assertEqual(interval.left_bracket, "[")
         self.assertEqual(interval.start, 1)
         self.assertEqual(interval.end, 5)
-        self.assertEqual(interval.right_bracket, "]")
+        self.assertEqual(interval.right_bracket, ")")
 
         interval = geometry.Interval("(", -3, 7, ")")
         self.assertEqual(interval.left_bracket, "(")
@@ -129,19 +179,16 @@ class TestInterval(unittest.TestCase):
         with self.assertRaises(ValueError):
             geometry.Interval("[", 1, inf, ")")
 
-    # __init__ should raise a ValueError if the interval is empty.
-    def test_init_interval_not_empty(self) -> None:
+    # __init__ should raise a ValueError if the start is not less than the end.
+    def test_init_interval_start_not_less_end(self) -> None:
         with self.assertRaises(ValueError):
-            geometry.Interval("[", 5, 1, "]")
+            geometry.Interval("[", 5, 1, ")")
         with self.assertRaises(ValueError):
             geometry.Interval("(", 5, 5, "]")
         with self.assertRaises(ValueError):
             geometry.Interval("[", 5, 5, ")")
         with self.assertRaises(ValueError):
             geometry.Interval("(", 5, 5, ")")
-
-    # __init__ should raise a ValueError if the interval is a point.
-    def test_init_interval_not_point(self) -> None:
         with self.assertRaises(ValueError):
             geometry.Interval("[", 5, 5, "]")
 
@@ -149,34 +196,14 @@ class TestInterval(unittest.TestCase):
     # around.
     def test_init_invalid_bracket(self) -> None:
         with self.assertRaises(ValueError):
-            geometry.Interval("]", 1, 5, "]")  # type: ignore
+            geometry.Interval("]", 1, 5, ")")  # type: ignore
         with self.assertRaises(ValueError):
             geometry.Interval("[", 1, 5, "(")  # type: ignore
 
-    # __iter__ should return an iterator over the interval's components.
-    def test_iter(self) -> None:
-        interval = geometry.Interval("[", 1, 5, "]")
-        components = list(interval)
-        self.assertEqual(components, [True, 1, 5, True])
-
-    # __getitem__ should return the component at the given index.
-    def test_getitem(self) -> None:
-        interval = geometry.Interval("[", 1, 5, "]")
-        self.assertEqual(interval[0], True)
-        self.assertEqual(interval[1], 1)
-        self.assertEqual(interval[2], 5)
-        self.assertEqual(interval[3], True)
-
-    # __getitem__ should raise an IndexError if the index is out of bounds.
-    def test_getitem_invalid_index(self) -> None:
-        interval = geometry.Interval("[", 1, 5, "]")
-        with self.assertRaises(IndexError):
-            interval[4]
-
     # __repr__ should return a string representation of the interval.
-    def test_interval_repr(self) -> None:
-        interval = geometry.Interval("[", 1, 5, "]")
-        self.assertEqual(repr(interval), "Interval('[', 1, 5, ']')")
+    def test_repr(self) -> None:
+        interval = geometry.Interval("[", 1, 5, ")")
+        self.assertEqual(repr(interval), "Interval('[', 1, 5, ')')")
         interval = geometry.Interval("[", -inf, 10, "]")
         self.assertEqual(repr(interval), "Interval('[', -inf, 10, ']')")
         interval = geometry.Interval("[", -5, inf, "]")
@@ -185,9 +212,9 @@ class TestInterval(unittest.TestCase):
         self.assertEqual(repr(interval), "Interval('(', -3.5, 7.8, ')')")
 
     # __str__ should return a formatted string representation of the interval.
-    def test_interval_str(self) -> None:
-        interval = geometry.Interval("[", 1, 5, "]")
-        self.assertEqual(str(interval), "[1, 5]")
+    def test_str(self) -> None:
+        interval = geometry.Interval("[", 1, 5, ")")
+        self.assertEqual(str(interval), "[1, 5)")
         interval = geometry.Interval("[", -inf, 10, "]")
         self.assertEqual(str(interval), "[-inf, 10]")
         interval = geometry.Interval("[", -5, inf, "]")
@@ -196,9 +223,9 @@ class TestInterval(unittest.TestCase):
         self.assertEqual(str(interval), "(-3.5, 7.8)")
 
     # __hash__ should return a unique hash id for the interval.
-    def test_interval_hash(self) -> None:
-        interval1 = geometry.Interval("[", 1, 5, "]")
-        interval2 = geometry.Interval("[", 1, 5, "]")
+    def test_hash(self) -> None:
+        interval1 = geometry.Interval("[", 1, 5, ")")
+        interval2 = geometry.Interval("[", 1, 5, ")")
         interval3 = geometry.Interval("[", 2, 5, "]")
 
         self.assertEqual(hash(interval1), hash(interval2))
@@ -206,8 +233,8 @@ class TestInterval(unittest.TestCase):
 
     # __eq__ should return True iff two intervals are equal.
     def test_eq(self) -> None:
-        interval1 = geometry.Interval("[", 1, 5, "]")
-        interval2 = geometry.Interval("[", 1, 5, "]")
+        interval1 = geometry.Interval("[", 1, 5, ")")
+        interval2 = geometry.Interval("[", 1, 5, ")")
         self.assertEqual(interval1, interval2)
 
         interval1 = geometry.Interval("[", -inf, 10, "]")
@@ -216,25 +243,130 @@ class TestInterval(unittest.TestCase):
 
     # __eq__ should return False if the other object is not an interval.
     def test_eq_non_interval(self) -> None:
-        interval = geometry.Interval("[", 1, 5, "]")
-        non_interval_object = "not an interval"
-        self.assertFalse(interval == non_interval_object)
+        interval = geometry.Interval("[", 1, 5, ")")
+        non_interval_object_1 = "not an interval"
+        self.assertFalse(interval == non_interval_object_1)
+        non_interval_object_2 = 42
+        self.assertFalse(interval == non_interval_object_2)
+        non_interval_object_3 = ["[", 1, 5, ")"]
+        self.assertFalse(interval == non_interval_object_3)
 
 
 class TestNumberSet(unittest.TestCase):
     @override
     def setUp(self) -> None:
-        self.numberset = geometry.NumberSet()._direct_init(
-            [0, 0, 1, 2, 3, 5, 5, 6, 8, inf],
-            [True, True, True, True, False, False, False, False, False, True],
-        )
+        self.numberset: geometry.NumberSet = (
+            geometry.NumberSet._NumberSet__direct_init(  # type: ignore
+                [0, 0, 1, 2, 3, 5, 5, 6, 8, inf],
+                [
+                    True,
+                    True,
+                    True,
+                    True,
+                    False,
+                    False,
+                    False,
+                    False,
+                    False,
+                    True,
+                ],
+            )
+        )  # {0, [1, 2], (3, 5), (5, 6), (8, inf]}
+        self.numberset_copy: geometry.NumberSet = (
+            geometry.NumberSet._NumberSet__direct_init(  # type: ignore
+                [0, 0, 1, 2, 3, 5, 5, 6, 8, inf],
+                [
+                    True,
+                    True,
+                    True,
+                    True,
+                    False,
+                    False,
+                    False,
+                    False,
+                    False,
+                    True,
+                ],
+            )
+        )  # {0, [1, 2], (3, 5), (5, 6), (8, inf]}
+        self.numberset_single_overlap: geometry.NumberSet = (
+            geometry.NumberSet._NumberSet__direct_init(  # type: ignore
+                [-inf, -8, -6, -5, -5, -3, -2, -1, 0, 0],
+                [
+                    True,
+                    False,
+                    False,
+                    False,
+                    False,
+                    False,
+                    True,
+                    True,
+                    True,
+                    True,
+                ],
+            )
+        )  # {[-inf, -8), (-6, -5), (-5, -3), [-2, -1], 0}
+        self.numberset_lt: geometry.NumberSet = (
+            geometry.NumberSet._NumberSet__direct_init(  # type: ignore
+                [-inf, -8, -6, -5, -5, -3, -2, -1, -1, 0],
+                [
+                    True,
+                    False,
+                    False,
+                    False,
+                    False,
+                    True,
+                    True,
+                    False,
+                    False,
+                    False,
+                ],
+            )
+        )  # {[-inf, -8), (-6, -5), (-5, -3], [-2, -1), (-1, 0)}
+        self.numberset_subset: geometry.NumberSet = (
+            geometry.NumberSet._NumberSet__direct_init(  # type: ignore
+                [1, 1, 4, 5, 8, 10, 12, 13, 13, inf],
+                [
+                    True,
+                    True,
+                    True,
+                    False,
+                    False,
+                    True,
+                    True,
+                    False,
+                    False,
+                    True,
+                ],
+            )
+        )  # {1, [4, 5), (8, 10], [12, 13), (13, inf]}
+        self.numberset_inv: geometry.NumberSet = (
+            geometry.NumberSet._NumberSet__direct_init(  # type: ignore
+                [-inf, 0, 0, 1, 2, 3, 5, 5, 6, 8],
+                [
+                    True,
+                    False,
+                    False,
+                    False,
+                    False,
+                    True,
+                    True,
+                    True,
+                    True,
+                    True,
+                ],
+            )
+        )  # {[-inf, 0), (0, 1), (2, 3], 5, [6, 8]}
+        self.numberset_empty: geometry.NumberSet = (
+            geometry.NumberSet._NumberSet__direct_init([], [])  # type: ignore
+        )  # {}
+        self.numberset_full: geometry.NumberSet = (
+            geometry.NumberSet._NumberSet__direct_init(  # type: ignore
+                [-inf, inf], [True, True]
+            )
+        )  # {[-inf, inf]}
 
-    # amount_components should return the correct amount of components in the
-    # set.
-    def test_amount_components(self) -> None:
-        self.assertEqual(self.numberset.amount_components, 5)
-
-    # components should return the correct components.
+    # components should return the components in the set.
     def test_components(self) -> None:
         self.assertEqual(
             list(self.numberset.components),
@@ -245,6 +377,127 @@ class TestNumberSet(unittest.TestCase):
                 geometry.Interval("(", 5, 6, ")"),
                 geometry.Interval("(", 8, inf, "]"),
             ],
+        )
+
+    # amount_components should return the amount of components in the set.
+    def test_amount_components(self) -> None:
+        self.assertEqual(self.numberset.amount_components, 5)
+
+    # __init__ with no arguments.
+    def test_init_empty(self) -> None:
+        numberset = geometry.NumberSet()
+        self.assertEqual(numberset._boundaries, [])
+        self.assertEqual(numberset._boundaries_included, [])
+
+    # __init__ with a single number.
+    def test_init_number(self) -> None:
+        number_set = geometry.NumberSet(5)
+        self.assertEqual(number_set._boundaries, [5, 5])
+        self.assertEqual(number_set._boundaries_included, [True, True])
+
+    # __init__ should raise a ValueError if it is initialized with a single
+    # number that is -inf or inf.
+    def test_init_number_inf(self) -> None:
+        with self.assertRaises(ValueError):
+            geometry.NumberSet(-inf)
+        with self.assertRaises(ValueError):
+            geometry.NumberSet(inf)
+
+    # __init__ with a single interval.
+    def test_init_interval(self) -> None:
+        interval = geometry.Interval("[", 1, 5, "]")
+        numberset = geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [1, 5])
+        self.assertEqual(numberset._boundaries_included, [True, True])
+
+    # __init__ with a single NumberSet instance.
+    def test_init_numberset(self) -> None:
+        interval = geometry.Interval("[", -3, 1, ")")
+        numberset1 = geometry.NumberSet(interval)
+        numberset2 = geometry.NumberSet(numberset1)
+        self.assertEqual(numberset2._boundaries, [-3, 1])
+        self.assertEqual(numberset2._boundaries_included, [True, False])
+
+    # __init__ with multiple non-overlapping numbers.
+    def test_init_numbers(self) -> None:
+        numberset = geometry.NumberSet(1, 2, 3, 4, 5)
+        self.assertEqual(numberset._boundaries, [1, 1, 2, 2, 3, 3, 4, 4, 5, 5])
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, True, True, True, True, True, True],
+        )
+
+    # __init__ with multiple non-overlapping intervals.
+    def test_init_intervals(self) -> None:
+        interval1 = geometry.Interval("[", 1, 5, ")")
+        interval2 = geometry.Interval("(", 10, 15, "]")
+        interval3 = geometry.Interval("[", 20, 25, "]")
+        numberset = geometry.NumberSet(interval1, interval2, interval3)
+        self.assertEqual(numberset._boundaries, [1, 5, 10, 15, 20, 25])
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, False, False, True, True, True],
+        )
+
+    # __init__ with multiple non-overlapping numbersets.
+    def test_init_numbersets(self) -> None:
+        interval1 = geometry.Interval("[", 1, 5, ")")
+        numberset1 = geometry.NumberSet(0, interval1)
+        interval2 = geometry.Interval("(", 10, 15, "]")
+        numberset2 = geometry.NumberSet(6, 7, interval2)
+        numberset = geometry.NumberSet(numberset1, numberset2)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 5, 6, 6, 7, 7, 10, 15]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, False, True, True, True, True, False, True],
+        )
+
+    # __init__ with multiple non-overlapping numbers, intervals, and
+    # numbersets.
+    def test_init_numbers_intervals_numbersets(self) -> None:
+        interval = geometry.Interval("(", -3, 1, ")")
+        interval1 = geometry.Interval("[", 6, 8, ")")
+        numberset1 = geometry.NumberSet(5, interval1)
+        numberset = geometry.NumberSet(-4, interval, numberset1)
+        self.assertEqual(numberset._boundaries, [-4, -4, -3, 1, 5, 5, 6, 8])
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, False, False, True, True, True, False],
+        )
+
+    # __init__ with multiple overlapping numbers.
+    def test_init_numbers_overlapping(self) -> None:
+        numberset = geometry.NumberSet(1, 2, 3, 4, 5, 1, 3, 4, 4)
+        self.assertEqual(numberset._boundaries, [1, 1, 2, 2, 3, 3, 4, 4, 5, 5])
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, True, True, True, True, True, True],
+        )
+
+    # __init__ with multiple overlapping intervals.
+    def test_init_intervals_overlapping(self) -> None:
+        interval1 = geometry.Interval("[", 1, 5, "]")
+        interval2 = geometry.Interval("(", 4, 10, ")")
+        interval3 = geometry.Interval("[", 10, 12, ")")
+        interval4 = geometry.Interval("(", 6, 8, "]")
+        numberset = geometry.NumberSet(
+            interval1, interval2, interval3, interval4
+        )
+        self.assertEqual(numberset._boundaries, [1, 12])
+        self.assertEqual(numberset._boundaries_included, [True, False])
+
+    # __init__ with multiple overlapping numbersets.
+    def test_init_numbersets_overlapping(self) -> None:
+        interval1 = geometry.Interval("[", 1, 5, "]")
+        numberset1 = geometry.NumberSet(0, interval1)
+        interval2 = geometry.Interval("(", 4, 10, ")")
+        numberset2 = geometry.NumberSet(6, 7, interval2)
+        numberset = geometry.NumberSet(numberset1, numberset2)
+        self.assertEqual(numberset._boundaries, [0, 0, 1, 10])
+        self.assertEqual(
+            numberset._boundaries_included, [True, True, True, False]
         )
 
     # __iter__ should return an iterator over the set's components.
@@ -270,11 +523,20 @@ class TestNumberSet(unittest.TestCase):
         self.assertEqual(
             self.numberset[4], geometry.Interval("(", 8, inf, "]")
         )
+        self.assertEqual(self.numberset[-5], 0)
+        self.assertEqual(self.numberset[-4], geometry.Interval("[", 1, 2, "]"))
+        self.assertEqual(self.numberset[-3], geometry.Interval("(", 3, 5, ")"))
+        self.assertEqual(self.numberset[-2], geometry.Interval("(", 5, 6, ")"))
+        self.assertEqual(
+            self.numberset[-1], geometry.Interval("(", 8, inf, "]")
+        )
 
     # __getitem__ should raise an IndexError if the index is out of bounds.
     def test_getitem_index_error(self) -> None:
         with self.assertRaises(IndexError):
             self.numberset[5]
+        with self.assertRaises(IndexError):
+            self.numberset[-6]
 
     # __repr__ should return a string representation of the set.
     def test_repr(self) -> None:
@@ -288,8 +550,7 @@ class TestNumberSet(unittest.TestCase):
     # __str__ should return a formatted string representation of the set.
     def test_str(self) -> None:
         self.assertEqual(
-            str(self.numberset),
-            "NumberSet{0, [1, 2], (3, 5), (5, 6), (8, inf]}",
+            str(self.numberset), "{0, [1, 2], (3, 5), (5, 6), (8, inf]}"
         )
 
     # __bool__ should return True iff the set is not empty.
@@ -299,67 +560,52 @@ class TestNumberSet(unittest.TestCase):
 
     # __eq__ should return True iff two sets are equal.
     def test_eq(self) -> None:
-        numberset1 = geometry.NumberSet._direct_init(
-            [0, 0, 1, 2, 3, 5, 5, 6, 8, inf],
-            [True, True, True, True, False, False, False, False, False, True],
-        )
-        numberset2 = geometry.NumberSet._direct_init(
-            [0, 0, 1, 2, 3, 5, 5, 6, 8, inf],
-            [True, True, True, True, False, False, False, False, True, True],
-        )
-        self.assertEqual(self.numberset, numberset1)
-        self.assertNotEqual(self.numberset, numberset2)
+        self.assertEqual(self.numberset, self.numberset_copy)
+        self.assertNotEqual(self.numberset, self.numberset_single_overlap)
+        self.assertNotEqual(self.numberset, self.numberset_lt)
+        self.assertNotEqual(self.numberset, self.numberset_subset)
 
     # __eq__ should return False if the other object is not a set.
     def test_eq_non_set(self) -> None:
         self.assertNotEqual(self.numberset, "not a set")
+        self.assertNotEqual(self.numberset, 42)
+        self.assertNotEqual(
+            self.numberset,
+            [
+                0,
+                geometry.Interval("[", 1, 2, "]"),
+                geometry.Interval("(", 3, 5, ")"),
+                geometry.Interval("(", 5, 6, ")"),
+                geometry.Interval("(", 8, inf, "]"),
+            ],
+        )
 
     # __lt__ should return True iff all numbers in the first set are left of
     # all numbers in the second set.
     def test_lt(self) -> None:
-        numberset1 = geometry.NumberSet._direct_init(
-            [0, 0, 1, 2, 3, 5, 5, 6, 8, inf],
-            [True, True, True, True, False, False, False, False, False, True],
-        )
-        numberset2 = geometry.NumberSet._direct_init(
-            [-inf, -8, -6, -5, -5, -3, -2, -1, 0, 0],
-            [True, False, False, False, False, False, True, True, True, True],
-        )
-        numberset3 = geometry.NumberSet._direct_init(
-            [-inf, -8, -6, -5, -5, -3, -2, -1],
-            [True, False, False, False, False, False, True, True],
-        )
-        self.assertFalse(self.numberset < numberset1)
-        self.assertFalse(numberset1 < self.numberset)
-        self.assertFalse(self.numberset < numberset2)
-        self.assertFalse(numberset2 < self.numberset)
-        self.assertFalse(self.numberset < numberset3)
-        self.assertTrue(numberset3 < self.numberset)
+        self.assertFalse(self.numberset < self.numberset_copy)
+        self.assertFalse(self.numberset_copy < self.numberset)
+        self.assertFalse(self.numberset < self.numberset_single_overlap)
+        self.assertFalse(self.numberset_single_overlap < self.numberset)
+        self.assertFalse(self.numberset < self.numberset_lt)
+        self.assertTrue(self.numberset_lt < self.numberset)
+        self.assertFalse(self.numberset < self.numberset_subset)
+        self.assertFalse(self.numberset_subset < self.numberset)
 
     # __gt__ should return True iff all numbers in the first set are right of
     # all numbers in the second set.
     def test_gt(self) -> None:
-        numberset1 = geometry.NumberSet._direct_init(
-            [0, 0, 1, 2, 3, 5, 5, 6, 8, inf],
-            [True, True, True, True, False, False, False, False, False, True],
-        )
-        numberset2 = geometry.NumberSet._direct_init(
-            [-inf, -8, -6, -5, -5, -3, -2, -1, 0, 0],
-            [True, False, False, False, False, False, True, True, True, True],
-        )
-        numberset3 = geometry.NumberSet._direct_init(
-            [-inf, -8, -6, -5, -5, -3, -2, -1],
-            [True, False, False, False, False, False, True, True],
-        )
-        self.assertFalse(self.numberset > numberset1)
-        self.assertFalse(numberset1 > self.numberset)
-        self.assertFalse(self.numberset > numberset2)
-        self.assertFalse(numberset2 > self.numberset)
-        self.assertTrue(self.numberset > numberset3)
-        self.assertFalse(numberset3 > self.numberset)
+        self.assertFalse(self.numberset > self.numberset_copy)
+        self.assertFalse(self.numberset_copy > self.numberset)
+        self.assertFalse(self.numberset > self.numberset_single_overlap)
+        self.assertFalse(self.numberset_single_overlap > self.numberset)
+        self.assertTrue(self.numberset > self.numberset_lt)
+        self.assertFalse(self.numberset_lt > self.numberset)
+        self.assertFalse(self.numberset > self.numberset_subset)
+        self.assertFalse(self.numberset_subset > self.numberset)
 
-    # __contains__ should return True iff the number is in the set.
-    def test_contains(self) -> None:
+    # __contains__ should return True iff the given number is in the set.
+    def test_contains_number(self) -> None:
         self.assertFalse(-inf in self.numberset)
         self.assertFalse(-1 in self.numberset)
         self.assertTrue(0 in self.numberset)
@@ -374,15 +620,1220 @@ class TestNumberSet(unittest.TestCase):
         self.assertTrue(9 in self.numberset)
         self.assertTrue(inf in self.numberset)
 
-    # __invert__ should return the complement of the set.
-    def test_invert(self) -> None:
-        inv_numberset = ~self.numberset
+    # __contains__ should return True iff the given interval is in the set.
+    def test_contains_interval(self) -> None:
+        self.assertFalse(
+            geometry.Interval("[", -inf, 0, "]") in self.numberset
+        )
+        self.assertFalse(geometry.Interval("[", 0, 1, "]") in self.numberset)
+        self.assertTrue(geometry.Interval("[", 1, 2, ")") in self.numberset)
+        self.assertFalse(geometry.Interval("(", 2, 3, ")") in self.numberset)
+        self.assertFalse(geometry.Interval("[", 3, 5, "]") in self.numberset)
+        self.assertTrue(geometry.Interval("(", 5, 6, ")") in self.numberset)
+        self.assertFalse(geometry.Interval("[", 8, inf, "]") in self.numberset)
+        self.assertTrue(geometry.Interval("[", 9, inf, "]") in self.numberset)
+
+    # __contains__ should return True iff another set is in the set.
+    def test_contains_set(self) -> None:
+        self.assertTrue(self.numberset_copy in self.numberset)
+        self.assertFalse(self.numberset_single_overlap in self.numberset)
+        self.assertFalse(self.numberset_lt in self.numberset)
+        self.assertTrue(self.numberset_subset in self.numberset)
+
+    # __sub__ should correctly handle a number if it is on a point.
+    def test_sub_number_point(self) -> None:
+        numberset = self.numberset - 0
+        self.assertEqual(numberset._boundaries, [1, 2, 3, 5, 5, 6, 8, inf])
         self.assertEqual(
-            inv_numberset._boundaries, [-inf, 0, 0, 1, 2, 3, 5, 5, 6, 8]
+            numberset._boundaries_included,
+            [True, True, False, False, False, False, False, True],
+        )
+
+    # __sub__ should correctly handle a number if it is on an included start
+    # bound.
+    def test_sub_number_included_start_bound(self) -> None:
+        numberset = self.numberset - 1
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
         )
         self.assertEqual(
-            inv_numberset._boundaries_included,
+            numberset._boundaries_included,
+            [True, True, False, True, False, False, False, False, False, True],
+        )
+
+    # __sub__ should correctly handle a number if it is on an included end
+    # bound.
+    def test_sub_number_included_end_bound(self) -> None:
+        numberset = self.numberset - 2
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, False, False, False, False, False, False, True],
+        )
+
+    # __sub__ should correctly handle a number if it is in an interval.
+    def test_sub_number_in_interval(self) -> None:
+        numberset = self.numberset - 4
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 4, 4, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [
+                True,
+                True,
+                True,
+                True,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                True,
+            ],
+        )
+
+    # __sub__ should correctly handle a number if it is in a hole between
+    # intervals.
+    def test_sub_number_hole(self) -> None:
+        numberset = self.numberset - 5
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, False, False, True],
+        )
+
+    # __sub__ should correctly handle a number if it is on an excluded start
+    # bound.
+    def test_sub_number_excluded_start_bound(self) -> None:
+        numberset = self.numberset - 3
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, False, False, True],
+        )
+
+    # __sub__ should correctly handle a number if it is on an excluded end
+    # bound.
+    def test_sub_number_excluded_end_bound(self) -> None:
+        numberset = self.numberset - 6
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, False, False, True],
+        )
+
+    # __sub__ should correctly handle a number if it is outside all components.
+    def test_sub_number_outside_components(self) -> None:
+        numberset = self.numberset - 7
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, False, False, True],
+        )
+
+    # __sub__ should raise a ValueError if the number is -inf or inf.
+    def test_sub_number_inf(self) -> None:
+        with self.assertRaises(ValueError):
+            self.numberset - (-inf)  # type: ignore
+        with self.assertRaises(ValueError):
+            self.numberset - inf  # type: ignore
+
+    # __sub__ should return the correct set if the other set is empty.
+    def test_sub_other_empty(self) -> None:
+        numberset = self.numberset - self.numberset_empty
+        self.assertEqual(numberset._boundaries, self.numberset._boundaries)
+        self.assertEqual(
+            numberset._boundaries_included, self.numberset._boundaries_included
+        )
+
+    # __sub__ should return the correct set if the other set is full.
+    def test_sub_other_full(self) -> None:
+        numberset = self.numberset - self.numberset_full
+        self.assertEqual(
+            numberset._boundaries, self.numberset_empty._boundaries
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            self.numberset_empty._boundaries_included,
+        )
+
+    # __sub__ should return the correct set if the other set's borders are
+    # included.
+    def test_sub_other_borders_included(self) -> None:
+        interval = geometry.Interval("[", 0, 1, "]")
+        numberset = self.numberset - geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [1, 2, 3, 5, 5, 6, 8, inf])
+        self.assertEqual(
+            numberset._boundaries_included,
+            [False, True, False, False, False, False, False, True],
+        )
+        interval = geometry.Interval("[", 1, 2, "]")
+        numberset = self.numberset - geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [0, 0, 3, 5, 5, 6, 8, inf])
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, False, False, False, False, False, True],
+        )
+        interval = geometry.Interval("[", 2, 3, "]")
+        numberset = self.numberset - geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, False, False, False, False, False, False, True],
+        )
+        interval = geometry.Interval("[", 3, 4, "]")
+        numberset = self.numberset - geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 4, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, False, False, True],
+        )
+        interval = geometry.Interval("[", 4, 5, "]")
+        numberset = self.numberset - geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 4, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, False, False, True],
+        )
+        interval = geometry.Interval("[", 5, 6, "]")
+        numberset = self.numberset - geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [0, 0, 1, 2, 3, 5, 8, inf])
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, True],
+        )
+        interval = geometry.Interval("[", 6, 7, "]")
+        numberset = self.numberset - geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, False, False, True],
+        )
+        interval = geometry.Interval("[", 7, 8, "]")
+        numberset = self.numberset - geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, False, False, True],
+        )
+        interval = geometry.Interval("[", 8, 9, "]")
+        numberset = self.numberset - geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 9, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, False, False, True],
+        )
+
+    # __sub__ should return the correct set if the other set's borders are
+    # excluded.
+    def test_sub_other_borders_excluded(self) -> None:
+        interval = geometry.Interval("(", 0, 1, ")")
+        numberset = self.numberset - geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, False, False, True],
+        )
+        interval = geometry.Interval("(", 1, 2, ")")
+        numberset = self.numberset - geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 1, 2, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [
+                True,
+                True,
+                True,
+                True,
+                True,
+                True,
+                False,
+                False,
+                False,
+                False,
+                False,
+                True,
+            ],
+        )
+        interval = geometry.Interval("(", 2, 3, ")")
+        numberset = self.numberset - geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, False, False, True],
+        )
+        interval = geometry.Interval("(", 3, 4, ")")
+        numberset = self.numberset - geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 4, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, True, False, False, False, False, True],
+        )
+        interval = geometry.Interval("(", 4, 5, ")")
+        numberset = self.numberset - geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 4, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, True, False, False, False, True],
+        )
+        interval = geometry.Interval("(", 5, 6, ")")
+        numberset = self.numberset - geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [0, 0, 1, 2, 3, 5, 8, inf])
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, True],
+        )
+        interval = geometry.Interval("(", 6, 7, ")")
+        numberset = self.numberset - geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, False, False, True],
+        )
+        interval = geometry.Interval("(", 7, 8, ")")
+        numberset = self.numberset - geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, False, False, True],
+        )
+        interval = geometry.Interval("(", 8, 9, ")")
+        numberset = self.numberset - geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 9, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, False, True, True],
+        )
+
+    # __invert__ should return the complement of the set.
+    def test_invert(self) -> None:
+        numberset = ~self.numberset
+        self.assertEqual(
+            numberset._boundaries, [-inf, 0, 0, 1, 2, 3, 5, 5, 6, 8]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
             [True, False, False, False, False, True, True, True, True, True],
+        )
+        numberset = ~self.numberset_single_overlap
+        self.assertEqual(
+            numberset._boundaries, [-8, -6, -5, -5, -3, -2, -1, 0, 0, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, True, False, False, False, False, True],
+        )
+        numberset = ~self.numberset_lt
+        self.assertEqual(
+            numberset._boundaries, [-8, -6, -5, -5, -3, -2, -1, -1, 0, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, True, True, True, True],
+        )
+        numberset = ~self.numberset_subset
+        self.assertEqual(
+            numberset._boundaries, [-inf, 1, 1, 4, 5, 8, 10, 12, 13, 13]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, False, False, False, True, True, False, False, True, True],
+        )
+
+    # __and__ should correctly handle a number if it is on a point.
+    def test_and_number_point(self) -> None:
+        numberset = self.numberset & 0
+        self.assertEqual(numberset._boundaries, [0, 0])
+        self.assertEqual(numberset._boundaries_included, [True, True])
+
+    # __and__ should correctly handle a number if it is on an included start
+    # bound.
+    def test_and_number_included_start_bound(self) -> None:
+        numberset = self.numberset & 1
+        self.assertEqual(numberset._boundaries, [1, 1])
+        self.assertEqual(numberset._boundaries_included, [True, True])
+
+    # __and__ should correctly handle a number if it is on an included end
+    # bound.
+    def test_and_number_included_end_bound(self) -> None:
+        numberset = self.numberset & 2
+        self.assertEqual(numberset._boundaries, [2, 2])
+        self.assertEqual(numberset._boundaries_included, [True, True])
+
+    # __and__ should correctly handle a number if it is in an interval.
+    def test_and_number_in_interval(self) -> None:
+        numberset = self.numberset & 4
+        self.assertEqual(numberset._boundaries, [4, 4])
+        self.assertEqual(numberset._boundaries_included, [True, True])
+
+    # __and__ should correctly handle a number if it is in a hole between
+    # intervals.
+    def test_and_number_hole(self) -> None:
+        numberset = self.numberset & 5
+        self.assertEqual(numberset._boundaries, [])
+        self.assertEqual(numberset._boundaries_included, [])
+
+    # __and__ should correctly handle a number if it is on an excluded start
+    # bound.
+    def test_and_number_excluded_start_bound(self) -> None:
+        numberset = self.numberset & 3
+        self.assertEqual(numberset._boundaries, [])
+        self.assertEqual(numberset._boundaries_included, [])
+
+    # __and__ should correctly handle a number if it is on an excluded end
+    # bound.
+    def test_and_number_excluded_end_bound(self) -> None:
+        numberset = self.numberset & 6
+        self.assertEqual(numberset._boundaries, [])
+        self.assertEqual(numberset._boundaries_included, [])
+
+    # __and__ should correctly handle a number if it is outside all components.
+    def test_and_number_outside_components(self) -> None:
+        numberset = self.numberset & 7
+        self.assertEqual(numberset._boundaries, [])
+        self.assertEqual(numberset._boundaries_included, [])
+
+    # __and__ should raise a ValueError if the number is -inf or inf.
+    def test_and_number_inf(self) -> None:
+        with self.assertRaises(ValueError):
+            self.numberset & (-inf)  # type: ignore
+        with self.assertRaises(ValueError):
+            self.numberset & inf  # type: ignore
+
+    # __and__ should return the correct set if the other set is empty.
+    def test_and_other_empty(self) -> None:
+        numberset = self.numberset & self.numberset_empty
+        self.assertEqual(
+            numberset._boundaries, self.numberset_empty._boundaries
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            self.numberset_empty._boundaries_included,
+        )
+
+    # __and__ should return the correct set if the other set is full.
+    def test_and_other_full(self) -> None:
+        numberset = self.numberset & self.numberset_full
+        self.assertEqual(numberset._boundaries, self.numberset._boundaries)
+        self.assertEqual(
+            numberset._boundaries_included, self.numberset._boundaries_included
+        )
+
+    # __and__ should return the correct set if the other set's borders are
+    # included.
+    def test_and_other_borders_included(self) -> None:
+        interval = geometry.Interval("[", 0, 1, "]")
+        numberset = self.numberset & geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [0, 0, 1, 1])
+        self.assertEqual(
+            numberset._boundaries_included, [True, True, True, True]
+        )
+        interval = geometry.Interval("[", 1, 2, "]")
+        numberset = self.numberset & geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [1, 2])
+        self.assertEqual(numberset._boundaries_included, [True, True])
+        interval = geometry.Interval("[", 2, 3, "]")
+        numberset = self.numberset & geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [2, 2])
+        self.assertEqual(numberset._boundaries_included, [True, True])
+        interval = geometry.Interval("[", 3, 4, "]")
+        numberset = self.numberset & geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [3, 4])
+        self.assertEqual(numberset._boundaries_included, [False, True])
+        interval = geometry.Interval("[", 4, 5, "]")
+        numberset = self.numberset & geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [4, 5])
+        self.assertEqual(numberset._boundaries_included, [True, False])
+        interval = geometry.Interval("[", 5, 6, "]")
+        numberset = self.numberset & geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [5, 6])
+        self.assertEqual(numberset._boundaries_included, [False, False])
+        interval = geometry.Interval("[", 6, 7, "]")
+        numberset = self.numberset & geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [])
+        self.assertEqual(numberset._boundaries_included, [])
+        interval = geometry.Interval("[", 7, 8, "]")
+        numberset = self.numberset & geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [])
+        self.assertEqual(numberset._boundaries_included, [])
+        interval = geometry.Interval("[", 8, 9, "]")
+        numberset = self.numberset & geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [8, 9])
+        self.assertEqual(numberset._boundaries_included, [False, True])
+
+    # __and__ should return the correct set if the other set's borders are
+    # excluded.
+    def test_and_other_borders_excluded(self) -> None:
+        interval = geometry.Interval("(", 0, 1, ")")
+        numberset = self.numberset & geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [])
+        self.assertEqual(numberset._boundaries_included, [])
+        interval = geometry.Interval("(", 1, 2, ")")
+        numberset = self.numberset & geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [1, 2])
+        self.assertEqual(numberset._boundaries_included, [False, False])
+        interval = geometry.Interval("(", 2, 3, ")")
+        numberset = self.numberset & geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [])
+        self.assertEqual(numberset._boundaries_included, [])
+        interval = geometry.Interval("(", 3, 4, ")")
+        numberset = self.numberset & geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [3, 4])
+        self.assertEqual(numberset._boundaries_included, [False, False])
+        interval = geometry.Interval("(", 4, 5, ")")
+        numberset = self.numberset & geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [4, 5])
+        self.assertEqual(numberset._boundaries_included, [False, False])
+        interval = geometry.Interval("(", 5, 6, ")")
+        numberset = self.numberset & geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [5, 6])
+        self.assertEqual(numberset._boundaries_included, [False, False])
+        interval = geometry.Interval("(", 6, 7, ")")
+        numberset = self.numberset & geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [])
+        self.assertEqual(numberset._boundaries_included, [])
+        interval = geometry.Interval("(", 7, 8, ")")
+        numberset = self.numberset & geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [])
+        self.assertEqual(numberset._boundaries_included, [])
+        interval = geometry.Interval("(", 8, 9, ")")
+        numberset = self.numberset & geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [8, 9])
+        self.assertEqual(numberset._boundaries_included, [False, False])
+
+    # __or__ should correctly handle a number if it is on a point.
+    def test_or_number_point(self) -> None:
+        numberset = self.numberset | 0
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, False, False, True],
+        )
+
+    # __or__ should correctly handle a number if it is on an included start
+    # bound.
+    def test_or_number_included_start_bound(self) -> None:
+        numberset = self.numberset | 1
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, False, False, True],
+        )
+
+    # __or__ should correctly handle a number if it is on an included end
+    # bound.
+    def test_or_number_included_end_bound(self) -> None:
+        numberset = self.numberset | 2
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, False, False, True],
+        )
+
+    # __or__ should correctly handle a number if it is in an interval.
+    def test_or_number_in_interval(self) -> None:
+        numberset = self.numberset | 4
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, False, False, True],
+        )
+
+    # __or__ should correctly handle a number if it is in a hole between
+    # intervals.
+    def test_or_number_hole(self) -> None:
+        numberset = self.numberset | 5
+        self.assertEqual(numberset._boundaries, [0, 0, 1, 2, 3, 6, 8, inf])
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, True],
+        )
+
+    # __or__ should correctly handle a number if it is on an excluded start
+    # bound.
+    def test_or_number_excluded_start_bound(self) -> None:
+        numberset = self.numberset | 3
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, True, False, False, False, False, True],
+        )
+
+    # __or__ should correctly handle a number if it is on an excluded end
+    # bound.
+    def test_or_number_excluded_end_bound(self) -> None:
+        numberset = self.numberset | 6
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, True, False, True],
+        )
+
+    # __or__ should correctly handle a number if it is outside all components.
+    def test_or_number_outside_components(self) -> None:
+        numberset = self.numberset | 7
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 7, 7, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [
+                True,
+                True,
+                True,
+                True,
+                False,
+                False,
+                False,
+                False,
+                True,
+                True,
+                False,
+                True,
+            ],
+        )
+
+    # __or__ should raise a ValueError if the number is -inf or inf.
+    def test_or_number_inf(self) -> None:
+        with self.assertRaises(ValueError):
+            self.numberset | (-inf)  # type: ignore
+        with self.assertRaises(ValueError):
+            self.numberset | inf  # type: ignore
+
+    # __or__ should return the correct set if the other set is empty.
+    def test_or_other_empty(self) -> None:
+        numberset = self.numberset | self.numberset_empty
+        self.assertEqual(numberset._boundaries, self.numberset._boundaries)
+        self.assertEqual(
+            numberset._boundaries_included, self.numberset._boundaries_included
+        )
+
+    # __or__ should return the correct set if the other set is full.
+    def test_or_other_full(self) -> None:
+        numberset = self.numberset | self.numberset_full
+        self.assertEqual(
+            numberset._boundaries, self.numberset_full._boundaries
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            self.numberset_full._boundaries_included,
+        )
+
+    # __or__ should return the correct set if the other set's borders are
+    # included.
+    def test_or_other_borders_included(self) -> None:
+        interval = geometry.Interval("[", 0, 1, "]")
+        numberset = self.numberset | geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [0, 2, 3, 5, 5, 6, 8, inf])
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, False, False, False, False, False, True],
+        )
+        interval = geometry.Interval("[", 1, 2, "]")
+        numberset = self.numberset | geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, False, False, True],
+        )
+        interval = geometry.Interval("[", 2, 3, "]")
+        numberset = self.numberset | geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [0, 0, 1, 5, 5, 6, 8, inf])
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, False, False, False, False, True],
+        )
+        interval = geometry.Interval("[", 3, 4, "]")
+        numberset = self.numberset | geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, True, False, False, False, False, True],
+        )
+        interval = geometry.Interval("[", 4, 5, "]")
+        numberset = self.numberset | geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [0, 0, 1, 2, 3, 6, 8, inf])
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, True],
+        )
+        interval = geometry.Interval("[", 5, 6, "]")
+        numberset = self.numberset | geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [0, 0, 1, 2, 3, 6, 8, inf])
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, True, False, True],
+        )
+        interval = geometry.Interval("[", 6, 7, "]")
+        numberset = self.numberset | geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 7, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, True, False, True],
+        )
+        interval = geometry.Interval("[", 7, 8, "]")
+        numberset = self.numberset | geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 7, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, False, True, True],
+        )
+        interval = geometry.Interval("[", 8, 9, "]")
+        numberset = self.numberset | geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, False, True, True],
+        )
+
+    # __or__ should return the correct set if the other set's borders are
+    # excluded.
+    def test_or_other_borders_excluded(self) -> None:
+        interval = geometry.Interval("(", 0, 1, ")")
+        numberset = self.numberset | geometry.NumberSet(interval)
+        self.assertEqual(numberset._boundaries, [0, 2, 3, 5, 5, 6, 8, inf])
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, False, False, False, False, False, True],
+        )
+        interval = geometry.Interval("(", 1, 2, ")")
+        numberset = self.numberset | geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, False, False, True],
+        )
+        interval = geometry.Interval("(", 2, 3, ")")
+        numberset = self.numberset | geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 3, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, False, False, False, False, False, False, True],
+        )
+        interval = geometry.Interval("(", 3, 4, ")")
+        numberset = self.numberset | geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, False, False, True],
+        )
+        interval = geometry.Interval("(", 4, 5, ")")
+        numberset = self.numberset | geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, False, False, True],
+        )
+        interval = geometry.Interval("(", 5, 6, ")")
+        numberset = self.numberset | geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, False, False, True],
+        )
+        interval = geometry.Interval("(", 6, 7, ")")
+        numberset = self.numberset | geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 6, 7, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [
+                True,
+                True,
+                True,
+                True,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                True,
+            ],
+        )
+        interval = geometry.Interval("(", 7, 8, ")")
+        numberset = self.numberset | geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 7, 8, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [
+                True,
+                True,
+                True,
+                True,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                True,
+            ],
+        )
+        interval = geometry.Interval("(", 8, 9, ")")
+        numberset = self.numberset | geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, False, False, True],
+        )
+
+    # __xor__ should remove a number from the set if it is on a point.
+    def test_xor_number_point(self) -> None:
+        numberset = self.numberset ^ 0
+        self.assertEqual(numberset._boundaries, [1, 2, 3, 5, 5, 6, 8, inf])
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, False, False, False, False, False, True],
+        )
+
+    # __xor__ should correctly handle a number if it is on an included start
+    # bound.
+    def test_xor_number_included_start_bound(self) -> None:
+        numberset = self.numberset ^ 1
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, False, True, False, False, False, False, False, True],
+        )
+
+    # __xor__ should correctly handle a number if it is on an included end
+    # bound.
+    def test_xor_number_included_end_bound(self) -> None:
+        numberset = self.numberset ^ 2
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, False, False, False, False, False, False, True],
+        )
+
+    # __xor__ should correctly handle a number if it is in an interval.
+    def test_xor_number_in_interval(self) -> None:
+        numberset = self.numberset ^ 4
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 4, 4, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [
+                True,
+                True,
+                True,
+                True,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                True,
+            ],
+        )
+
+    # __xor__ should correctly handle a number if it is in a hole between
+    # intervals.
+    def test_xor_number_hole(self) -> None:
+        numberset = self.numberset ^ 5
+        self.assertEqual(numberset._boundaries, [0, 0, 1, 2, 3, 6, 8, inf])
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, True],
+        )
+
+    # __xor__ should correctly handle a number if it is on an excluded start
+    # bound.
+    def test_xor_number_excluded_start_bound(self) -> None:
+        numberset = self.numberset ^ 3
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, True, False, False, False, False, True],
+        )
+
+    # __xor__ should correctly handle a number if it is on an excluded end
+    # bound.
+    def test_xor_number_excluded_end_bound(self) -> None:
+        numberset = self.numberset ^ 6
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [True, True, True, True, False, False, False, True, False, True],
+        )
+
+    # __xor__ should correctly handle a number if it is outside all components.
+    def test_xor_number_outside_components(self) -> None:
+        numberset = self.numberset ^ 7
+        self.assertEqual(
+            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 7, 7, 8, inf]
+        )
+        self.assertEqual(
+            numberset._boundaries_included,
+            [
+                True,
+                True,
+                True,
+                True,
+                False,
+                False,
+                False,
+                False,
+                True,
+                True,
+                False,
+                True,
+            ],
+        )
+
+    # __xor__ should raise a ValueError if the number is -inf or inf.
+    def test_xor_number_inf(self) -> None:
+        with self.assertRaises(ValueError):
+            self.numberset ^ (-inf)  # type: ignore
+        with self.assertRaises(ValueError):
+            self.numberset ^ inf  # type: ignore
+
+    # __xor__ should return the correct set if the other set is empty.
+    def test_xor_other_empty(self) -> None:
+        numberset = self.numberset ^ self.numberset_empty
+        self.assertEqual(numberset._boundaries, self.numberset._boundaries)
+        self.assertEqual(
+            numberset._boundaries_included, self.numberset._boundaries_included
+        )
+
+    # __xor__ should return the correct set if the other set is full.
+    def test_xor_other_full(self) -> None:
+        numberset = self.numberset ^ self.numberset_full
+        self.assertEqual(numberset._boundaries, self.numberset_inv._boundaries)
+        self.assertEqual(
+            numberset._boundaries_included,
+            self.numberset_inv._boundaries_included,
+        )
+
+    # __xor__ should return the correct set if the other set's borders are
+    # included.
+    def test_xor_other_borders_included(self) -> None:
+        interval = geometry.Interval("[", 0, 1, "]")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset_or._boundaries, [0, 1, 1, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset_or._boundaries_included,
+            [
+                False,
+                False,
+                False,
+                True,
+                False,
+                False,
+                False,
+                False,
+                False,
+                True,
+            ],
+        )
+        interval = geometry.Interval("[", 1, 2, "]")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
+        self.assertEqual(numberset_or._boundaries, [0, 0, 3, 5, 5, 6, 8, inf])
+        self.assertEqual(
+            numberset_or._boundaries_included,
+            [True, True, False, False, False, False, False, True],
+        )
+        interval = geometry.Interval("[", 2, 3, "]")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset_or._boundaries, [0, 0, 1, 2, 2, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset_or._boundaries_included,
+            [True, True, True, False, False, False, False, False, False, True],
+        )
+        interval = geometry.Interval("[", 3, 4, "]")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset_or._boundaries, [0, 0, 1, 2, 3, 3, 4, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset_or._boundaries_included,
+            [
+                True,
+                True,
+                True,
+                True,
+                True,
+                True,
+                False,
+                False,
+                False,
+                False,
+                False,
+                True,
+            ],
+        )
+        interval = geometry.Interval("[", 4, 5, "]")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset_or._boundaries, [0, 0, 1, 2, 3, 4, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset_or._boundaries_included,
+            [True, True, True, True, False, False, True, False, False, True],
+        )
+        interval = geometry.Interval("[", 5, 6, "]")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 6, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset_or._boundaries_included,
+            [True, True, True, True, False, True, True, True, False, True],
+        )
+        interval = geometry.Interval("[", 6, 7, "]")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 7, 8, inf]
+        )
+        self.assertEqual(
+            numberset_or._boundaries_included,
+            [True, True, True, True, False, False, False, True, False, True],
+        )
+        interval = geometry.Interval("[", 7, 8, "]")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 7, inf]
+        )
+        self.assertEqual(
+            numberset_or._boundaries_included,
+            [True, True, True, True, False, False, False, False, True, True],
+        )
+        interval = geometry.Interval("[", 8, 9, "]")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, 8, 9, inf]
+        )
+        self.assertEqual(
+            numberset_or._boundaries_included,
+            [
+                True,
+                True,
+                True,
+                True,
+                False,
+                False,
+                False,
+                False,
+                True,
+                True,
+                False,
+                True,
+            ],
+        )
+
+    # __xor__ should return the correct set if the other set's borders are
+    # excluded.
+    def test_xor_other_borders_excluded(self) -> None:
+        interval = geometry.Interval("(", 0, 1, ")")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
+        self.assertEqual(numberset_or._boundaries, [0, 2, 3, 5, 5, 6, 8, inf])
+        self.assertEqual(
+            numberset_or._boundaries_included,
+            [True, True, False, False, False, False, False, True],
+        )
+        interval = geometry.Interval("(", 1, 2, ")")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset_or._boundaries, [0, 0, 1, 1, 2, 2, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset_or._boundaries_included,
+            [
+                True,
+                True,
+                True,
+                True,
+                True,
+                True,
+                False,
+                False,
+                False,
+                False,
+                False,
+                True,
+            ],
+        )
+        interval = geometry.Interval("(", 2, 3, ")")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset_or._boundaries, [0, 0, 1, 3, 3, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset_or._boundaries_included,
+            [True, True, True, False, False, False, False, False, False, True],
+        )
+        interval = geometry.Interval("(", 3, 4, ")")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset_or._boundaries, [0, 0, 1, 2, 4, 5, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset_or._boundaries_included,
+            [True, True, True, True, True, False, False, False, False, True],
+        )
+        interval = geometry.Interval("(", 4, 5, ")")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset_or._boundaries, [0, 0, 1, 2, 3, 4, 5, 6, 8, inf]
+        )
+        self.assertEqual(
+            numberset_or._boundaries_included,
+            [True, True, True, True, False, True, False, False, False, True],
+        )
+        interval = geometry.Interval("(", 5, 6, ")")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
+        self.assertEqual(numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 8, inf])
+        self.assertEqual(
+            numberset_or._boundaries_included,
+            [True, True, True, True, False, False, False, True],
+        )
+        interval = geometry.Interval("(", 6, 7, ")")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 6, 7, 8, inf]
+        )
+        self.assertEqual(
+            numberset_or._boundaries_included,
+            [
+                True,
+                True,
+                True,
+                True,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                True,
+            ],
+        )
+        interval = geometry.Interval("(", 7, 8, ")")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 7, 8, 8, inf]
+        )
+        self.assertEqual(
+            numberset_or._boundaries_included,
+            [
+                True,
+                True,
+                True,
+                True,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                True,
+            ],
+        )
+        interval = geometry.Interval("(", 8, 9, ")")
+        numberset_or = self.numberset ^ geometry.NumberSet(interval)
+        self.assertEqual(
+            numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 9, inf]
+        )
+        self.assertEqual(
+            numberset_or._boundaries_included,
+            [True, True, True, True, False, False, False, False, True, True],
         )
 
     # __lshift__ should return the set shifted left by the given amount.
@@ -410,15 +1861,98 @@ class TestNumberSet(unittest.TestCase):
     # copy should return a copy of the set that doesn't share any references
     # with the original set.
     def test_copy(self) -> None:
-        numberset_copy = self.numberset.copy()
-        self.assertIsNot(numberset_copy, self.numberset)
+        numberset = self.numberset.copy()
+        self.assertIsNot(numberset, self.numberset)
+        self.assertIsNot(numberset._boundaries, self.numberset._boundaries)
         self.assertIsNot(
-            numberset_copy._boundaries, self.numberset._boundaries
+            numberset._boundaries_included, self.numberset._boundaries_included
         )
-        self.assertIsNot(
-            numberset_copy._boundaries_included,
-            self.numberset._boundaries_included,
+        self.assertEqual(numberset._boundaries, self.numberset._boundaries)
+        self.assertEqual(
+            numberset._boundaries_included, self.numberset._boundaries_included
         )
+
+    # lookup should correctly handle a number if it is on a point.
+    def test_lookup_point(self) -> None:
+        in_set, on_start, on_end, idx = self.numberset.lookup(0)
+        self.assertTrue(in_set)
+        self.assertTrue(on_start)
+        self.assertTrue(on_end)
+        self.assertEqual(idx, 0)
+
+    # lookup should correctly handle a number if it is on an included start
+    # bound.
+    def test_lookup_included_start_bound(self) -> None:
+        in_set, on_start, on_end, idx = self.numberset.lookup(1)
+        self.assertTrue(in_set)
+        self.assertTrue(on_start)
+        self.assertFalse(on_end)
+        self.assertEqual(idx, 2)
+
+    # lookup should correctly handle a number if it is on an included end
+    # bound.
+    def test_lookup_included_end_bound(self) -> None:
+        in_set, on_start, on_end, idx = self.numberset.lookup(2)
+        self.assertTrue(in_set)
+        self.assertFalse(on_start)
+        self.assertTrue(on_end)
+        self.assertEqual(idx, 3)
+
+    # lookup should correctly handle a number if it is in an interval.
+    def test_lookup_in_interval(self) -> None:
+        in_set, on_start, on_end, idx = self.numberset.lookup(4)
+        self.assertTrue(in_set)
+        self.assertFalse(on_start)
+        self.assertFalse(on_end)
+        self.assertEqual(idx, 5)
+
+    # lookup should correctly handle a number if it is in a hole bewteen
+    # intervals.
+    def test_lookup_hole(self) -> None:
+        in_set, on_start, on_end, idx = self.numberset.lookup(5)
+        self.assertFalse(in_set)
+        self.assertTrue(on_start)
+        self.assertTrue(on_end)
+        self.assertEqual(idx, 5)
+
+    # lookup should correctly handle a number if it is on an excluded start
+    # bound.
+    def test_lookup_excluded_start_bound(self) -> None:
+        in_set, on_start, on_end, idx = self.numberset.lookup(3)
+        self.assertFalse(in_set)
+        self.assertTrue(on_start)
+        self.assertFalse(on_end)
+        self.assertEqual(idx, 4)
+
+    # lookup should correctly handle a number if it is on an excluded end
+    # bound.
+    def test_lookup_excluded_end_bound(self) -> None:
+        in_set, on_start, on_end, idx = self.numberset.lookup(6)
+        self.assertFalse(in_set)
+        self.assertFalse(on_start)
+        self.assertTrue(on_end)
+        self.assertEqual(idx, 7)
+
+    # lookup should correctly handle a number if it is outside all components.
+    def test_lookup_outside_components(self) -> None:
+        in_set, on_start, on_end, idx = self.numberset.lookup(7)
+        self.assertFalse(in_set)
+        self.assertFalse(on_start)
+        self.assertFalse(on_end)
+        self.assertEqual(idx, 8)
+
+    # lookup should correctly handle a number if it is -inf or inf.
+    def test_lookup_inf(self) -> None:
+        in_set, on_start, on_end, idx = self.numberset.lookup(-inf)
+        self.assertFalse(in_set)
+        self.assertFalse(on_start)
+        self.assertFalse(on_end)
+        self.assertEqual(idx, 0)
+        in_set, on_start, on_end, idx = self.numberset.lookup(inf)
+        self.assertTrue(in_set)
+        self.assertFalse(on_start)
+        self.assertTrue(on_end)
+        self.assertEqual(idx, 9)
 
     # contains_parallel should return which sets the numbers are contained in.
     def test_contains_parallel(self) -> None:
@@ -429,10 +1963,10 @@ class TestNumberSet(unittest.TestCase):
         possible_bounds = list(range(-10, 11))
         possible_inclusions = [True, False]
 
-        # Generate a list of random intervals. Do this by randomly choosing a
-        # start and end bound for each interval and whether they are included
-        # from the possible bounds and inclusions.
-        intervals = []
+        # Generate a list of random number sets. Do this by randomly choosing a
+        # start and end bound for each interval and by choosing whether the
+        # start and end bounds are included or excluded.
+        numbersets = []
         for _ in range(100):
             start, end = 0, 0
             start_included, end_included = True, True
@@ -444,10 +1978,11 @@ class TestNumberSet(unittest.TestCase):
             if start > end:
                 start, end = end, start
                 start_included, end_included = end_included, start_included
-            intervals.append(
-                geometry.Interval(start_included, start, end, end_included)
+            numbersets.append(
+                geometry.NumberSet(
+                    geometry.Interval(start_included, start, end, end_included)
+                )
             )
-        numbersets = [geometry.NumberSet(interval) for interval in intervals]
 
         # For each number, check that the result of contains_parallel is the
         # same as the result of contains for each set.
@@ -462,339 +1997,6 @@ class TestNumberSet(unittest.TestCase):
                 if number in numberset
             ]
             self.assertEqual(expected_result, result_parallel)
-
-    # lookup returns 4 elements of the correct type.
-    def test_lookup_type(self) -> None:
-        numberset = geometry.NumberSet()
-        in_set, on_start, on_end, idx = numberset.lookup(0)
-        self.assertIsInstance(in_set, bool)
-        self.assertIsInstance(on_start, bool)
-        self.assertIsInstance(on_end, bool)
-        self.assertIsInstance(idx, int)
-
-    # lookup returns the correct values if number is on a point.
-    def test_lookup_point(self) -> None:
-        in_set, on_start, on_end, idx = self.numberset.lookup(0)
-        self.assertTrue(in_set)
-        self.assertTrue(on_start)
-        self.assertTrue(on_end)
-        self.assertEqual(idx, 0)
-
-    # lookup returns the correct values if number is on an included start
-    # bound.
-    def test_lookup_included_start_bound(self) -> None:
-        in_set, on_start, on_end, idx = self.numberset.lookup(1)
-        self.assertTrue(in_set)
-        self.assertTrue(on_start)
-        self.assertFalse(on_end)
-        self.assertEqual(idx, 2)
-
-    # lookup returns the correct values if number is on an included end bound.
-    def test_lookup_included_end_bound(self) -> None:
-        in_set, on_start, on_end, idx = self.numberset.lookup(2)
-        self.assertTrue(in_set)
-        self.assertFalse(on_start)
-        self.assertTrue(on_end)
-        self.assertEqual(idx, 3)
-
-    # lookup returns the correct values if number is in an interval.
-    def test_lookup_in_interval(self) -> None:
-        in_set, on_start, on_end, idx = self.numberset.lookup(4)
-        self.assertTrue(in_set)
-        self.assertFalse(on_start)
-        self.assertFalse(on_end)
-        self.assertEqual(idx, 5)
-
-    # lookup returns the correct values if number is in a hole between
-    # intervals.
-    def test_lookup_hole(self) -> None:
-        in_set, on_start, on_end, idx = self.numberset.lookup(5)
-        self.assertFalse(in_set)
-        self.assertTrue(on_start)
-        self.assertTrue(on_end)
-        self.assertEqual(idx, 5)
-
-    # lookup returns the correct values if number is on an excluded start
-    # bound.
-    def test_lookup_excluded_start_bound(self) -> None:
-        in_set, on_start, on_end, idx = self.numberset.lookup(3)
-        self.assertFalse(in_set)
-        self.assertTrue(on_start)
-        self.assertFalse(on_end)
-        self.assertEqual(idx, 4)
-
-    # lookup returns the correct values if number is on an excluded end bound.
-    def test_lookup_excluded_end_bound(self) -> None:
-        in_set, on_start, on_end, idx = self.numberset.lookup(6)
-        self.assertFalse(in_set)
-        self.assertFalse(on_start)
-        self.assertTrue(on_end)
-        self.assertEqual(idx, 7)
-
-    # lookup returns the correct values if number is outside all components.
-    def test_lookup_outside_components(self) -> None:
-        in_set, on_start, on_end, idx = self.numberset.lookup(7)
-        self.assertFalse(in_set)
-        self.assertFalse(on_start)
-        self.assertFalse(on_end)
-        self.assertEqual(idx, 8)
-
-    # lookup returns the correct values if number is -inf or inf.
-    def test_lookup_inf(self) -> None:
-        in_set, on_start, on_end, idx = self.numberset.lookup(-inf)
-        self.assertFalse(in_set)
-        self.assertFalse(on_start)
-        self.assertFalse(on_end)
-        self.assertEqual(idx, 0)
-        in_set, on_start, on_end, idx = self.numberset.lookup(inf)
-        self.assertTrue(in_set)
-        self.assertFalse(on_start)
-        self.assertTrue(on_end)
-        self.assertEqual(idx, 9)
-
-    # add_number should add a number to the set if number is on a point.
-    def test_add_number_point(self) -> None:
-        numberset = self.numberset.copy()
-        numberset.add_number(0)
-        self.assertEqual(
-            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset._boundaries_included,
-            [True, True, True, True, False, False, False, False, False, True],
-        )
-
-    # add_number should add a number to the set if number is on an included
-    # start bound.
-    def test_add_number_included_start_bound(self) -> None:
-        numberset = self.numberset.copy()
-        numberset.add_number(1)
-        self.assertEqual(
-            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset._boundaries_included,
-            [True, True, True, True, False, False, False, False, False, True],
-        )
-
-    # add_number should add a number to the set if number is on an included
-    # end bound.
-    def test_add_number_included_end_bound(self) -> None:
-        numberset = self.numberset.copy()
-        numberset.add_number(2)
-        self.assertEqual(
-            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset._boundaries_included,
-            [True, True, True, True, False, False, False, False, False, True],
-        )
-
-    # add_number should add a number to the set if number is in an interval.
-    def test_add_number_in_interval(self) -> None:
-        numberset = self.numberset.copy()
-        numberset.add_number(4)
-        self.assertEqual(
-            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset._boundaries_included,
-            [True, True, True, True, False, False, False, False, False, True],
-        )
-
-    # add_number should add a number to the set if number is in a hole between
-    # intervals.
-    def test_add_number_hole(self) -> None:
-        numberset = self.numberset.copy()
-        numberset.add_number(5)
-        self.assertEqual(numberset._boundaries, [0, 0, 1, 2, 3, 6, 8, inf])
-        self.assertEqual(
-            numberset._boundaries_included,
-            [True, True, True, True, False, False, False, True],
-        )
-
-    # add_number should add a number to the set if number is on an excluded
-    # start bound.
-    def test_add_number_excluded_start_bound(self) -> None:
-        numberset = self.numberset.copy()
-        numberset.add_number(3)
-        self.assertEqual(
-            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset._boundaries_included,
-            [True, True, True, True, True, False, False, False, False, True],
-        )
-
-    # add_number should add a number to the set if number is on an excluded
-    # end bound.
-    def test_add_number_excluded_end_bound(self) -> None:
-        numberset = self.numberset.copy()
-        numberset.add_number(6)
-        self.assertEqual(
-            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset._boundaries_included,
-            [True, True, True, True, False, False, False, True, False, True],
-        )
-
-    # add_number should add a number to the set if number is outside all
-    # components.
-    def test_add_number_outside_components(self) -> None:
-        numberset = self.numberset.copy()
-        numberset.add_number(7)
-        self.assertEqual(
-            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 7, 7, 8, inf]
-        )
-        self.assertEqual(
-            numberset._boundaries_included,
-            [
-                True,
-                True,
-                True,
-                True,
-                False,
-                False,
-                False,
-                False,
-                True,
-                True,
-                False,
-                True,
-            ],
-        )
-
-    # add_number should raise a ValueError if number is -inf or inf.
-    def test_add_number_inf(self) -> None:
-        numberset = self.numberset.copy()
-        with self.assertRaises(ValueError):
-            numberset.add_number(-inf)
-        with self.assertRaises(ValueError):
-            numberset.add_number(inf)
-
-    # remove_number should remove a number from the set if number is on a
-    # point.
-    def test_remove_number_point(self) -> None:
-        numberset = self.numberset.copy()
-        numberset.remove_number(0)
-        self.assertEqual(numberset._boundaries, [1, 2, 3, 5, 5, 6, 8, inf])
-        self.assertEqual(
-            numberset._boundaries_included,
-            [True, True, False, False, False, False, False, True],
-        )
-
-    # remove_number should remove a number from the set if number is on an
-    # included start bound.
-    def test_remove_number_included_start_bound(self) -> None:
-        numberset = self.numberset.copy()
-        numberset.remove_number(1)
-        self.assertEqual(
-            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset._boundaries_included,
-            [True, True, False, True, False, False, False, False, False, True],
-        )
-
-    # remove_number should remove a number from the set if number is on an
-    # included end bound.
-    def test_remove_number_included_end_bound(self) -> None:
-        numberset = self.numberset.copy()
-        numberset.remove_number(2)
-        self.assertEqual(
-            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset._boundaries_included,
-            [True, True, True, False, False, False, False, False, False, True],
-        )
-
-    # remove_number should remove a number from the set if number is in an
-    # interval.
-    def test_remove_number_in_interval(self) -> None:
-        numberset = self.numberset.copy()
-        numberset.remove_number(4)
-        self.assertEqual(
-            numberset._boundaries, [0, 0, 1, 2, 3, 4, 4, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset._boundaries_included,
-            [
-                True,
-                True,
-                True,
-                True,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                True,
-            ],
-        )
-
-    # remove_number should remove a number from the set if number is in a hole
-    # between intervals.
-    def test_remove_number_hole(self) -> None:
-        numberset = self.numberset.copy()
-        numberset.remove_number(5)
-        self.assertEqual(
-            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset._boundaries_included,
-            [True, True, True, True, False, False, False, False, False, True],
-        )
-
-    # remove_number should remove a number from the set if number is on an
-    # excluded start bound.
-    def test_remove_number_excluded_start_bound(self) -> None:
-        numberset = self.numberset.copy()
-        numberset.remove_number(3)
-        self.assertEqual(
-            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset._boundaries_included,
-            [True, True, True, True, False, False, False, False, False, True],
-        )
-
-    # remove_number should remove a number from the set if number is on an
-    # excluded end bound.
-    def test_remove_number_excluded_end_bound(self) -> None:
-        numberset = self.numberset.copy()
-        numberset.remove_number(6)
-        self.assertEqual(
-            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset._boundaries_included,
-            [True, True, True, True, False, False, False, False, False, True],
-        )
-
-    # remove_number should remove a number from the set if number is outside
-    # all components.
-    def test_remove_number_outside_components(self) -> None:
-        numberset = self.numberset.copy()
-        numberset.remove_number(7)
-        self.assertEqual(
-            numberset._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset._boundaries_included,
-            [True, True, True, True, False, False, False, False, False, True],
-        )
-
-    # remove_number should raise a ValueError if number is -inf or inf.
-    def test_remove_number_inf(self) -> None:
-        numberset = self.numberset.copy()
-        with self.assertRaises(ValueError):
-            numberset.remove_number(-inf)
-        with self.assertRaises(ValueError):
-            numberset.remove_number(inf)
 
     # _extract_subset should return the correct subset if the subset is
     # discarded.
@@ -1336,676 +2538,6 @@ class TestNumberSet(unittest.TestCase):
         self.assertEqual(subset._boundaries, inv_numberset._boundaries)
         self.assertEqual(
             subset._boundaries_included, inv_numberset._boundaries_included
-        )
-
-    # __and__ should return the correct set if the other set is empty.
-    def test_and_other_empty(self) -> None:
-        numberset = self.numberset & geometry.NumberSet()
-        self.assertEqual(numberset._boundaries, [])
-        self.assertEqual(numberset._boundaries_included, [])
-
-    # __and__ should return the correct set if the other set is full.
-    def test_and_other_full(self) -> None:
-        interval = geometry.Interval("[", -inf, inf, "]")
-        numberset = self.numberset & geometry.NumberSet(interval)
-        self.assertEqual(numberset._boundaries, self.numberset._boundaries)
-        self.assertEqual(
-            numberset._boundaries_included, self.numberset._boundaries_included
-        )
-
-    # __and__ should return the correct set if the other set is a single
-    # number.
-    def test_and_other_number(self) -> None:
-        for number in range(9):
-            numberset = self.numberset & geometry.NumberSet(number)
-            self.assertEqual(
-                numberset._boundaries,
-                [number, number] if number in self.numberset else [],
-            )
-            self.assertEqual(
-                numberset._boundaries_included,
-                [True, True] if number in self.numberset else [],
-            )
-
-    # __and__ should return the correct set if the other set's borders are
-    # included.
-    def test_and_other_borders_included(self) -> None:
-        for start in range(9):
-            interval = geometry.Interval("[", start, start + 1, "]")
-            numberset_and = self.numberset & geometry.NumberSet(interval)
-            numberset_subset = self.numberset._extract_subset(
-                start, start + 1, True, True, "01"
-            )
-            self.assertEqual(
-                numberset_and._boundaries, numberset_subset._boundaries
-            )
-            self.assertEqual(
-                numberset_and._boundaries_included,
-                numberset_subset._boundaries_included,
-            )
-
-    # __and__ should return the correct set if the other set's borders are
-    # excluded.
-    def test_and_other_borders_excluded(self) -> None:
-        for start in range(9):
-            interval = geometry.Interval("(", start, start + 1, ")")
-            numberset_and = self.numberset & geometry.NumberSet(interval)
-            numberset_subset = self.numberset._extract_subset(
-                start, start + 1, False, False, "01"
-            )
-            self.assertEqual(
-                numberset_and._boundaries, numberset_subset._boundaries
-            )
-
-    # __or__ should return the correct set if the other set is empty.
-    def test_or_other_empty(self) -> None:
-        numberset = self.numberset | geometry.NumberSet()
-        self.assertEqual(numberset._boundaries, self.numberset._boundaries)
-        self.assertEqual(
-            numberset._boundaries_included, self.numberset._boundaries_included
-        )
-
-    # __or__ should return the correct set if the other set is full.
-    def test_or_other_full(self) -> None:
-        interval = geometry.Interval("[", -inf, inf, "]")
-        numberset = self.numberset | geometry.NumberSet(interval)
-        self.assertEqual(numberset._boundaries, [-inf, inf])
-        self.assertEqual(numberset._boundaries_included, [True, True])
-
-    # __or__ should return the correct set if the other set is a single
-    # number.
-    def test_or_other_number(self) -> None:
-        for number in range(9):
-            numberset_or = self.numberset | geometry.NumberSet(number)
-            numberset_add = self.numberset.copy()
-            numberset_add.add_number(number)
-            self.assertEqual(
-                numberset_or._boundaries, numberset_add._boundaries
-            )
-            self.assertEqual(
-                numberset_or._boundaries_included,
-                numberset_add._boundaries_included,
-            )
-
-    # __or__ should return the correct set if the other set's borders are
-    # included.
-    def test_or_other_borders_included(self) -> None:
-        interval = geometry.Interval("[", 0, 1, "]")
-        numberset_or = self.numberset | geometry.NumberSet(interval)
-        self.assertEqual(numberset_or._boundaries, [0, 2, 3, 5, 5, 6, 8, inf])
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, False, False, False, False, False, True],
-        )
-        interval = geometry.Interval("[", 1, 2, "]")
-        numberset_or = self.numberset | geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, True, True, False, False, False, False, False, True],
-        )
-        interval = geometry.Interval("[", 2, 3, "]")
-        numberset_or = self.numberset | geometry.NumberSet(interval)
-        self.assertEqual(numberset_or._boundaries, [0, 0, 1, 5, 5, 6, 8, inf])
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, True, False, False, False, False, True],
-        )
-        interval = geometry.Interval("[", 3, 4, "]")
-        numberset_or = self.numberset | geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, True, True, True, False, False, False, False, True],
-        )
-        interval = geometry.Interval("[", 4, 5, "]")
-        numberset_or = self.numberset | geometry.NumberSet(interval)
-        self.assertEqual(numberset_or._boundaries, [0, 0, 1, 2, 3, 6, 8, inf])
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, True, True, False, False, False, True],
-        )
-        interval = geometry.Interval("[", 5, 6, "]")
-        numberset_or = self.numberset | geometry.NumberSet(interval)
-        self.assertEqual(numberset_or._boundaries, [0, 0, 1, 2, 3, 6, 8, inf])
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, True, True, False, True, False, True],
-        )
-        interval = geometry.Interval("[", 6, 7, "]")
-        numberset_or = self.numberset | geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 7, 8, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, True, True, False, False, False, True, False, True],
-        )
-        interval = geometry.Interval("[", 7, 8, "]")
-        numberset_or = self.numberset | geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 7, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, True, True, False, False, False, False, True, True],
-        )
-        interval = geometry.Interval("[", 8, 9, "]")
-        numberset_or = self.numberset | geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, True, True, False, False, False, False, True, True],
-        )
-
-    # __or__ should return the correct set if the other set's borders are
-    # excluded.
-    def test_or_other_borders_excluded(self) -> None:
-        interval = geometry.Interval("(", 0, 1, ")")
-        numberset_or = self.numberset | geometry.NumberSet(interval)
-        self.assertEqual(numberset_or._boundaries, [0, 2, 3, 5, 5, 6, 8, inf])
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, False, False, False, False, False, True],
-        )
-        interval = geometry.Interval("(", 1, 2, ")")
-        numberset_or = self.numberset | geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, True, True, False, False, False, False, False, True],
-        )
-        interval = geometry.Interval("(", 2, 3, ")")
-        numberset_or = self.numberset | geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 3, 3, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, True, False, False, False, False, False, False, True],
-        )
-        interval = geometry.Interval("(", 3, 4, ")")
-        numberset_or = self.numberset | geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, True, True, False, False, False, False, False, True],
-        )
-        interval = geometry.Interval("(", 4, 5, ")")
-        numberset_or = self.numberset | geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, True, True, False, False, False, False, False, True],
-        )
-        interval = geometry.Interval("(", 5, 6, ")")
-        numberset_or = self.numberset | geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, True, True, False, False, False, False, False, True],
-        )
-        interval = geometry.Interval("(", 6, 7, ")")
-        numberset_or = self.numberset | geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 6, 7, 8, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [
-                True,
-                True,
-                True,
-                True,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                True,
-            ],
-        )
-        interval = geometry.Interval("(", 7, 8, ")")
-        numberset_or = self.numberset | geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 7, 8, 8, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [
-                True,
-                True,
-                True,
-                True,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                True,
-            ],
-        )
-        interval = geometry.Interval("(", 8, 9, ")")
-        numberset_or = self.numberset | geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, True, True, False, False, False, False, False, True],
-        )
-
-    # __xor__ should return the correct set if the other set is empty.
-    def test_xor_other_empty(self) -> None:
-        numberset = self.numberset ^ geometry.NumberSet()
-        self.assertEqual(numberset._boundaries, self.numberset._boundaries)
-        self.assertEqual(
-            numberset._boundaries_included, self.numberset._boundaries_included
-        )
-
-    # __xor__ should return the correct set if the other set is full.
-    def test_xor_other_full(self) -> None:
-        interval = geometry.Interval("[", -inf, inf, "]")
-        numberset = self.numberset ^ geometry.NumberSet(interval)
-        inv_numberset = ~self.numberset
-        self.assertEqual(numberset._boundaries, inv_numberset._boundaries)
-        self.assertEqual(
-            numberset._boundaries_included, inv_numberset._boundaries_included
-        )
-
-    # __xor__ should return the correct set if the other set is a single
-    # number.
-    def test_xor_other_number(self) -> None:
-        for number in range(9):
-            numberset_number = geometry.NumberSet(number)
-            numberset_xor = self.numberset ^ numberset_number
-            if number in self.numberset:
-                numberset_verify = self.numberset.copy()
-                numberset_verify.remove_number(number)
-            else:
-                numberset_verify = self.numberset.copy()
-                numberset_verify.add_number(number)
-            self.assertEqual(
-                numberset_xor._boundaries, numberset_verify._boundaries
-            )
-            self.assertEqual(
-                numberset_xor._boundaries_included,
-                numberset_verify._boundaries_included,
-            )
-
-    # __xor__ should return the correct set if the other set's borders are
-    # included.
-    def test_xor_other_borders_included(self) -> None:
-        interval = geometry.Interval("[", 0, 1, "]")
-        numberset_or = self.numberset ^ geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 1, 1, 2, 3, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [
-                False,
-                False,
-                False,
-                True,
-                False,
-                False,
-                False,
-                False,
-                False,
-                True,
-            ],
-        )
-        interval = geometry.Interval("[", 1, 2, "]")
-        numberset_or = self.numberset ^ geometry.NumberSet(interval)
-        self.assertEqual(numberset_or._boundaries, [0, 0, 3, 5, 5, 6, 8, inf])
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, False, False, False, False, False, True],
-        )
-        interval = geometry.Interval("[", 2, 3, "]")
-        numberset_or = self.numberset ^ geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 2, 2, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, True, False, False, False, False, False, False, True],
-        )
-        interval = geometry.Interval("[", 3, 4, "]")
-        numberset_or = self.numberset ^ geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 2, 3, 3, 4, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [
-                True,
-                True,
-                True,
-                True,
-                True,
-                True,
-                False,
-                False,
-                False,
-                False,
-                False,
-                True,
-            ],
-        )
-        interval = geometry.Interval("[", 4, 5, "]")
-        numberset_or = self.numberset ^ geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 2, 3, 4, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, True, True, False, False, True, False, False, True],
-        )
-        interval = geometry.Interval("[", 5, 6, "]")
-        numberset_or = self.numberset ^ geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 6, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, True, True, False, True, True, True, False, True],
-        )
-        interval = geometry.Interval("[", 6, 7, "]")
-        numberset_or = self.numberset ^ geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 7, 8, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, True, True, False, False, False, True, False, True],
-        )
-        interval = geometry.Interval("[", 7, 8, "]")
-        numberset_or = self.numberset ^ geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 7, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, True, True, False, False, False, False, True, True],
-        )
-        interval = geometry.Interval("[", 8, 9, "]")
-        numberset_or = self.numberset ^ geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 8, 8, 9, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [
-                True,
-                True,
-                True,
-                True,
-                False,
-                False,
-                False,
-                False,
-                True,
-                True,
-                False,
-                True,
-            ],
-        )
-
-    # __xor__ should return the correct set if the other set's borders are
-    # excluded.
-    def test_xor_other_borders_excluded(self) -> None:
-        interval = geometry.Interval("(", 0, 1, ")")
-        numberset_or = self.numberset ^ geometry.NumberSet(interval)
-        self.assertEqual(numberset_or._boundaries, [0, 2, 3, 5, 5, 6, 8, inf])
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, False, False, False, False, False, True],
-        )
-        interval = geometry.Interval("(", 1, 2, ")")
-        numberset_or = self.numberset ^ geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 1, 2, 2, 3, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [
-                True,
-                True,
-                True,
-                True,
-                True,
-                True,
-                False,
-                False,
-                False,
-                False,
-                False,
-                True,
-            ],
-        )
-        interval = geometry.Interval("(", 2, 3, ")")
-        numberset_or = self.numberset ^ geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 3, 3, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, True, False, False, False, False, False, False, True],
-        )
-        interval = geometry.Interval("(", 3, 4, ")")
-        numberset_or = self.numberset ^ geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 2, 4, 5, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, True, True, True, False, False, False, False, True],
-        )
-        interval = geometry.Interval("(", 4, 5, ")")
-        numberset_or = self.numberset ^ geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 2, 3, 4, 5, 6, 8, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, True, True, False, True, False, False, False, True],
-        )
-        interval = geometry.Interval("(", 5, 6, ")")
-        numberset_or = self.numberset ^ geometry.NumberSet(interval)
-        self.assertEqual(numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 8, inf])
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, True, True, False, False, False, True],
-        )
-        interval = geometry.Interval("(", 6, 7, ")")
-        numberset_or = self.numberset ^ geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 6, 7, 8, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [
-                True,
-                True,
-                True,
-                True,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                True,
-            ],
-        )
-        interval = geometry.Interval("(", 7, 8, ")")
-        numberset_or = self.numberset ^ geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 7, 8, 8, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [
-                True,
-                True,
-                True,
-                True,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                True,
-            ],
-        )
-        interval = geometry.Interval("(", 8, 9, ")")
-        numberset_or = self.numberset ^ geometry.NumberSet(interval)
-        self.assertEqual(
-            numberset_or._boundaries, [0, 0, 1, 2, 3, 5, 5, 6, 9, inf]
-        )
-        self.assertEqual(
-            numberset_or._boundaries_included,
-            [True, True, True, True, False, False, False, False, True, True],
-        )
-
-    # __init__ with no arguments.
-    def test_init_empty(self) -> None:
-        numberset = geometry.NumberSet()
-        self.assertEqual(numberset._boundaries, [])
-        self.assertEqual(numberset._boundaries_included, [])
-
-    # __init__ with a single number.
-    def test_init_number(self) -> None:
-        number_set = geometry.NumberSet(5)
-        self.assertEqual(number_set._boundaries, [5, 5])
-        self.assertEqual(number_set._boundaries_included, [True, True])
-
-    # __init__ should raise a ValueError if it is initialized with a single
-    # number that is -inf or inf.
-    def test_init_number_inf(self) -> None:
-        with self.assertRaises(ValueError):
-            geometry.NumberSet(-inf)
-        with self.assertRaises(ValueError):
-            geometry.NumberSet(inf)
-
-    # __init__ with a single interval.
-    def test_init_interval(self) -> None:
-        interval = geometry.Interval("[", 1, 5, "]")
-        numberset = geometry.NumberSet(interval)
-        self.assertEqual(numberset._boundaries, [1, 5])
-        self.assertEqual(numberset._boundaries_included, [True, True])
-
-    # __init__ with a single NumberSet instance.
-    def test_init_numberset(self) -> None:
-        interval = geometry.Interval("[", -3, 1, ")")
-        numberset1 = geometry.NumberSet(interval)
-        numberset2 = geometry.NumberSet(numberset1)
-        self.assertEqual(numberset2._boundaries, [-3, 1])
-        self.assertEqual(numberset2._boundaries_included, [True, False])
-
-    # __init__ with multiple non-overlapping numbers.
-    def test_init_numbers(self) -> None:
-        numberset = geometry.NumberSet(1, 2, 3, 4, 5)
-        self.assertEqual(numberset._boundaries, [1, 1, 2, 2, 3, 3, 4, 4, 5, 5])
-        self.assertEqual(
-            numberset._boundaries_included,
-            [True, True, True, True, True, True, True, True, True, True],
-        )
-
-    # __init__ with multiple non-overlapping intervals.
-    def test_init_intervals(self) -> None:
-        interval1 = geometry.Interval("[", 1, 5, ")")
-        interval2 = geometry.Interval("(", 10, 15, "]")
-        interval3 = geometry.Interval("[", 20, 25, "]")
-        numberset = geometry.NumberSet(interval1, interval2, interval3)
-        self.assertEqual(numberset._boundaries, [1, 5, 10, 15, 20, 25])
-        self.assertEqual(
-            numberset._boundaries_included,
-            [True, False, False, True, True, True],
-        )
-
-    # __init__ with multiple non-overlapping numbersets.
-    def test_init_numbersets(self) -> None:
-        interval1 = geometry.Interval("[", 1, 5, ")")
-        numberset1 = geometry.NumberSet(0, interval1)
-        interval2 = geometry.Interval("(", 10, 15, "]")
-        numberset2 = geometry.NumberSet(6, 7, interval2)
-        numberset = geometry.NumberSet(numberset1, numberset2)
-        self.assertEqual(
-            numberset._boundaries, [0, 0, 1, 5, 6, 6, 7, 7, 10, 15]
-        )
-        self.assertEqual(
-            numberset._boundaries_included,
-            [True, True, True, False, True, True, True, True, False, True],
-        )
-
-    # __init__ with multiple non-overlapping numbers, intervals, and
-    # numbersets.
-    def test_init_numbers_intervals_numbersets(self) -> None:
-        interval = geometry.Interval("(", -3, 1, ")")
-        interval1 = geometry.Interval("[", 6, 8, ")")
-        numberset1 = geometry.NumberSet(5, interval1)
-        numberset = geometry.NumberSet(-4, interval, numberset1)
-        self.assertEqual(numberset._boundaries, [-4, -4, -3, 1, 5, 5, 6, 8])
-        self.assertEqual(
-            numberset._boundaries_included,
-            [True, True, False, False, True, True, True, False],
-        )
-
-    # __init__ with multiple overlapping numbers.
-    def test_init_numbers_overlapping(self) -> None:
-        numberset = geometry.NumberSet(1, 2, 3, 4, 5, 1, 3, 4, 4)
-        self.assertEqual(numberset._boundaries, [1, 1, 2, 2, 3, 3, 4, 4, 5, 5])
-        self.assertEqual(
-            numberset._boundaries_included,
-            [True, True, True, True, True, True, True, True, True, True],
-        )
-
-    # __init__ with multiple overlapping intervals.
-    def test_init_intervals_overlapping(self) -> None:
-        interval1 = geometry.Interval("[", 1, 5, "]")
-        interval2 = geometry.Interval("(", 4, 10, ")")
-        interval3 = geometry.Interval("[", 10, 12, ")")
-        interval4 = geometry.Interval("(", 6, 8, "]")
-        numberset = geometry.NumberSet(
-            interval1, interval2, interval3, interval4
-        )
-        self.assertEqual(numberset._boundaries, [1, 12])
-        self.assertEqual(numberset._boundaries_included, [True, False])
-
-    # __init__ with multiple overlapping numbersets.
-    def test_init_numbersets_overlapping(self) -> None:
-        interval1 = geometry.Interval("[", 1, 5, "]")
-        numberset1 = geometry.NumberSet(0, interval1)
-        interval2 = geometry.Interval("(", 4, 10, ")")
-        numberset2 = geometry.NumberSet(6, 7, interval2)
-        numberset = geometry.NumberSet(numberset1, numberset2)
-        self.assertEqual(numberset._boundaries, [0, 0, 1, 10])
-        self.assertEqual(
-            numberset._boundaries_included, [True, True, True, False]
         )
 
     # is_empty should return True iff the NumberSet is empty.
