@@ -378,10 +378,6 @@ class TestNumberSet(unittest.TestCase):
             ],
         )
 
-    # amount_components should return the amount of components in the set.
-    def test_amount_components(self) -> None:
-        self.assertEqual(self.numberset.amount_components, 5)
-
     # __init__ with no arguments.
     def test_init_empty(self) -> None:
         numberset = geometry.NumberSet()
@@ -536,6 +532,10 @@ class TestNumberSet(unittest.TestCase):
             self.numberset[5]
         with self.assertRaises(IndexError):
             self.numberset[-6]
+
+    # __len__ should return the amount of components in the set.
+    def test_amount_components(self) -> None:
+        self.assertEqual(len(self.numberset), 5)
 
     # __repr__ should return a string representation of the set.
     def test_repr(self) -> None:

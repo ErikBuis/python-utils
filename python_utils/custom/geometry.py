@@ -463,22 +463,6 @@ class NumberSet:
                     self._boundaries_included[idx + 1],
                 )
 
-    @property
-    def amount_components(self) -> int:
-        """The amount of numbers and intervals contained in the set.
-
-        Returns:
-            The amount of numbers and intervals contained in the set. Each
-            standalone number counts as one component, and each interval counts
-            as one component.
-
-        Examples:
-        >>> ns = NumberSet(0, 10, Interval("[", 1, 5, ")"))
-        >>> ns.amount_components
-        3
-        """
-        return len(self._boundaries) // 2
-
     def __init__(self, *components: "float | Interval | NumberSet") -> None:
         """Create a NumberSet instance.
 
@@ -596,8 +580,8 @@ class NumberSet:
             The component at the given index, assuming all components are
             sorted in ascending order.
         """
-        idx = self.amount_components + idx if idx < 0 else idx
-        if not 0 <= idx < self.amount_components:
+        idx = len(self) + idx if idx < 0 else idx
+        if not 0 <= idx < len(self):
             raise IndexError("NumberSet index out of range.")
 
         comp_idx = idx * 2
@@ -609,6 +593,21 @@ class NumberSet:
             self._boundaries[comp_idx + 1],
             self._boundaries_included[comp_idx + 1],
         )
+
+    def __len__(self) -> int:
+        """The amount of numbers and intervals contained in the set.
+
+        Returns:
+            The amount of numbers and intervals contained in the set. Each
+            standalone number counts as one component, and each interval counts
+            as one component.
+
+        Examples:
+        >>> ns = NumberSet(0, 10, Interval("[", 1, 5, ")"))
+        >>> len(ns)
+        3
+        """
+        return len(self._boundaries) // 2
 
     @override
     def __repr__(self) -> str:
@@ -2034,23 +2033,17 @@ class NumberSet:
 
     def is_number(self) -> bool:
         """Check if the set represents a single number."""
-        return (
-            self.amount_components == 1
-            and self._boundaries[0] == self._boundaries[1]
-        )
+        return len(self) == 1 and self._boundaries[0] == self._boundaries[1]
 
     def is_interval(self) -> bool:
         """Check if the set represents a single interval."""
-        return (
-            self.amount_components == 1
-            and self._boundaries[0] < self._boundaries[1]
-        )
+        return len(self) == 1 and self._boundaries[0] < self._boundaries[1]
 
     def is_reducible(self) -> bool:
-        """Check if the set can be reduced to one or no componets."""
-        return self.amount_components <= 1
+        """Check if the set can be reduced to one or no components."""
+        return len(self) <= 1
 
-    def reduce(self) -> "NumberSet | Interval | float | None":
+    def reduce(self) -> "None | float | Interval | NumberSet":
         """Reduce the set to an Interval, number or None (if empty)."""
         if not self.is_reducible():
             return self
