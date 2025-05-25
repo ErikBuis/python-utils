@@ -1,0 +1,424 @@
+# TODO Actually make this code a usable util function
+
+from __future__ import annotations
+
+import argparse
+import inspect
+import sys
+from collections.abc import Sequence
+from typing import Callable, cast
+
+import matplotlib.pyplot as plt
+import numpy as np
+import numpy.typing as npt
+from scipy.ndimage import gaussian_filter1d
+from scipy.optimize import curve_fit
+from sklearn.base import BaseEstimator
+from sklearn.exceptions import NotFittedError
+from sklearn.linear_model import RANSACRegressor
+from sklearn.neighbors import NearestNeighbors
+from tqdm import tqdm
+
+
+def _mammen_rvs(size: int) -> npt.NDArray[np.float64]:
+    """Generate Mammen random variables.
+
+    Mammen random variables are used in the wild bootstrap method for robust
+    bootstrapping. They are defined as a mixture of two point masses, which
+    allows it to deal with heteroscedasticity and distributions that are not
+    normally distributed. This is particularly useful in regression contexts
+    where the residuals may not follow a normal distribution.
+
+    See https://en.wikipedia.org/wiki/Bootstrapping_(statistics)#Wild_bootstrap
+    for more details.
+
+    Args:
+        size: The number of Mammen random variables to generate.
+
+    Returns:
+        An array of Mammen random variables of the specified size.
+    """
+    sqrt5 = np.sqrt(5)
+    p = (sqrt5 + 1) / (2 * sqrt5)
+    w1 = (1 - sqrt5) / 2
+    w2 = (1 + sqrt5) / 2
+    return np.where(np.random.rand(size) < p, w1, w2)
+
+
+class _ModelWrapper(BaseEstimator):
+    """A wrapper class to make a model function compatible with RANSACRegressor.
+
+    This class takes a callable model function and wraps it in a scikit-learn
+    BaseEstimator structure. This allows parameter estimation with the RANSAC
+    algorithm.
+
+    Attributes:
+        model_func: The callable function representing the model to be fitted.
+            This function should take x-values as its first argument, followed
+            by model parameters.
+        params: The fitted parameters of the model after `fit` is called.
+            None if the model has not been fitted.
+    """
+
+    def __init__(
+        self, model_func: Callable[..., npt.NDArray[np.floating]]
+    ) -> None:
+        """Initialize the ModelWrapper.
+
+        Args:
+            model_func: The callable function representing the model to be
+                fitted.
+        """
+        self.model_func = model_func
+        self.params = None
+
+    def fit(
+        self, x: npt.NDArray[np.floating], y: npt.NDArray[np.floating]
+    ) -> _ModelWrapper:
+        """Fit the model to the provided data.
+
+        Uses `scipy.optimize.curve_fit` to find the optimal parameters for the
+        `model_func` given the input data `x` and `y`.
+
+        Args:
+            x: Observed data on the x-axis (independent variable).
+            y: Observed data on the y-axis (dependent variable).
+
+        Returns:
+            The fitted ModelWrapper instance.
+        """
+        self.params, _ = curve_fit(self.model_func, x.ravel(), y, maxfev=10000)
+        return self
+
+    def predict(self, x: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]:
+        """Predict target values for the given data using the fitted model.
+
+        Args:
+            x: The independent variable data for which to make predictions.
+
+        Returns:
+            The predicted target values.
+        """
+        if self.params is None:
+            raise NotFittedError(
+                "Model is not fitted yet. Call 'fit' before 'predict'."
+            )
+        return self.model_func(x.ravel(), *self.params)
+
+    def score(
+        self, x: npt.NDArray[np.floating], y: npt.NDArray[np.floating]
+    ) -> float:
+        """Calculate the R-squared score for the model.
+
+        Args:
+            x: Observed data on the x-axis (independent variable).
+            y: Observed data on the y-axis (dependent variable).
+
+        Returns:
+            The R-squared score.
+        """
+        y_preds = self.predict(x)
+        ss_res = np.sum((y - y_preds) ** 2)
+        ss_tot = np.sum((y - np.mean(y)) ** 2)
+        return 1 - ss_res / ss_tot
+
+
+def bootstrap_confidence_intervals(
+    x_data: npt.NDArray[np.floating],
+    y_data: npt.NDArray[np.floating],
+    model_func: Callable[..., npt.NDArray[np.floating]],
+    x_query: npt.NDArray[np.floating],
+    confs: Sequence[float],
+    n_bootstraps: int = 500,
+) -> tuple[
+    npt.NDArray[np.floating],
+    list[tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]],
+]:
+    """Calculate confidence intervals using wild bootstrapping.
+
+    This function fits a model to the provided data using RANSAC and calculates
+    confidence intervals for the predictions at specified `x_query` points.
+
+    A confidence interval is a range of values that is likely to contain the
+    true value of a parameter with a specified level of confidence. More
+    specifically, for each given x_query point, the function returns the
+    following:
+    - The most likely y value (the model prediction).
+    - Two bounds between which the true y value is expected to lie with a
+      certain confidence level (e.g. 68% and 95%).
+
+    The function is able to deal with the following issues well:
+    - Heteroscedasticity: The residuals (differences between observed and
+      predicted values) do not have constant variance.
+    - Non-normal distribution of residuals: The residuals do not follow a normal
+      distribution but follow an unknown distribution.
+    - Asymmetric residuals: The negative and positive residuals may not be
+      symmetrically distributed around the "true" value.
+    - Outliers: The data may contain outliers that can affect the model fitting.
+
+    Args:
+        x_data: Observed data on the x-axis (independent variable).
+            Shape: [N]
+        y_data: Observed data on the y-axis (dependent variable).
+            Shape: [N]
+        model_func: A function that is assumed to be able to represent the
+            data's underlying trend. This function should take an array of
+            x-values as its first argument, followed by the model parameters.
+            For example, if you assume a linear model, the function body should
+            be `a * x + b`, where `a` and `b` are the parameters to be fitted.
+        x_query: The x-values for which to calculate confidence intervals.
+            Shape: [M]
+        confs: A sequence of confidence levels (as percentages) for which to
+            calculate the confidence intervals. For example, if you want 68% and
+            95% confidence intervals, you would pass `(68, 95)`.
+            Length: C
+        n_bootstraps: The number of bootstrap samples to generate. A higher
+            number of bootstraps will result in more smooth and accurate
+            confidence intervals, but will also increase the computation time.
+
+    Returns:
+        Tuple containing:
+        - The y predictions for each `x_query` point based on the fitted model
+          that was generated using RANSAC.
+          Shape: [M]
+        - List of tuples of lower and upper bounds, one tuple for each
+          confidence interval. Each tuple contains:
+            - Smoothed lower bound of the interval.
+              Shape: [M]
+            - Smoothed upper bound of the interval.
+              Shape: [M]
+          Length: C
+    """
+    # Here's how this function works on a high level:
+    # 1. Model fitting: The function first fits a model to the provided `x_data`
+    #    and `y_data` using RANSAC.
+    # 2. Residual calculation: The residuals (differences between the observed
+    #    `y_data` and model predictions) are calculated.
+    # 3. Bootstrapping: Artificial samples (bootstraps) are generated by
+    #    perturbing each residual using the local neighborhood around it. This
+    #    is called "wild bootstrapping", see the following for more details:
+    #    https://en.wikipedia.org/wiki/Bootstrapping_(statistics)#Wild_bootstrap
+    #    For each bootstrap sample, a new model is fit around the artificial
+    #    data (without using RANSAC for efficiency reasons). The `y` values
+    #    are again predicted, now using the bootstrapped model.
+    # 4. Confidence interval calculation: Lastly, it calculates the specified
+    #    intervals (e.g. 68% and 95%) of the predicted `y` values across all
+    #    bootstrap samples to form the lower and upper bounds of the confidence
+    #    intervals. These bounds are then smoothed using a Gaussian filter to
+    #    reduce the disparity between neighboring query points.
+
+    # Reshape the data to ensure it is 2D, as required by sklearn.
+    N = len(x_data)  # Number of data points
+    x_data_reshaped = x_data.reshape(-1, 1)  # [N, 1]
+    x_query_reshaped = x_query.reshape(-1, 1)  # [M, 1]
+
+    # Step 1: Fit the model using RANSAC.
+    P = len(inspect.signature(model_func).parameters)
+    ransac = RANSACRegressor(estimator=_ModelWrapper(model_func), min_samples=P)
+    ransac.fit(x_data_reshaped, y_data)
+    popt: npt.NDArray[np.floating] = ransac.estimator_.params  # [P]
+    y_preds = model_func(x_query, *popt)  # [M]
+
+    # Step 2: Calculate residuals.
+    y_fit = model_func(x_data, *popt)  # [N]
+    residuals = y_data - y_fit  # [N]
+
+    # Fit KNN once to avoid repeated work.
+    knn = NearestNeighbors(n_neighbors=N)
+    knn.fit(x_data_reshaped)
+    dists, nbr_idcs = knn.kneighbors(x_query_reshaped)  # [M, N], [M, N]
+    dists = np.take_along_axis(dists, nbr_idcs, axis=1)  # sort to match x_query
+    dists /= np.ptp(x_data)  # normalize for better weight calculation
+
+    # Calculate weights for each neighbor based on distance.
+    weights = np.exp(-20 * dists**2)  # [M, N]
+    weights = np.where(weights >= 1e-10, weights, 1e-10)  # avoid zero weights
+    weights /= np.sum(weights, axis=1, keepdims=True)  # normalize weights
+
+    # Perform local residual resampling for each x_query point.
+    # This is done in advance to avoid repeated work in the bootstrapping step.
+    local_residuals = np.stack([
+        np.random.choice(
+            residuals, size=n_bootstraps, p=weights_i
+        )  # [n_bootstraps]
+        for weights_i in weights
+    ])  # [M, n_bootstraps]
+
+    # Step 3: Wild bootstrapping.
+    y_boots = []
+    for b in tqdm(range(n_bootstraps)):
+        # Generate wild bootstrap noise.
+        wild_noise_boot = residuals * _mammen_rvs(N)  # [N]
+        y_boot = y_fit + wild_noise_boot  # [N]
+
+        # Fit model to bootstrapped data.
+        popt_boot, _ = curve_fit(model_func, x_data, y_boot, p0=popt)  # [P], _
+
+        # Perform local residual resampling for each x_query point.
+        local_residuals_boot = local_residuals[:, b]  # [M]
+
+        # Add local noise to simulate new observations.
+        y_boot = model_func(x_query, *popt_boot) + local_residuals_boot  # [M]
+        y_boots.append(y_boot)
+
+    y_boots = np.stack(y_boots)  # [n_bootstraps, M]
+    y_intervals = []
+    for conf in confs:
+        lower_bound = (100 - conf) / 2
+        upper_bound = 100 - lower_bound
+
+        # Calculate the percentiles for the confidence intervals.
+        y_low, y_high = np.percentile(
+            y_boots, [lower_bound, upper_bound], axis=0
+        )  # [M], [M]
+
+        # Smooth the bounds using a Gaussian filter.
+        y_low = gaussian_filter1d(y_low, sigma=2)
+        y_high = gaussian_filter1d(y_high, sigma=2)
+        y_intervals.append((y_low, y_high))
+
+    return y_preds, y_intervals
+
+
+def main(args: argparse.Namespace) -> None:
+    """The entry point of the program.
+
+    Args:
+        args: The command line arguments.
+    """
+
+    def linear(x: np.ndarray, a: float, b: float) -> np.ndarray:
+        return a * x + b
+
+    def exponential(x: np.ndarray, a: float, b: float) -> np.ndarray:
+        return a * np.exp(b * x)
+
+    # Set the random seed for reproducibility.
+    np.random.seed(42)
+
+    # Generate artificial datasets.
+    n = 100
+    x = np.linspace(0, 10, n)
+
+    # 1. Asymmetric residuals.
+    true_y1 = linear(x, 2.0, 1.0)
+    noise1 = np.where(
+        np.random.randn(n) > 0,
+        np.abs(np.random.normal(0, 0.5, n)),
+        -np.abs(np.random.normal(0, 3.0, n)),
+    )
+    y1 = true_y1 + noise1
+
+    # 2. Exponential model.
+    true_y2 = exponential(x, 1.0, 0.3)
+    noise2 = np.random.normal(0, 5.0, size=n)
+    y2 = true_y2 + noise2
+
+    # 3. Heteroscedastic noise.
+    true_y3 = linear(x, -1.5, 20)
+    noise3 = np.random.normal(0, 0.2 + 0.4 * x, size=n)
+    y3 = true_y3 + noise3
+
+    # 4. Assymetric and heteroscedastic noise, exponential model.
+    true_y4 = exponential(x, 1.0, 0.3)
+    noise4 = np.where(
+        np.random.randn(n) > 0,
+        np.abs(np.random.normal(0, 3.0 + 1.0 * x, n)),
+        -np.abs(np.random.normal(0, 0.5 + 0.4 * x, n)),
+    )
+    y4 = true_y4 + noise4
+
+    # Gather the datasets for plotting.
+    datasets = [
+        (x, y1, linear, "Asymmetric Noise"),
+        (x, y2, exponential, "Exponential Model"),
+        (x, y3, linear, "Heteroscedastic Noise"),
+        (x, y4, exponential, "Everything Together"),
+    ]
+
+    # Plot the confidence intervals.
+    _, axs = plt.subplots(2, 2, figsize=(10, 8))
+    x_query = np.linspace(x.min(), x.max(), 200)
+
+    for ax, (x_data, y_data, model_func, title) in zip(axs.flatten(), datasets):
+        ax = cast(plt.Axes, ax)
+        confs = (95, 68)
+        colors = ["red", "orange"]
+        alphas = [0.2, 0.4]
+
+        # Fit the model and calculate confidence intervals.
+        y_preds, y_intervals = bootstrap_confidence_intervals(
+            x_data, y_data, model_func, x_query, confs
+        )
+
+        # Plot the observed data.
+        ax.scatter(x_data, y_data, alpha=0.5, label="Data")
+
+        # Plot the confidence intervals.
+        for (y_low, y_high), conf, color, alpha in zip(
+            y_intervals, confs, colors, alphas
+        ):
+            ax.fill_between(
+                x_query,
+                y_low,
+                y_high,
+                color=color,
+                alpha=alpha,
+                label=f"{conf}%",
+            )
+
+        # Plot the fitted curve.
+        ax.plot(x_query, y_preds, color="black", label="Fitted Curve")
+
+        # Set figure-wide properties.
+        ax.set_title(title)
+        ax.legend()
+
+    plt.tight_layout()
+    plt.show()
+
+
+if __name__ == "__main__":
+    from loguru import logger
+
+    # Create the argument parser.
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+
+    # Define command line arguments.
+    parser.add_argument(
+        "--logging_level",
+        type=str,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        default="INFO",
+        help="The logging level to use.",
+    )
+
+    # Parse the command line arguments.
+    args = parser.parse_args()
+
+    # Configure the root logger.
+    logger.remove()
+    logger.add(
+        sys.stderr,
+        level=args.logging_level,
+        format=(
+            "<green>{time:HH:mm:ss}</green>"
+            + " | <level>{level:<8}</level>"
+            + " | <cyan>{name}:{line}</cyan>"
+            + " | <level>{message}</level>"
+        ),
+        filter={
+            "": "INFO",  # Default level for external libraries.
+            "__main__": "TRACE",  # All levels for the main file.
+            __package__: "TRACE",  # All levels for internal modules.
+        },
+    )
+
+    # Log the command line arguments for reproducibility.
+    logger.debug(f"{args=}")
+
+    # Run the program.
+    with logger.catch():
+        main(args)

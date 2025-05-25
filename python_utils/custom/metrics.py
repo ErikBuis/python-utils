@@ -42,18 +42,14 @@ def calculate_metrics_binary(
     )
 
     # Calculate precision, recall, and F1-score for both classes.
-    precision_pos = (
-        TP / (TP + FP) if not math.isclose(TP + FP, 0) else math.nan
-    )
+    precision_pos = TP / (TP + FP) if not math.isclose(TP + FP, 0) else math.nan
     recall_pos = TP / (TP + FN) if not math.isclose(TP + FN, 0) else math.nan
     F1_pos = (
         2 * TP / (2 * TP + FN + FP)
         if not math.isclose(TP + FN + FP, 0)
         else math.nan
     )
-    precision_neg = (
-        TN / (TN + FN) if not math.isclose(TN + FN, 0) else math.nan
-    )
+    precision_neg = TN / (TN + FN) if not math.isclose(TN + FN, 0) else math.nan
     recall_neg = TN / (TN + FP) if not math.isclose(TN + FP, 0) else math.nan
     F1_neg = (
         2 * TN / (2 * TN + FN + FP)
@@ -260,9 +256,7 @@ def determine_extreme_model_metric(
     if frac_labels_pos is None or frac_preds_pos is None:
         extreme_factor = -1 if extreme == "best" else 1
 
-        def calc_metrics_func_partial(
-            frac_pos: float,
-        ) -> float:  # type: ignore
+        def calc_metrics_func_partial(frac_pos: float) -> float:  # type: ignore
             if frac_labels_pos is None:
                 return (
                     calc_metrics_func(frac_pos, frac_preds_pos)  # type: ignore
@@ -554,9 +548,7 @@ def main(args: argparse.Namespace) -> None:
             ]  # [M]
 
     # Plot the metrics in 3D space.
-    ncols, nrows = optimal_grid_layout(
-        len(args.metrics_to_analyze), max_rows=4
-    )
+    ncols, nrows = optimal_grid_layout(len(args.metrics_to_analyze), max_rows=4)
     size_x, size_y = optimal_size(ncols / nrows, max_size_x=15, max_size_y=10)
     _, axs = plt.subplots(
         nrows,
@@ -626,9 +618,7 @@ def main(args: argparse.Namespace) -> None:
 
         # Plot the avg of the best and worst models as a purple wireframe.
         if show_average:
-            metric_average = (
-                metric_best + metric_worst
-            ) / 2  # [R^2 + (R-1)^2]
+            metric_average = (metric_best + metric_worst) / 2  # [R^2 + (R-1)^2]
             ax.plot_trisurf(
                 frac_labels_poss,  # [R^2 + (R-1)^2]
                 frac_preds_poss,  # [R^2 + (R-1)^2]
