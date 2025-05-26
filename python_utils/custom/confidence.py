@@ -1,5 +1,3 @@
-# TODO Actually make this code a usable util function
-
 from __future__ import annotations
 
 import argparse
@@ -46,7 +44,7 @@ def _mammen_rvs(size: int) -> npt.NDArray[np.float64]:
 
 
 class _ModelWrapper(BaseEstimator):
-    """A wrapper class to make a model function compatible with RANSACRegressor.
+    """Wrapper class to make a model function compatible with RANSACRegressor.
 
     This class takes a callable model function and wraps it in a scikit-learn
     BaseEstimator structure. This allows parameter estimation with the RANSAC
@@ -117,7 +115,7 @@ class _ModelWrapper(BaseEstimator):
 
     def score(
         self, x: npt.NDArray[np.floating], y: npt.NDArray[np.floating]
-    ) -> float:
+    ) -> np.floating:
         """Calculate the R-squared score for the model.
 
         Args:
@@ -143,7 +141,6 @@ def bootstrap_confidence_intervals(
     curve_fit_kwargs: dict[str, Any] = {},
 ) -> tuple[
     npt.NDArray[np.float64],
-    npt.NDArray[np.floating],
     list[tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]],
 ]:
     """Calculate confidence intervals using wild bootstrapping.
@@ -155,8 +152,8 @@ def bootstrap_confidence_intervals(
     true value of a parameter with a specified level of confidence. More
     specifically, for each given x_query point, the function returns the
     following:
-    - The most likely y value (the model prediction).
-    - Two bounds between which the true y value is expected to lie with a
+    - The most likely y-value (the model prediction).
+    - Two bounds between which the true y-value is expected to lie with a
       certain confidence level (e.g. 68% and 95%).
 
     The function is able to deal with the following issues well:
@@ -195,9 +192,6 @@ def bootstrap_confidence_intervals(
         Tuple containing:
         - The optimal parameter values found by the model fitted with RANSAC.
           Shape: [P]
-        - The y predictions for each `x_query` point based on the fitted model
-          that was generated using RANSAC.
-          Shape: [M]
         - List of tuples of lower and upper bounds, one tuple for each
           confidence interval. Each tuple contains:
             - Smoothed lower bound of the interval.
@@ -237,7 +231,6 @@ def bootstrap_confidence_intervals(
     )
     ransac.fit(x_data_reshaped, y_data)
     popt = ransac.estimator_.params  # [P]
-    y_preds = model_func(x_query, *popt)  # [M]
     curve_fit_kwargs["p0"] = popt
 
     # Step 2: Calculate residuals.
@@ -252,7 +245,7 @@ def bootstrap_confidence_intervals(
     dists /= np.ptp(x_data)  # normalize for better weight calculation
 
     # Calculate weights for each neighbor based on distance.
-    weights = np.exp(-20 * dists ** 2)  # [M, K]
+    weights = np.exp(-20 * dists**2)  # [M, K]
     weights = np.where(weights >= 1e-10, weights, 1e-10)  # avoid zero weights
     weights /= np.sum(weights, axis=1, keepdims=True)  # normalize weights
 
@@ -306,7 +299,76 @@ def bootstrap_confidence_intervals(
         y_high = gaussian_filter1d(y_high, sigma=2)
         y_intervals.append((y_low, y_high))
 
-    return popt, y_preds, y_intervals
+    return popt, y_intervals
+
+
+def remap_unseen_x_to_y_intervals(
+    x_unseen: npt.NDArray[np.floating],
+    model_func: Callable[..., npt.NDArray[np.floating]],
+    popt: npt.NDArray[np.floating],
+    x_query: npt.NDArray[np.floating],
+    y_intervals: list[
+        tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]
+    ],
+) -> tuple[
+    npt.NDArray[np.floating],
+    list[tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]],
+]:
+    """Remap unseen x-values to predicted y-values and confidence intervals.
+
+    This function takes the x-values and the fitted model parameters, and remaps
+    the y-intervals to the corresponding x-values. This is useful when you
+    want to get a predicted y-value together with its confidence for an unseen
+    x value.
+
+    Args:
+        x_unseen: The unseen x-values to remap to y-values and confidence
+            scores.
+            Shape: [U]
+        model_func: The model function used to fit the data. This function
+            should take an array of x-values as its first argument, followed by
+            the model parameters.
+        popt: The optimal parameters calculated by the
+            `bootstrap_confidence_intervals` function.
+            Shape: [P]
+        x_query: The x-values for which the confidence intervals were
+            calculated. This is the same as the `x_query` parameter passed to
+            the `bootstrap_confidence_intervals` function.
+            Shape: [M]
+        y_intervals: The confidence intervals calculated by the
+            `bootstrap_confidence_intervals` function. This is a list of tuples
+            of lower and upper bounds, one tuple for each confidence interval.
+            Each tuple contains:
+                - Smoothed lower bound of the interval.
+                Shape: [M]
+                - Smoothed upper bound of the interval.
+                Shape: [M]
+            Length: C
+
+    Returns:
+        Tuple containing:
+        - The predicted y-values for the given x_unseen.
+          Shape: [U]
+        - List of tuples of lower and upper bounds, one tuple for each
+          confidence interval. Each tuple contains:
+            - Smoothed lower bound of the interval.
+              Shape: [U]
+            - Smoothed upper bound of the interval.
+              Shape: [U]
+          Length: C
+    """
+    # Predict the y-values for the unseen x-values.
+    y_pred_unseen = model_func(x_unseen, *popt)  # [U]
+
+    # Map each x_unseen to the corresponding confidence intervals.
+    y_intervals_unseen = []
+    for y_low, y_high in y_intervals:
+        # Interpolate the y-intervals to the unseen x-values.
+        y_low_unseen = np.interp(x_unseen, x_query, y_low)  # [U]
+        y_high_unseen = np.interp(x_unseen, x_query, y_high)  # [U]
+        y_intervals_unseen.append((y_low_unseen, y_high_unseen))
+
+    return y_pred_unseen, y_intervals_unseen
 
 
 def main(args: argparse.Namespace) -> None:
@@ -331,6 +393,8 @@ def main(args: argparse.Namespace) -> None:
 
     # Generate artificial datasets.
     N = 1000
+    M = 50
+    U = 100
     x = np.linspace(0, 10, N)
 
     # Dataset 1: Asymmetric residuals.
@@ -383,7 +447,8 @@ def main(args: argparse.Namespace) -> None:
 
     # Plot the confidence intervals.
     _, axs = plt.subplots(2, 2, figsize=(10, 8))
-    x_query = np.linspace(x.min(), x.max(), 200)
+    x_query = np.linspace(x.min(), x.max(), M)
+    x_unseen = np.linspace(x.min(), x.max(), U)
 
     for ax, (x_data, y_data, model_func, title, formula) in zip(
         axs.flatten(), datasets
@@ -394,7 +459,7 @@ def main(args: argparse.Namespace) -> None:
         alphas = [0.2, 0.4]
 
         # Fit the model and calculate confidence intervals.
-        popt, y_preds, y_intervals = bootstrap_confidence_intervals(
+        popt, y_intervals = bootstrap_confidence_intervals(
             x_data,
             y_data,
             model_func,
@@ -402,27 +467,30 @@ def main(args: argparse.Namespace) -> None:
             confs,
             curve_fit_kwargs={"maxfev": 10000, "sigma": 5},
         )
+        y_pred_unseen, y_intervals_unseen = remap_unseen_x_to_y_intervals(
+            x_unseen, model_func, popt, x_query, y_intervals
+        )
 
         # Plot the observed data.
         ax.scatter(x_data, y_data, alpha=0.5, label="Data")
 
         # Plot the confidence intervals.
-        for (y_low, y_high), conf, color, alpha in zip(
-            y_intervals, confs, colors, alphas
+        for (y_low_unseen, y_high_unseen), conf, color, alpha in zip(
+            y_intervals_unseen, confs, colors, alphas
         ):
             ax.fill_between(
-                x_query,
-                y_low,
-                y_high,
+                x_unseen,
+                y_low_unseen,
+                y_high_unseen,
                 color=color,
                 alpha=alpha,
                 label=f"{conf}%",
             )
 
-        # Plot the fitted curve.
+        # Plot the predictions for the unseen x-values.
         ax.plot(
-            x_query,
-            y_preds,
+            x_unseen,
+            y_pred_unseen,
             color="black",
             label=f"Fitted Curve: ${formula.format(*popt)}$",
         )
