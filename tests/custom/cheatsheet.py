@@ -346,9 +346,7 @@ class TestReverseDigraph(unittest.TestCase):
 
     def test_reverse_tree(self) -> None:
         reversed_graph = cheatsheet.reverse_digraph(self.tree)
-        self.assertListEqual(
-            reversed_graph, [[], [0], [0], [0], [1], [1], [2]]
-        )
+        self.assertListEqual(reversed_graph, [[], [0], [0], [0], [1], [1], [2]])
 
 
 class TestKahn(unittest.TestCase):

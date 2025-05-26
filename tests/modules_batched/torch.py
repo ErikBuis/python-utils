@@ -12,9 +12,7 @@ class TestInterpBatched(unittest.TestCase):
     def test_interp_batched_equivalent_np(self) -> None:
         B = 10
         x = torch.rand((B, 100)) * 102 - 1  # in [-1, 101)
-        xp = (
-            torch.sort(torch.rand((B, 100)), dim=1).values * 100
-        )  # in [0, 100)
+        xp = torch.sort(torch.rand((B, 100)), dim=1).values * 100  # in [0, 100)
         fp = torch.rand((B, 100))  # in [0, 1)
         left = torch.full((B,), -1)
         right = torch.full((B,), 101)

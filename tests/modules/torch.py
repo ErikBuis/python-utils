@@ -266,9 +266,7 @@ class TestUnique(unittest.TestCase):
         self.assertTrue(
             torch.equal(
                 uniques,
-                torch.as_tensor(
-                    [[7, 9, 10], [8, 10, 9], [9, 8, 7], [9, 7, 7]]
-                ),
+                torch.as_tensor([[7, 9, 10], [8, 10, 9], [9, 8, 7], [9, 7, 7]]),
             )
         )
         self.assertTrue(torch.equal(backmap, torch.as_tensor([2, 0, 3, 1])))
@@ -284,9 +282,7 @@ class TestUnique(unittest.TestCase):
             )
         )
 
-        self.assertTrue(
-            torch.equal(backmap[: counts[0]], torch.as_tensor([2]))
-        )
+        self.assertTrue(torch.equal(backmap[: counts[0]], torch.as_tensor([2])))
 
         cumcounts = counts.cumsum(dim=0)
         get_idcs = lambda i: backmap[
@@ -334,9 +330,7 @@ class TestUnique(unittest.TestCase):
             )
         )
 
-        self.assertTrue(
-            torch.equal(backmap[: counts[0]], torch.as_tensor([0]))
-        )
+        self.assertTrue(torch.equal(backmap[: counts[0]], torch.as_tensor([0])))
 
         cumcounts = counts.cumsum(dim=0)
         get_idcs = lambda i: backmap[

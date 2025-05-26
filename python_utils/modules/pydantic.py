@@ -52,9 +52,7 @@ try:
     GeoDataFrameAnn = Annotated[
         gpd.GeoDataFrame,
         GetPydanticSchema(
-            lambda tp, handler: core_schema.is_instance_schema(
-                gpd.GeoDataFrame
-            )
+            lambda tp, handler: core_schema.is_instance_schema(gpd.GeoDataFrame)
         ),
     ]
 except ImportError:

@@ -527,9 +527,7 @@ class TestNumberSet(unittest.TestCase):
         self.assertEqual(self.numberset[1], geometry.Interval("[", 1, 2, "]"))
         self.assertEqual(self.numberset[2], geometry.Interval("(", 3, 5, ")"))
         self.assertEqual(self.numberset[3], geometry.Interval("(", 5, 6, ")"))
-        self.assertEqual(
-            self.numberset[4], geometry.Interval("(", 8, inf, "]")
-        )
+        self.assertEqual(self.numberset[4], geometry.Interval("(", 8, inf, "]"))
         self.assertEqual(self.numberset[-5], 0)
         self.assertEqual(self.numberset[-4], geometry.Interval("[", 1, 2, "]"))
         self.assertEqual(self.numberset[-3], geometry.Interval("(", 3, 5, ")"))
@@ -633,9 +631,7 @@ class TestNumberSet(unittest.TestCase):
 
     # __contains__ should return True iff the given interval is in the set.
     def test_contains_interval(self) -> None:
-        self.assertFalse(
-            geometry.Interval("[", -inf, 0, "]") in self.numberset
-        )
+        self.assertFalse(geometry.Interval("[", -inf, 0, "]") in self.numberset)
         self.assertFalse(geometry.Interval("[", 0, 1, "]") in self.numberset)
         self.assertTrue(geometry.Interval("[", 1, 2, ")") in self.numberset)
         self.assertFalse(geometry.Interval("(", 2, 3, ")") in self.numberset)
@@ -1274,9 +1270,7 @@ class TestNumberSet(unittest.TestCase):
     # __or__ should return the correct set if the other set is full.
     def test_or_other_full(self) -> None:
         numberset = self.numberset | self.numberset_full
-        self.assertEqual(
-            numberset._boundaries, self.numberset_full._boundaries
-        )
+        self.assertEqual(numberset._boundaries, self.numberset_full._boundaries)
         self.assertEqual(
             numberset._boundaries_included,
             self.numberset_full._boundaries_included,
@@ -2141,9 +2135,7 @@ class TestNumberSet(unittest.TestCase):
         self.assertEqual(subset._boundaries_included, [True, True, True, True])
         subset = self.numberset._extract_subset(-inf, 2, True, False, "01")
         self.assertEqual(subset._boundaries, [0, 0, 1, 2])
-        self.assertEqual(
-            subset._boundaries_included, [True, True, True, False]
-        )
+        self.assertEqual(subset._boundaries_included, [True, True, True, False])
         subset = self.numberset._extract_subset(2, inf, True, True, "01")
         self.assertEqual(subset._boundaries, [2, 2, 3, 5, 5, 6, 8, inf])
         self.assertEqual(
@@ -2586,8 +2578,7 @@ class TestNumberSet(unittest.TestCase):
         self.assertTrue(numberset.is_interval())
 
         numberset = geometry.NumberSet(
-            geometry.Interval("[", 3, 4, "]"),
-            geometry.Interval("[", 5, 6, "]"),
+            geometry.Interval("[", 3, 4, "]"), geometry.Interval("[", 5, 6, "]")
         )
         self.assertFalse(numberset.is_interval())
 
@@ -2603,14 +2594,12 @@ class TestNumberSet(unittest.TestCase):
         self.assertTrue(numberset.is_reducible())
 
         numberset = geometry.NumberSet(
-            geometry.Interval("[", 3, 4, "]"),
-            geometry.Interval("[", 5, 6, "]"),
+            geometry.Interval("[", 3, 4, "]"), geometry.Interval("[", 5, 6, "]")
         )
         self.assertFalse(numberset.is_reducible())
 
         numberset = geometry.NumberSet(
-            geometry.Interval("[", 3, 4, "]"),
-            geometry.Interval("[", 4, 5, "]"),
+            geometry.Interval("[", 3, 4, "]"), geometry.Interval("[", 4, 5, "]")
         )
         self.assertTrue(numberset.is_reducible())
 
@@ -2626,14 +2615,12 @@ class TestNumberSet(unittest.TestCase):
         self.assertEqual(numberset.reduce(), geometry.Interval("[", 3, 4, "]"))
 
         numberset = geometry.NumberSet(
-            geometry.Interval("[", 3, 4, "]"),
-            geometry.Interval("[", 5, 6, "]"),
+            geometry.Interval("[", 3, 4, "]"), geometry.Interval("[", 5, 6, "]")
         )
         self.assertEqual(numberset.reduce(), numberset)
 
         numberset = geometry.NumberSet(
-            geometry.Interval("[", 3, 4, "]"),
-            geometry.Interval("[", 4, 5, "]"),
+            geometry.Interval("[", 3, 4, "]"), geometry.Interval("[", 4, 5, "]")
         )
         self.assertEqual(numberset.reduce(), geometry.Interval("[", 3, 5, "]"))
 

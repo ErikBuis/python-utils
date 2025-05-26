@@ -180,8 +180,7 @@ def __is_point_in_polygon_simple_batched(
             #       = (y - yi) / m + xi
             #       = (y - yi) * (xj - xi) / (yj - yi) + xi
             x
-            < (xj - xi) / (yj - yi) * (y - yi)  # swap order for efficiency
-            + xi
+            < (xj - xi) / (yj - yi) * (y - yi) + xi  # swap order for efficiency
         )
     return in_polygon
 
@@ -249,9 +248,7 @@ def is_point_in_polygon_batched(
     if points.ndim == 1:
         points = points.unsqueeze(0)
 
-    exterior = torch.tensor(
-        polygon.exterior.coords, device=device, dtype=dtype
-    )
+    exterior = torch.tensor(polygon.exterior.coords, device=device, dtype=dtype)
     if not polygon.interiors:
         return __is_point_in_polygon_simple_batched(exterior, points)
     interiors = [

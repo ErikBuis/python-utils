@@ -1411,12 +1411,9 @@ class NumberSet:
                 curr_abc_ends_idx = len(curr_sets)
 
             # Add the current number to the lookup table.
-            lookup.append((
-                curr_number,
-                curr_sets,
-                curr_abc_ends_idx,
-                curr_bcd_starts_idx,
-            ))
+            lookup.append(
+                (curr_number, curr_sets, curr_abc_ends_idx, curr_bcd_starts_idx)
+            )
 
         # Now, we can easily find the sets that contain a number.
         # Runtime: O(N * (log(C) + S))
@@ -1884,9 +1881,7 @@ class NumberSet:
             idx_start = new_idx_start
 
         boundaries.extend(subsets[-1]._boundaries[idx_start:])
-        boundaries_included.extend(
-            subsets[-1]._boundaries_included[idx_start:]
-        )
+        boundaries_included.extend(subsets[-1]._boundaries_included[idx_start:])
 
         return boundaries, boundaries_included
 

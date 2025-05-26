@@ -145,9 +145,7 @@ class TestRemapSeriesToIdcs:
         """Test behavior when provided values_unique is empty."""
         series = pd.Series([10, 20, 30])
         values_unique = np.array([], dtype=np.int64)
-        expected_remapped = np.array(
-            [np.nan, np.nan, np.nan], dtype=np.float64
-        )
+        expected_remapped = np.array([np.nan, np.nan, np.nan], dtype=np.float64)
 
         unique, value2idx, remapped = remap_series_to_idcs(
             series, values_unique

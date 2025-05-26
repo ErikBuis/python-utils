@@ -107,6 +107,5 @@ class TestGetMatrixRotateVecAToVecB(unittest.TestCase):
             b = to_n.unsqueeze(1)  # [1, 1, 3]
             Ra = self.__transform_points(R, a)  # [1, 1, 3]
             self.assertTrue(
-                torch.allclose(Ra, b, atol=1e-6),
-                f"Ra != b\nRa = {Ra}\nb = {b}",
+                torch.allclose(Ra, b, atol=1e-6), f"Ra != b\nRa = {Ra}\nb = {b}"
             )

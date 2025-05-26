@@ -1000,9 +1000,7 @@ def depthfirst_pre_order(adjlist: list[list[int]], root: int) -> Iterator[int]:
         stack.extend(reversed(adjlist[v]))
 
 
-def depthfirst_post_order(
-    adjlist: list[list[int]], root: int
-) -> Iterator[int]:
+def depthfirst_post_order(adjlist: list[list[int]], root: int) -> Iterator[int]:
     """Yield vertices from the tree rooted at root in post-order.
 
     A post-order traversal visits the root after its children.

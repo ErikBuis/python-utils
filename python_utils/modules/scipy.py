@@ -175,9 +175,7 @@ def plot_fitted_curve(
     # Calculate confidence intervals with varying width.
     y_upper = np.full_like(y_fitted, np.nan)
     y_lower = np.full_like(y_fitted, np.nan)
-    full_width = (
-        np.log10(x[-1]) - np.log10(x[0]) if log_scale else x[-1] - x[0]
-    )
+    full_width = np.log10(x[-1]) - np.log10(x[0]) if log_scale else x[-1] - x[0]
     sliding_window_half_width = full_width * sliding_window / 2
     left_bounds = (
         10 ** (np.log10(x_space) - sliding_window_half_width)

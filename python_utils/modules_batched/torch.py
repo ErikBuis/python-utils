@@ -289,9 +289,7 @@ def stddev_padding_batched(
         values, L_bs, is_padding_zero=is_padding_zero
     )  # [B, *]
     values_centered = values - means.unsqueeze(1)  # [B, max(L_bs), *]
-    return mean_padding_batched(
-        values_centered.square(), L_bs
-    ).sqrt()  # [B, *]
+    return mean_padding_batched(values_centered.square(), L_bs).sqrt()  # [B, *]
 
 
 def min_padding_batched(
@@ -322,9 +320,7 @@ def min_padding_batched(
 
 
 def max_padding_batched(
-    values: torch.Tensor,
-    L_bs: torch.Tensor,
-    is_padding_minus_inf: bool = False,
+    values: torch.Tensor, L_bs: torch.Tensor, is_padding_minus_inf: bool = False
 ) -> torch.Tensor:
     """Calculate the maximum per dimension for each sample in the batch.
 

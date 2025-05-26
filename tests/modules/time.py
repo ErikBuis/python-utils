@@ -42,8 +42,7 @@ class TestHumanReadableTime(unittest.TestCase):
             human_readable_time(1234567890, abbreviate=False), "1.23 seconds"
         )
         self.assertEqual(
-            human_readable_time(234567890, abbreviate=False),
-            "235 milliseconds",
+            human_readable_time(234567890, abbreviate=False), "235 milliseconds"
         )
 
     def test_over_or_equal_to_one_minute(self) -> None:

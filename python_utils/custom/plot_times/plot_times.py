@@ -72,9 +72,7 @@ def plot_times(
     magic_colorbar = {"fraction": 0.046, "pad": 0.04}
 
     cache = (
-        pickle.load(open(path_to_cache, "rb"))
-        if path_to_cache.exists()
-        else {}
+        pickle.load(open(path_to_cache, "rb")) if path_to_cache.exists() else {}
     )
 
     # The cache is formatted like this:

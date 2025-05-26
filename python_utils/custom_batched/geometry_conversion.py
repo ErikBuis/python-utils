@@ -119,8 +119,7 @@ Attributes:
 """
 
 MultiPolygonExterior = NamedTuple(
-    "MultiPolygonExterior",
-    [("vertices", torch.Tensor), ("V_ps", torch.Tensor)],
+    "MultiPolygonExterior", [("vertices", torch.Tensor), ("V_ps", torch.Tensor)]
 )
 """The exterior of a MultiPolygon object.
 
@@ -197,10 +196,7 @@ Attributes:
 
 MultiPolygonVertices = NamedTuple(
     "MultiPolygonVertices",
-    [
-        ("exteriors", MultiPolygonExterior),
-        ("interiors", MultiPolygonInteriors),
-    ],
+    [("exteriors", MultiPolygonExterior), ("interiors", MultiPolygonInteriors)],
 )
 """The vertices of a MultiPolygon object.
 

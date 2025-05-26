@@ -114,8 +114,7 @@ def gaussian_batched(
 
 
 def monotonic_hyperbolic_rescaling_batched(
-    x: float | npt.NDArray | torch.Tensor,
-    r: float | npt.NDArray | torch.Tensor,
+    x: float | npt.NDArray | torch.Tensor, r: float | npt.NDArray | torch.Tensor
 ) -> torch.Tensor:
     """Monotonically rescale numbers using hyperbolic functions.
 

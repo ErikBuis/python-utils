@@ -42,33 +42,25 @@ class TestOptimalGridLayout(unittest.TestCase):
         self.assertEqual(cols, 2)
         self.assertEqual(rows, 12)
 
-    def test_optimal_grid_layout_constrained_nrows_x_ncols_eq_n_1(
-        self,
-    ) -> None:
+    def test_optimal_grid_layout_constrained_nrows_x_ncols_eq_n_1(self) -> None:
         n = 16
         cols, rows = optimal_grid_layout(n, max_cols=10, max_rows=3)
         self.assertEqual(cols, 8)
         self.assertEqual(rows, 2)
 
-    def test_optimal_grid_layout_constrained_nrows_x_ncols_eq_n_2(
-        self,
-    ) -> None:
+    def test_optimal_grid_layout_constrained_nrows_x_ncols_eq_n_2(self) -> None:
         n = 24
         cols, rows = optimal_grid_layout(n, max_cols=10, max_rows=10)
         self.assertEqual(cols, 4)
         self.assertEqual(rows, 6)
 
-    def test_optimal_grid_layout_constrained_nrows_x_ncols_gt_n_1(
-        self,
-    ) -> None:
+    def test_optimal_grid_layout_constrained_nrows_x_ncols_gt_n_1(self) -> None:
         n = 24
         cols, rows = optimal_grid_layout(n, max_cols=5, max_rows=5)
         self.assertEqual(cols, 5)
         self.assertEqual(rows, 5)
 
-    def test_optimal_grid_layout_constrained_nrows_x_ncols_gt_n_2(
-        self,
-    ) -> None:
+    def test_optimal_grid_layout_constrained_nrows_x_ncols_gt_n_2(self) -> None:
         n = 21
         cols, rows = optimal_grid_layout(n, max_cols=6, max_rows=6)
         self.assertEqual(cols, 4)

@@ -348,8 +348,7 @@ def ravel_multi_index(
         multi_index = torch.clamp(multi_index, torch.as_tensor(0), dims - 1)
     else:
         raise ValueError(
-            "clipmode must be one of 'clip', 'raise', or 'wrap' (got"
-            f" '{mode}')"
+            f"clipmode must be one of 'clip', 'raise', or 'wrap' (got '{mode}')"
         )
 
     return torch.sum(multi_index * factors, dim=0)  # [N_0, ..., N_{D-1}]

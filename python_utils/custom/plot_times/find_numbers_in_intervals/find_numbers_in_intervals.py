@@ -17,9 +17,9 @@ def contains_parallel_naive(
 ) -> list[list[int]]:
     results: list[list[int]] = []
     for number in numbers:
-        results.append([
-            i for i, numberset in enumerate(numbersets) if number in numberset
-        ])
+        results.append(
+            [i for i, numberset in enumerate(numbersets) if number in numberset]
+        )
     return results
 
 
