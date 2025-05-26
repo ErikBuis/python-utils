@@ -189,7 +189,9 @@ def bootstrap_confidence_intervals(
         curve_fit_kwargs: Keyword arguments to pass to
             `scipy.optimize.curve_fit`.
         ransac_regressor_kwargs: Keyword arguments to pass to
-            `sklearn.linear_model.RANSACRegressor`.
+            `sklearn.linear_model.RANSACRegressor`. If `min_samples` is not
+            provided, it will be set to the maximum of either the number of
+            parameters of the model function or `N // 4`.
 
     Returns:
         Tuple containing:
@@ -228,8 +230,8 @@ def bootstrap_confidence_intervals(
 
     # Step 1: Fit the model using RANSAC.
     if ransac_regressor_kwargs.get("min_samples") is None:
-        ransac_regressor_kwargs["min_samples"] = len(
-            inspect.signature(model_func).parameters
+        ransac_regressor_kwargs["min_samples"] = max(
+            len(inspect.signature(model_func).parameters), N // 4
         )
     ransac = RANSACRegressor(
         estimator=_ModelWrapper(model_func, curve_fit_kwargs=curve_fit_kwargs),
@@ -488,12 +490,7 @@ def main(args: argparse.Namespace) -> None:
             x_query,
             confs,
             curve_fit_kwargs={"maxfev": 10000, "bounds": bounds},
-            ransac_regressor_kwargs={
-                "min_samples": min(
-                    len(inspect.signature(model_func).parameters), N // 4
-                ),
-                "max_trials": 1000,
-            },
+            ransac_regressor_kwargs={"max_trials": 1000},
         )
         y_pred_unseen, y_intervals_unseen = remap_unseen_x_to_y_intervals(
             x_unseen, model_func, popt, x_query, y_intervals
