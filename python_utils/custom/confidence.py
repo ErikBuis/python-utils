@@ -6,7 +6,7 @@ import argparse
 import inspect
 import sys
 from collections.abc import Sequence
-from typing import Callable, cast
+from typing import Any, Callable, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -56,20 +56,28 @@ class _ModelWrapper(BaseEstimator):
         model_func: The callable function representing the model to be fitted.
             This function should take x-values as its first argument, followed
             by model parameters.
+        curve_fit_kwargs: Keyword arguments to pass to
+            `scipy.optimize.curve_fit`.
         params: The fitted parameters of the model after `fit` is called.
             None if the model has not been fitted.
     """
 
     def __init__(
-        self, model_func: Callable[..., npt.NDArray[np.floating]]
+        self,
+        model_func: Callable[..., npt.NDArray[np.floating]],
+        curve_fit_kwargs: dict[str, Any] = {},
     ) -> None:
         """Initialize the ModelWrapper.
 
         Args:
             model_func: The callable function representing the model to be
-                fitted.
+                fitted. This function should take x-values as its first
+                argument, followed by model parameters.
+            curve_fit_kwargs: Keyword arguments to pass to
+                `scipy.optimize.curve_fit`.
         """
         self.model_func = model_func
+        self.curve_fit_kwargs = curve_fit_kwargs
         self.params = None
 
     def fit(
@@ -87,7 +95,9 @@ class _ModelWrapper(BaseEstimator):
         Returns:
             The fitted ModelWrapper instance.
         """
-        self.params, _ = curve_fit(self.model_func, x.ravel(), y, maxfev=10000)
+        self.params, _ = curve_fit(
+            self.model_func, x.ravel(), y, **self.curve_fit_kwargs
+        )
         return self
 
     def predict(self, x: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]:
@@ -130,7 +140,9 @@ def bootstrap_confidence_intervals(
     x_query: npt.NDArray[np.floating],
     confs: Sequence[float],
     n_bootstraps: int = 500,
+    curve_fit_kwargs: dict[str, Any] = {},
 ) -> tuple[
+    npt.NDArray[np.float64],
     npt.NDArray[np.floating],
     list[tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]],
 ]:
@@ -166,6 +178,7 @@ def bootstrap_confidence_intervals(
             x-values as its first argument, followed by the model parameters.
             For example, if you assume a linear model, the function body should
             be `a * x + b`, where `a` and `b` are the parameters to be fitted.
+            Amount of parameters after first input: P
         x_query: The x-values for which to calculate confidence intervals.
             Shape: [M]
         confs: A sequence of confidence levels (as percentages) for which to
@@ -175,9 +188,13 @@ def bootstrap_confidence_intervals(
         n_bootstraps: The number of bootstrap samples to generate. A higher
             number of bootstraps will result in more smooth and accurate
             confidence intervals, but will also increase the computation time.
+        **curve_fit_kwargs: Keyword arguments to pass to
+            `scipy.optimize.curve_fit`.
 
     Returns:
         Tuple containing:
+        - The optimal parameter values found by the model fitted with RANSAC.
+          Shape: [P]
         - The y predictions for each `x_query` point based on the fitted model
           that was generated using RANSAC.
           Shape: [M]
@@ -214,62 +231,74 @@ def bootstrap_confidence_intervals(
 
     # Step 1: Fit the model using RANSAC.
     P = len(inspect.signature(model_func).parameters)
-    ransac = RANSACRegressor(estimator=_ModelWrapper(model_func), min_samples=P)
+    ransac = RANSACRegressor(
+        estimator=_ModelWrapper(model_func, curve_fit_kwargs=curve_fit_kwargs),
+        min_samples=P,
+    )
     ransac.fit(x_data_reshaped, y_data)
-    popt: npt.NDArray[np.floating] = ransac.estimator_.params  # [P]
+    popt = ransac.estimator_.params  # [P]
     y_preds = model_func(x_query, *popt)  # [M]
+    curve_fit_kwargs["p0"] = popt
 
     # Step 2: Calculate residuals.
     y_fit = model_func(x_data, *popt)  # [N]
     residuals = y_data - y_fit  # [N]
 
     # Fit KNN once to avoid repeated work.
-    knn = NearestNeighbors(n_neighbors=N)
+    K = N // 3
+    knn = NearestNeighbors(n_neighbors=K)
     knn.fit(x_data_reshaped)
-    dists, nbr_idcs = knn.kneighbors(x_query_reshaped)  # [M, N], [M, N]
-    dists = np.take_along_axis(dists, nbr_idcs, axis=1)  # sort to match x_query
+    dists, nbr_idcs = knn.kneighbors(x_query_reshaped)  # [M, K], [M, K]
     dists /= np.ptp(x_data)  # normalize for better weight calculation
 
     # Calculate weights for each neighbor based on distance.
-    weights = np.exp(-20 * dists**2)  # [M, N]
+    weights = np.exp(-20 * dists ** 2)  # [M, K]
     weights = np.where(weights >= 1e-10, weights, 1e-10)  # avoid zero weights
     weights /= np.sum(weights, axis=1, keepdims=True)  # normalize weights
 
     # Perform local residual resampling for each x_query point.
     # This is done in advance to avoid repeated work in the bootstrapping step.
+    residuals_rearranged = np.take_along_axis(
+        np.expand_dims(residuals, 0), nbr_idcs, axis=1
+    )  # [M, K]
     local_residuals = np.stack([
         np.random.choice(
-            residuals, size=n_bootstraps, p=weights_i
+            residuals_rearranged_i, size=n_bootstraps, p=weights_i
         )  # [n_bootstraps]
-        for weights_i in weights
+        for residuals_rearranged_i, weights_i in zip(
+            residuals_rearranged, weights
+        )
     ])  # [M, n_bootstraps]
 
     # Step 3: Wild bootstrapping.
-    y_boots = []
+    y_pred_boots = []
     for b in tqdm(range(n_bootstraps)):
-        # Generate wild bootstrap noise.
+        # Generate wild bootstrap noise using Mammen random variables.
         wild_noise_boot = residuals * _mammen_rvs(N)  # [N]
         y_boot = y_fit + wild_noise_boot  # [N]
 
         # Fit model to bootstrapped data.
-        popt_boot, _ = curve_fit(model_func, x_data, y_boot, p0=popt)  # [P], _
-
-        # Perform local residual resampling for each x_query point.
-        local_residuals_boot = local_residuals[:, b]  # [M]
+        popt_boot, _ = curve_fit(
+            model_func, x_data, y_boot, **curve_fit_kwargs
+        )  # [P], _
 
         # Add local noise to simulate new observations.
-        y_boot = model_func(x_query, *popt_boot) + local_residuals_boot  # [M]
-        y_boots.append(y_boot)
+        y_pred_boot = (
+            model_func(x_query, *popt_boot) + local_residuals[:, b]
+        )  # [M]
+        y_pred_boots.append(y_pred_boot)
 
-    y_boots = np.stack(y_boots)  # [n_bootstraps, M]
+    y_pred_boots = np.stack(y_pred_boots)  # [n_bootstraps, M]
+
+    # Step 4: Confidence interval calculation.
     y_intervals = []
     for conf in confs:
         lower_bound = (100 - conf) / 2
         upper_bound = 100 - lower_bound
 
-        # Calculate the percentiles for the confidence intervals.
+        # Calculate percentiles for the confidence intervals.
         y_low, y_high = np.percentile(
-            y_boots, [lower_bound, upper_bound], axis=0
+            y_pred_boots, [lower_bound, upper_bound], axis=0
         )  # [M], [M]
 
         # Smooth the bounds using a Gaussian filter.
@@ -277,7 +306,7 @@ def bootstrap_confidence_intervals(
         y_high = gaussian_filter1d(y_high, sigma=2)
         y_intervals.append((y_low, y_high))
 
-    return y_preds, y_intervals
+    return popt, y_preds, y_intervals
 
 
 def main(args: argparse.Namespace) -> None:
@@ -287,68 +316,91 @@ def main(args: argparse.Namespace) -> None:
         args: The command line arguments.
     """
 
-    def linear(x: np.ndarray, a: float, b: float) -> np.ndarray:
+    def linear(
+        x: npt.NDArray[np.floating], a: float, b: float
+    ) -> npt.NDArray[np.floating]:
         return a * x + b
 
-    def exponential(x: np.ndarray, a: float, b: float) -> np.ndarray:
+    def exponential(
+        x: npt.NDArray[np.floating], a: float, b: float
+    ) -> npt.NDArray[np.floating]:
         return a * np.exp(b * x)
 
     # Set the random seed for reproducibility.
-    np.random.seed(42)
+    np.random.seed(69)
 
     # Generate artificial datasets.
-    n = 100
-    x = np.linspace(0, 10, n)
+    N = 1000
+    x = np.linspace(0, 10, N)
 
-    # 1. Asymmetric residuals.
-    true_y1 = linear(x, 2.0, 1.0)
+    # Dataset 1: Asymmetric residuals.
+    true_y1 = linear(x, 1.0, 10.0)
     noise1 = np.where(
-        np.random.randn(n) > 0,
-        np.abs(np.random.normal(0, 0.5, n)),
-        -np.abs(np.random.normal(0, 3.0, n)),
+        np.random.randn(N) > 0,
+        np.abs(np.random.normal(0, 0.5, N)),
+        -np.abs(np.random.normal(0, 3.0, N)),
     )
     y1 = true_y1 + noise1
 
-    # 2. Exponential model.
+    # Dataset 2: Exponential model.
     true_y2 = exponential(x, 1.0, 0.3)
-    noise2 = np.random.normal(0, 5.0, size=n)
+    noise2 = np.random.normal(0, 5.0, size=N)
     y2 = true_y2 + noise2
 
-    # 3. Heteroscedastic noise.
-    true_y3 = linear(x, -1.5, 20)
-    noise3 = np.random.normal(0, 0.2 + 0.4 * x, size=n)
+    # Dataset 3: Heteroscedastic noise.
+    true_y3 = linear(x, -1.0, 20)
+    noise3 = np.random.normal(0, 0.2 + 0.4 * x, size=N)
     y3 = true_y3 + noise3
 
-    # 4. Assymetric and heteroscedastic noise, exponential model.
+    # Dataset 4: Assymetric and heteroscedastic noise, exponential model.
     true_y4 = exponential(x, 1.0, 0.3)
     noise4 = np.where(
-        np.random.randn(n) > 0,
-        np.abs(np.random.normal(0, 3.0 + 1.0 * x, n)),
-        -np.abs(np.random.normal(0, 0.5 + 0.4 * x, n)),
+        np.random.randn(N) > 0,
+        np.abs(np.random.normal(0, 3.0 + 1.0 * x, N)),
+        -np.abs(np.random.normal(0, 0.5 + 0.4 * x, N)),
     )
     y4 = true_y4 + noise4
 
     # Gather the datasets for plotting.
     datasets = [
-        (x, y1, linear, "Asymmetric Noise"),
-        (x, y2, exponential, "Exponential Model"),
-        (x, y3, linear, "Heteroscedastic Noise"),
-        (x, y4, exponential, "Everything Together"),
+        (x, y1, linear, "Asymmetric Noise", r"{:.2f} \cdot x + {:.2f}"),
+        (
+            x,
+            y2,
+            exponential,
+            "Exponential Model",
+            r"{:.2f} \cdot \exp({:.2f} * x)",
+        ),
+        (x, y3, linear, "Heteroscedastic Noise", r"{:.2f} \cdot x + {:.2f}"),
+        (
+            x,
+            y4,
+            exponential,
+            "Everything Together",
+            r"{:.2f} \cdot \exp({:.2f} * x)",
+        ),
     ]
 
     # Plot the confidence intervals.
     _, axs = plt.subplots(2, 2, figsize=(10, 8))
     x_query = np.linspace(x.min(), x.max(), 200)
 
-    for ax, (x_data, y_data, model_func, title) in zip(axs.flatten(), datasets):
+    for ax, (x_data, y_data, model_func, title, formula) in zip(
+        axs.flatten(), datasets
+    ):
         ax = cast(plt.Axes, ax)
         confs = (95, 68)
         colors = ["red", "orange"]
         alphas = [0.2, 0.4]
 
         # Fit the model and calculate confidence intervals.
-        y_preds, y_intervals = bootstrap_confidence_intervals(
-            x_data, y_data, model_func, x_query, confs
+        popt, y_preds, y_intervals = bootstrap_confidence_intervals(
+            x_data,
+            y_data,
+            model_func,
+            x_query,
+            confs,
+            curve_fit_kwargs={"maxfev": 10000, "sigma": 5},
         )
 
         # Plot the observed data.
@@ -368,7 +420,12 @@ def main(args: argparse.Namespace) -> None:
             )
 
         # Plot the fitted curve.
-        ax.plot(x_query, y_preds, color="black", label="Fitted Curve")
+        ax.plot(
+            x_query,
+            y_preds,
+            color="black",
+            label=f"Fitted Curve: ${formula.format(*popt)}$",
+        )
 
         # Set figure-wide properties.
         ax.set_title(title)
