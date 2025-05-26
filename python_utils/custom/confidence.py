@@ -126,9 +126,9 @@ class _ModelWrapper(BaseEstimator):
             The R-squared score.
         """
         y_preds = self.predict(x)
-        ss_res = np.sum((y - y_preds) ** 2)
-        ss_tot = np.sum((y - np.mean(y)) ** 2)
-        return 1 - ss_res / ss_tot
+        residual_sum_of_squares = np.sum((y - y_preds) ** 2)
+        total_sum_of_squares = np.sum((y - np.mean(y)) ** 2)
+        return 1 - residual_sum_of_squares / total_sum_of_squares
 
 
 def bootstrap_confidence_intervals(
@@ -139,6 +139,7 @@ def bootstrap_confidence_intervals(
     conf_levels: Sequence[float],
     n_bootstraps: int = 500,
     curve_fit_kwargs: dict[str, Any] = {},
+    ransac_regressor_kwargs: dict[str, Any] = {},
 ) -> tuple[
     npt.NDArray[np.float64],
     list[tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]],
@@ -185,8 +186,10 @@ def bootstrap_confidence_intervals(
         n_bootstraps: The number of bootstrap samples to generate. A higher
             number of bootstraps will result in more smooth and accurate
             confidence intervals, but will also increase the computation time.
-        **curve_fit_kwargs: Keyword arguments to pass to
+        curve_fit_kwargs: Keyword arguments to pass to
             `scipy.optimize.curve_fit`.
+        ransac_regressor_kwargs: Keyword arguments to pass to
+            `sklearn.linear_model.RANSACRegressor`.
 
     Returns:
         Tuple containing:
@@ -224,10 +227,13 @@ def bootstrap_confidence_intervals(
     x_query_reshaped = x_query.reshape(-1, 1)  # [M, 1]
 
     # Step 1: Fit the model using RANSAC.
-    P = len(inspect.signature(model_func).parameters)
+    if ransac_regressor_kwargs.get("min_samples") is None:
+        ransac_regressor_kwargs["min_samples"] = len(
+            inspect.signature(model_func).parameters
+        )
     ransac = RANSACRegressor(
         estimator=_ModelWrapper(model_func, curve_fit_kwargs=curve_fit_kwargs),
-        min_samples=P,
+        **ransac_regressor_kwargs,
     )
     ransac.fit(x_data_reshaped, y_data)
     popt = ransac.estimator_.params  # [P]
@@ -482,6 +488,12 @@ def main(args: argparse.Namespace) -> None:
             x_query,
             confs,
             curve_fit_kwargs={"maxfev": 10000, "bounds": bounds},
+            ransac_regressor_kwargs={
+                "min_samples": min(
+                    len(inspect.signature(model_func).parameters), N // 4
+                ),
+                "max_trials": 1000,
+            },
         )
         y_pred_unseen, y_intervals_unseen = remap_unseen_x_to_y_intervals(
             x_unseen, model_func, popt, x_query, y_intervals
