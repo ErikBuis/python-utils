@@ -136,7 +136,7 @@ def bootstrap_confidence_intervals(
     y_data: npt.NDArray[np.floating],
     model_func: Callable[..., npt.NDArray[np.floating]],
     x_query: npt.NDArray[np.floating],
-    confs: Sequence[float],
+    conf_levels: Sequence[float],
     n_bootstraps: int = 500,
     curve_fit_kwargs: dict[str, Any] = {},
 ) -> tuple[
@@ -178,9 +178,9 @@ def bootstrap_confidence_intervals(
             Amount of parameters after first input: P
         x_query: The x-values for which to calculate confidence intervals.
             Shape: [M]
-        confs: A sequence of confidence levels (as percentages) for which to
-            calculate the confidence intervals. For example, if you want 68% and
-            95% confidence intervals, you would pass `(68, 95)`.
+        conf_levels: A sequence of confidence levels (as percentages) for which
+            to calculate the confidence intervals. For example, if you want 68%
+            and 95% confidence intervals, you would pass `(68, 95)`.
             Length: C
         n_bootstraps: The number of bootstrap samples to generate. A higher
             number of bootstraps will result in more smooth and accurate
@@ -285,8 +285,8 @@ def bootstrap_confidence_intervals(
 
     # Step 4: Confidence interval calculation.
     y_intervals = []
-    for conf in confs:
-        lower_bound = (100 - conf) / 2
+    for conf_level in conf_levels:
+        lower_bound = (100 - conf_level) / 2
         upper_bound = 100 - lower_bound
 
         # Calculate percentiles for the confidence intervals.
@@ -412,7 +412,7 @@ def main(args: argparse.Namespace) -> None:
     y2 = true_y2 + noise2
 
     # Dataset 3: Heteroscedastic noise.
-    true_y3 = linear(x, -1.0, 20)
+    true_y3 = linear(x, -1.0, 20.0)
     noise3 = np.random.normal(0, 0.2 + 0.4 * x, size=N)
     y3 = true_y3 + noise3
 
@@ -427,21 +427,37 @@ def main(args: argparse.Namespace) -> None:
 
     # Gather the datasets for plotting.
     datasets = [
-        (x, y1, linear, "Asymmetric Noise", r"{:.2f} \cdot x + {:.2f}"),
+        (
+            x,
+            y1,
+            linear,
+            "Asymmetric Noise",
+            r"{:.2f} \cdot x + {:.2f}",
+            ([-10, -10], [10, 30]),
+        ),
         (
             x,
             y2,
             exponential,
             "Exponential Model",
             r"{:.2f} \cdot \exp({:.2f} * x)",
+            ([-10, -1], [10, 1]),
         ),
-        (x, y3, linear, "Heteroscedastic Noise", r"{:.2f} \cdot x + {:.2f}"),
+        (
+            x,
+            y3,
+            linear,
+            "Heteroscedastic Noise",
+            r"{:.2f} \cdot x + {:.2f}",
+            ([-10, -10], [10, 30]),
+        ),
         (
             x,
             y4,
             exponential,
             "Everything Together",
             r"{:.2f} \cdot \exp({:.2f} * x)",
+            ([-10, -1], [10, 1]),
         ),
     ]
 
@@ -450,7 +466,7 @@ def main(args: argparse.Namespace) -> None:
     x_query = np.linspace(x.min(), x.max(), M)
     x_unseen = np.linspace(x.min(), x.max(), U)
 
-    for ax, (x_data, y_data, model_func, title, formula) in zip(
+    for ax, (x_data, y_data, model_func, title, formula, bounds) in zip(
         axs.flatten(), datasets
     ):
         ax = cast(plt.Axes, ax)
@@ -465,7 +481,7 @@ def main(args: argparse.Namespace) -> None:
             model_func,
             x_query,
             confs,
-            curve_fit_kwargs={"maxfev": 10000, "sigma": 5},
+            curve_fit_kwargs={"maxfev": 10000, "bounds": bounds},
         )
         y_pred_unseen, y_intervals_unseen = remap_unseen_x_to_y_intervals(
             x_unseen, model_func, popt, x_query, y_intervals
