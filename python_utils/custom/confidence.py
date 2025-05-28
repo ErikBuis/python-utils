@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import inspect
 import sys
+import warnings
 from collections.abc import Sequence
 from typing import Any, Callable, cast
 
@@ -143,7 +144,7 @@ def bootstrap_confidence_intervals(
     npt.NDArray[np.float64],
     list[tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]],
 ]:
-    """Calculate confidence intervals using wild bootstrapping.
+    """Find confidence intervals using wild bootstrapping.
 
     This function fits a model to the provided data using RANSAC and calculates
     confidence intervals for the predictions at specified `x_query` points.
@@ -309,6 +310,71 @@ def bootstrap_confidence_intervals(
     return popt, y_intervals
 
 
+def bootstrap_confidence_intervals_abs(
+    x_data: npt.NDArray[np.floating],
+    y_data: npt.NDArray[np.floating],
+    x_query: npt.NDArray[np.floating],
+    conf_levels: Sequence[float],
+    n_bootstraps: int = 500,
+) -> list[npt.NDArray[np.floating]]:
+    """Find confidence intervals using wild bootstrapping around the x-axis.
+
+    This function is similar to `bootstrap_confidence_intervals`, but it assumes
+    that the data lies around the x-axis (y=0) and that the residuals are always
+    positive. This is useful for cases where you don't care about fitting a
+    model to the data, but rather want to calculate confidence intervals around
+    the absolute values of the data points.
+
+    Args:
+        x_data, y_data, x_query, conf_levels, n_bootstraps: Same as in
+        `bootstrap_confidence_intervals`.
+
+    Returns:
+        List of bounds of the confidence intervals, one for each confidence
+        level. Each element is a numpy array containing the smoothed (positive)
+        bound of the interval for the given confidence level.
+            Shape of inner arrays: [M]
+            Length: C
+    """
+    # Use a fitting function that returns a constant value, since the
+    # probability density for the distance being 0 is highest. We have to add a
+    # parameter to the function to make it compatible with the `curve_fit`
+    # function, but it will not be used in the fitting process.
+    model_func = lambda x, a: np.zeros_like(x)  # noqa: E731
+
+    # Duplicate the data on the negative side of the x-axis, since we want to
+    # calculate the confidence intervals around the x-axis. Another way to look
+    # at this is that we artificially generate samples that are a negative
+    # distance away from the ground truth, which is not possible in reality,
+    # but does allow us to calculate confidence intervals around the x-axis.
+    x_data = np.concatenate([x_data, x_data])  # [2 * N]
+    y_data = np.concatenate([y_data, -y_data])  # [2 * N]
+
+    # Perform the bootstrap confidence intervals calculation.
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=(
+                "OptimizeWarning: Covariance of the parameters could not be"
+                " estimated"
+            ),
+        )
+        _, y_intervals = bootstrap_confidence_intervals(
+            x_data,
+            y_data,
+            model_func,
+            x_query,
+            conf_levels,
+            n_bootstraps=n_bootstraps,
+            curve_fit_kwargs={"maxfev": 1},
+            ransac_regressor_kwargs={"max_trials": 1},
+        )  # _, C x 2 x [M]
+
+    # Take the mean of the lower and upper bounds of the confidence intervals.
+    # This is done to get a single bound for each confidence level.
+    return list(np.mean(np.abs(y_intervals), axis=1))  # C x [M]
+
+
 def remap_unseen_x_to_y_intervals(
     x_unseen: npt.NDArray[np.floating],
     model_func: Callable[..., npt.NDArray[np.floating]],
@@ -376,6 +442,45 @@ def remap_unseen_x_to_y_intervals(
         y_intervals_unseen.append((y_low_unseen, y_high_unseen))
 
     return y_pred_unseen, y_intervals_unseen
+
+
+def remap_unseen_x_to_y_intervals_abs(
+    x_unseen: npt.NDArray[np.floating],
+    x_query: npt.NDArray[np.floating],
+    y_intervals: list[npt.NDArray[np.floating]],
+) -> list[npt.NDArray[np.floating]]:
+    """Remap unseen x-values to confidence intervals around the x-axis.
+
+    This function is similar to `remap_unseen_x_to_y_intervals`, but it assumes
+    that the data lies around the x-axis (y=0) and that the residuals are always
+    positive. This is useful for cases where you don't care about fitting a
+    model to the data, but rather want to calculate confidence intervals around
+    the absolute values of the data points.
+
+    Args:
+        x_unseen, x_query: Same as in `remap_unseen_x_to_y_intervals`.
+        y_intervals: The confidence intervals calculated by the
+            `bootstrap_confidence_intervals_abs` function. This is a list of
+            numpy arrays containing the smoothed (positive) bound of the
+            interval for each confidence level.
+            Shape of inner arrays: [M]
+            Length: C
+
+    Returns:
+        List of bounds of the confidence intervals, one for each confidence
+        level. Each element is a numpy array containing the smoothed (positive)
+        bound of the interval for the given confidence level.
+            Shape of inner arrays: [U]
+            Length: C
+    """
+    # Map each x_unseen to the corresponding confidence intervals.
+    y_intervals_unseen = []
+    for y_bound in y_intervals:
+        # Interpolate the y-intervals to the unseen x-values.
+        y_bound_unseen = np.interp(x_unseen, x_query, y_bound)  # [U]
+        y_intervals_unseen.append(y_bound_unseen)
+
+    return y_intervals_unseen  # C x [U]
 
 
 def main(args: argparse.Namespace) -> None:
