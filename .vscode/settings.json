@@ -1,0 +1,62 @@
+{
+    "editor.wordWrapColumn": 80,
+    "editor.rulers": [80],
+
+    // isort formatter
+    "isort.args": [
+        "--line-length=80",  // Same line length as Black
+        "--profile=black",  // Prevent conflicts with Black
+    ],
+
+    // Black formatter
+    "black-formatter.args": [
+        "--line-length=80",  // Black will only split lines that exceed this length
+        "--skip-magic-trailing-comma",  // Try to squish lists onto one line if possible
+        "--preview",  // Enable changes that will be added in a future version of Black
+        "--enable-unstable-feature=string_processing",  // Automatically split strings over multiple lines
+        "--enable-unstable-feature=hug_parens_with_braces_and_square_brackets",  // Hug all types of parens
+        "--enable-unstable-feature=wrap_long_dict_values_in_parens"  // Use indent if a dict value is too long
+    ],
+
+    // Flake8 Linter
+    "flake8.args": [
+        "--max-line-length=80",  // Black only loosely adheres to line-length
+        // E203: Whitespace before ":"
+        "--extend-ignore=E203",  // Black disagrees with pep8 here
+        // F401: [module] imported but unused
+        // F403: `from [module] import *` used; unable to detect undefined names
+        // F405: [name] may be undefined, or defined from star imports: [module]
+        "--per-file-ignores=*/__init__.py:F401 */tier_*.py:F401,F403,F405",  // Ignoring Entire Files
+        // E741: Ambiguous variable name
+        // W503: Line break before binary operator
+        // W504: Line break after binary operator
+        // E226: Missing whitespace around arithmetic operator
+        // E221: Multiple spaces before operator
+        // E222: Multiple spaces after operator
+        // E731: Do not assign a lambda expression, use a def
+        // E203: Whitespace before ":"
+        "--ignore=E741,W503,W504,E226,E221,E222,E731,E203"
+    ],
+
+    /* Peacock settings. */
+    "workbench.colorCustomizations": {
+        "activityBar.activeBackground": "#65c89b",
+        "activityBar.background": "#65c89b",
+        "activityBar.foreground": "#15202b",
+        "activityBar.inactiveForeground": "#15202b99",
+        "activityBarBadge.background": "#945bc4",
+        "activityBarBadge.foreground": "#e7e7e7",
+        "commandCenter.border": "#15202b99",
+        "sash.hoverBorder": "#65c89b",
+        "statusBar.background": "#42b883",
+        "statusBar.foreground": "#15202b",
+        "statusBarItem.hoverBackground": "#359268",
+        "statusBarItem.remoteBackground": "#42b883",
+        "statusBarItem.remoteForeground": "#15202b",
+        "titleBar.activeBackground": "#42b883",
+        "titleBar.activeForeground": "#15202b",
+        "titleBar.inactiveBackground": "#42b88399",
+        "titleBar.inactiveForeground": "#15202b99"
+    },
+    "peacock.color": "#42b883",
+}

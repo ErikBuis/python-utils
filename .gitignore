@@ -414,7 +414,6 @@ TSWLatexianTemp*
 # WinEdt
 *.bak
 *.sav
-.vscode/
 
 # Texpad
 .texpadtmp
