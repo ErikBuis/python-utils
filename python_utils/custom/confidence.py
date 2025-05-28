@@ -354,10 +354,7 @@ def bootstrap_confidence_intervals_abs(
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore",
-            message=(
-                "OptimizeWarning: Covariance of the parameters could not be"
-                " estimated"
-            ),
+            message="Covariance of the parameters could not be estimated",
         )
         _, y_intervals = bootstrap_confidence_intervals(
             x_data,
