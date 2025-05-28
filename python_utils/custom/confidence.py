@@ -15,7 +15,6 @@ from sklearn.base import BaseEstimator
 from sklearn.exceptions import NotFittedError
 from sklearn.linear_model import RANSACRegressor
 from sklearn.neighbors import NearestNeighbors
-from tqdm import tqdm
 
 
 def _mammen_rvs(size: int) -> npt.NDArray[np.float64]:
@@ -273,7 +272,7 @@ def bootstrap_confidence_intervals(
 
     # Step 3: Wild bootstrapping.
     y_pred_boots = []
-    for b in tqdm(range(n_bootstraps)):
+    for b in range(n_bootstraps):
         # Generate wild bootstrap noise using Mammen random variables.
         wild_noise_boot = residuals * _mammen_rvs(N)  # [N]
         y_boot = y_fit + wild_noise_boot  # [N]
