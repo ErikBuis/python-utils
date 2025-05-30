@@ -14,7 +14,6 @@ import torch
 
 logger = logging.getLogger(__name__)
 
-
 LightningModuleT = TypeVar("LightningModuleT", bound=pl.LightningModule)
 
 
@@ -79,26 +78,39 @@ def load_best_model(
 
     # Find information about each model checkpoint.
     # We only keep one model in memory at a time to prevent running out of RAM.
-    # The outer dict has the (monitor, mode) combination as key.
-    # The inner dict has the best_model_path as key and the
-    # (best_model_score, creation_time) as value.
+    # models_dict will be a dict with the following structure:
+    # {
+    #     (monitor, mode): [
+    #         (best_model_score, creation_time, checkpoint, internal_state),
+    #         ...
+    #     ],
+    #     ...
+    # }
+    # where:
+    # - monitor: Metric that was monitored during training, e.g. 'loss/val'.
+    # - mode: Mode that was used to monitor the metric, e.g. 'min' or 'max'.
+    # - best_model_score: The best score of the model for the monitored metric.
+    # - creation_time: Time when the checkpoint was created.
+    # - checkpoint: Path to the checkpoint file as a string.
+    # - internal_state: A dictionary containing the internal state of the
+    #   ModelCheckpoint callback, which includes the best_model_score.
     map_location = trainer.strategy.root_device
-    models_dict: dict[tuple[str, str], dict[str, tuple[float, float]]] = (
-        defaultdict(dict)
-    )
+    models_dict: dict[
+        tuple[str, str], list[tuple[float, float, str, dict[str, Any]]]
+    ] = defaultdict(list)
     for checkpoint in list_of_checkpoints:
         curr_model = torch.load(
             checkpoint, map_location=map_location, weights_only=True
         )
-        for callback_name, keys in curr_model["callbacks"].items():
+        for callback_name, internal_state in curr_model["callbacks"].items():
             if callback_name.startswith("ModelCheckpoint"):
-                ckpt_kwargs = eval(callback_name[len("ModelCheckpoint") :])
-                models_dict[(ckpt_kwargs["monitor"], ckpt_kwargs["mode"])][
-                    keys["best_model_path"]
-                ] = (
-                    keys["best_model_score"],
-                    os.path.getctime(keys["best_model_path"]),
-                )
+                kwargs = eval(callback_name[len("ModelCheckpoint") :])
+                models_dict[(kwargs["monitor"], kwargs["mode"])].append((
+                    internal_state["best_model_score"],
+                    os.path.getctime(checkpoint),
+                    checkpoint,
+                    internal_state,
+                ))
                 break
     if not models_dict:
         raise FileNotFoundError(
@@ -143,7 +155,9 @@ def load_best_model(
             # Use the most recent model if none of the models are compatible.
             monitor_mode, candidate_models = max(
                 models_dict.items(),
-                key=lambda kv: max(kv[1].values(), key=lambda kv2: kv2[1])[1],
+                key=lambda kv: max(
+                    candidate_model[1] for candidate_model in kv[1]
+                ),
             )
             logger.error(
                 "Multiple saved models found, but none of their"
@@ -154,35 +168,55 @@ def load_best_model(
                 f" recenty saved model, which is {monitor_mode!r}."
             )
 
-    # Sort the models by their best score and creation time.
+    # Sort the models by their best score, then by creation time.
     sorted_models = sorted(
-        candidate_models.items(),
-        key=lambda kv: (
-            kv[1][0] if monitor_mode[1] == "min" else -kv[1][0],
-            kv[1][1],
+        candidate_models,
+        key=lambda candidate_model: (
+            (
+                candidate_model[0]
+                if monitor_mode[1] == "max"
+                else -candidate_model[0]
+            ),
+            candidate_model[1],
         ),
+        reverse=True,
     )
 
     # Check if the best model's state_dict is compatible with the given model.
-    for path, (score, ctime) in sorted_models:
+    expected_state_dict_keys = set(model.state_dict().keys())
+    for best_model_score, ctime, checkpoint, internal_state in sorted_models:
         try:
             best_model = model.__class__.load_from_checkpoint(
-                path, map_location=map_location, **kwargs
+                checkpoint, map_location=map_location, **kwargs
             )
         except (TypeError, RuntimeError) as e:
             logger.warning(
-                f"Could not load model from '{path}'. Error message: {e}"
+                f"Could not load model from '{checkpoint}'. This is likely due"
+                " to a change in the model architecture or hyperparameters."
+                " Skipping this checkpoint and trying the next one.\nOriginal"
+                f" error message: {e}"
             )
             continue
 
-        if set(model.state_dict().keys()) == set(
-            best_model.state_dict().keys()
-        ):
-            logger.info(
-                f"Found best model at '{path}' with {monitor_mode[0]}={score}."
-                f" File was created on {time.ctime(ctime)}."
+        found_state_dict_keys = set(best_model.state_dict().keys())
+        if expected_state_dict_keys != found_state_dict_keys:
+            logger.warning(
+                f"The state_dict of the model loaded from '{checkpoint}' is not"
+                " compatible with the provided LightningModule. The keys in"
+                " the state_dict are different. This is likely due to a change"
+                " in the model architecture or hyperparameters. Skipping this"
+                " checkpoint and trying the next one.\nExpected keys:"
+                f" {expected_state_dict_keys}\nFound keys:"
+                f" {found_state_dict_keys}"
             )
-            break
+            continue
+
+        logger.info(
+            f"Found best model at '{checkpoint}' with"
+            f" {monitor_mode[0]}={best_model_score}. File was created on"
+            f" {time.ctime(ctime)}."
+        )
+        break
     else:
         raise FileNotFoundError(
             "No checkpoint found with a state dictionary compatible with the"
@@ -190,8 +224,9 @@ def load_best_model(
             f" models which had their (monitor, mode) set to {monitor_mode!r}."
         )
 
-    # Hack the Trainer to think that we have just trained a model.
-    trainer.checkpoint_callback.best_model_path = path
+    # Hack the trainer to think that we have just trained a model.
+    for key, value in internal_state.items():
+        setattr(trainer.checkpoint_callback, key, value)
 
     # Set the logger to the version that was used during training.
     if reuse_version:
