@@ -377,7 +377,7 @@ def remap_unseen_x_to_y_intervals(
     model_func: Callable[..., npt.NDArray[np.floating]],
     popt: npt.NDArray[np.floating],
     x_query: npt.NDArray[np.floating],
-    y_intervals: list[
+    y_intervals: Sequence[
         tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]
     ],
 ) -> tuple[
@@ -444,7 +444,7 @@ def remap_unseen_x_to_y_intervals(
 def remap_unseen_x_to_y_intervals_abs(
     x_unseen: npt.NDArray[np.floating],
     x_query: npt.NDArray[np.floating],
-    y_intervals: list[npt.NDArray[np.floating]],
+    y_intervals: Sequence[npt.NDArray[np.floating]],
 ) -> list[npt.NDArray[np.floating]]:
     """Remap unseen x-values to confidence intervals around the x-axis.
 
