@@ -104,8 +104,10 @@ def load_best_model(
         )
         for callback_name, internal_state in curr_model["callbacks"].items():
             if callback_name.startswith("ModelCheckpoint"):
-                kwargs = eval(callback_name[len("ModelCheckpoint") :])
-                models_dict[(kwargs["monitor"], kwargs["mode"])].append((
+                curr_kwargs = eval(callback_name[len("ModelCheckpoint") :])
+                models_dict[
+                    (curr_kwargs["monitor"], curr_kwargs["mode"])
+                ].append((
                     internal_state["best_model_score"],
                     os.path.getctime(checkpoint),
                     checkpoint,
