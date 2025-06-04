@@ -120,16 +120,15 @@ def pad_sequence(
 def lexsort_along(
     x: npt.NDArray, axis: int = -1
 ) -> tuple[npt.NDArray, npt.NDArray]:
-    """Sort an array along a specific dimension, taking all others as constant.
+    """Sort an array along axis, taking all others as tuples.
 
-    This is like np.sort(), but it doesn't sort along the other dimensions.
-    As such, the other dimensions are treated as tuples. This function is
-    roughly equivalent to the following Python code, but it is much faster.
+    This is like np.sort(), but the other axes are treated as tuples.
+    This function is roughly equivalent to the following Python code, but it is
+    much faster.
     >>> np.stack(
     >>>     sorted(
     >>>         [np.take(x, i, axis=axis) for i in range(x.shape[axis])],
-    >>>         key=lambda n: n.tolist(),
-    >>>         reverse=descending,
+    >>>         key=tuple,
     >>>     ),
     >>>     axis=axis,
     >>> )
@@ -140,33 +139,42 @@ def lexsort_along(
     Args:
         x: The array to sort.
             Shape: [N_0, ..., N_axis, ..., N_{D-1}]
-        axis: The dimension to sort along.
+        axis: The axis to sort along.
 
     Returns:
         Tuple containing:
         - Sorted version of x.
             Shape: [N_0, ..., N_axis, ..., N_{D-1}]
-        - The indices where the elements in the original input ended up in the
-            returned sorted values.
+        - The backmap array, which contains the indices of the sorted values
+            in the original input.
+            The sorted version of x can be retrieved as follows:
+            >>> x_sorted = x.take(backmap, axis)
             Shape: [N_axis]
 
     Examples:
-        >>> x = np.array([[2, 1], [3, 0], [1, 2], [1, 3]])
-        >>> lexsort_along(x, axis=0)
-        (array([[1, 2],
-                [1, 3],
-                [2, 1],
-                [3, 0]]),
-         array([2, 3, 0, 1]))
-        >>> torch.sort(x, axis=0)
-        (array([[1, 0],
-                [1, 1],
-                [2, 2],
-                [3, 3]]),
-         array([[2, 1],
-                [3, 0],
-                [0, 2],
-                [1, 3]]))
+        >>> x = np.array([
+        >>>     [2, 1],
+        >>>     [3, 0],
+        >>>     [1, 2],
+        >>>     [1, 3],
+        >>> ])
+        >>> axis = 0
+
+        >>> x_sorted, backmap = lexsort_along(x, axis=axis)
+        >>> x_sorted
+        array([[1, 2],
+               [1, 3],
+               [2, 1],
+               [3, 0]])
+        >>> backmap
+        array([2, 3, 0, 1]))
+
+        >>> # Get the lexicographically sorted version of x:
+        >>> x.take(backmap)
+        array([[1, 2],
+               [1, 3],
+               [2, 1],
+               [3, 0]])
     """
     # We can use np.lexsort() to sort only the requested dimension.
     # First, we prepare the array for np.lexsort(). The input to this function
@@ -184,20 +192,22 @@ def lexsort_along(
     # >>>            [[23,  1],
     # >>>             [10, 17],
     # >>>             [ 9, 18]]])
-    # And axis=1, then the input to lexsort() must be:
-    # >>> lexsort(array([[ 1, 17, 18],
-    # >>>                [23, 10,  9],
-    # >>>                [14, 12,  0],
-    # >>>                [19,  5,  6],
-    # >>>                [21, 20, 22],
-    # >>>                [ 7,  3,  8],
-    # >>>                [13,  4,  2],
-    # >>>                [15, 11, 16]]))
+    # And axis=1, then the input to np.lexsort() must be:
+    # >>> np.lexsort(array([[ 1, 17, 18],
+    # >>>                   [23, 10,  9],
+    # >>>                   [14, 12,  0],
+    # >>>                   [19,  5,  6],
+    # >>>                   [21, 20, 22],
+    # >>>                   [ 7,  3,  8],
+    # >>>                   [13,  4,  2],
+    # >>>                   [15, 11, 16]]))
     # Note that the first row is evaluated last and the last row is evaluated
     # first. We can now see that the sorting order will be 11 < 15 < 16, so
-    # lexsort() will return array([1, 0, 2]). I thouroughly tested what the
+    # np.lexsort() will return array([1, 0, 2]). I thouroughly tested what the
     # absolute fastest way is to perform this operation, and it turns out that
     # the following is the best way to do it:
+    N_axis = x.shape[axis]
+
     if x.ndim == 1:
         y = np.expand_dims(x, 0)  # [1, N_axis]
     else:
@@ -205,20 +215,18 @@ def lexsort_along(
             x, axis, -1
         )  # [N_0, ..., N_{axis-1}, N_{axis+1}, ..., N_{D-1}, N_axis]
         y = y.reshape(
-            -1, y.shape[-1]
+            -1, N_axis
         )  # [N_0 * ... * N_{axis-1} * N_{axis+1} * ... * N_{D-1}, N_axis]
     y = np.flip(
         y, axis=(0,)
     )  # [N_0 * ... * N_{axis-1} * N_{axis+1} * ... * N_{D-1}, N_axis]
-    idcs = np.lexsort(y)  # [N_axis]
+    backmap = np.lexsort(y, axis=-1)  # [N_axis]
 
-    # Now we have to convert the output back to a array. This is a bit tricky,
-    # because we must be able to select indices from any given dimension. To do
-    # this, we perform:
-    x_sorted = x.take(idcs, axis)  # [N_0, ..., N_axis, ..., N_{D-1}]
+    # Sort the array along the given axis.
+    x_sorted = x.take(backmap, axis)  # [N_0, ..., N_axis, ..., N_{D-1}]
 
-    # Finally, we return the sorted array and the indices.
-    return x_sorted, idcs
+    # Finally, we return the sorted array and the backmap.
+    return x_sorted, backmap
 
 
 @overload

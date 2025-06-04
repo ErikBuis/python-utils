@@ -430,15 +430,15 @@ def lexsort(
 def lexsort_along(
     x: torch.Tensor, dim: int = -1
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Sort a tensor along dim, taking all others as constant tuples.
+    """Sort a tensor along dim, taking all others as tuples.
 
-    This is like torch.sort(), but it doesn't sort along the other dimensions.
-    As such, the other dimensions are treated as tuples. This function is
-    roughly equivalent to the following Python code, but it is much faster.
+    This is like torch.sort(), but the other dimensions are treated as tuples.
+    This function is roughly equivalent to the following Python code, but it is
+    much faster.
     >>> torch.stack(
     >>>     sorted(
     >>>         x.unbind(dim),
-    >>>         key=lambda t: t.tolist(),
+    >>>         key=lambda t: tuple(t),
     >>>     ),
     >>>     dim=dim,
     >>> )
@@ -447,7 +447,7 @@ def lexsort_along(
     preserved.
 
     Args:
-        x: The input tensor.
+        x: The tensor to sort.
             Shape: [N_0, ..., N_dim, ..., N_{D-1}]
         dim: The dimension to sort along.
 

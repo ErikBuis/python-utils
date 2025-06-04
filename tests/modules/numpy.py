@@ -10,21 +10,21 @@ from python_utils.modules.numpy import lexsort_along
 class TestLexsortAlong(unittest.TestCase):
     def test_lexsort_along_1D_axis0(self) -> None:
         x = np.array([4, 6, 2, 7, 0, 5, 1, 3])
-        values, indices = lexsort_along(x, axis=0)
+        values, backmap = lexsort_along(x, axis=0)
         self.assertTrue(
             np.array_equal(values, np.array([0, 1, 2, 3, 4, 5, 6, 7]))
         )
         self.assertTrue(
-            np.array_equal(indices, np.array([4, 6, 2, 7, 0, 5, 1, 3]))
+            np.array_equal(backmap, np.array([4, 6, 2, 7, 0, 5, 1, 3]))
         )
 
     def test_lexsort_along_2D_axis0(self) -> None:
         x = np.array([[2, 1], [3, 0], [1, 2], [1, 3]])
-        values, indices = lexsort_along(x, axis=0)
+        values, backmap = lexsort_along(x, axis=0)
         self.assertTrue(
             np.array_equal(values, np.array([[1, 2], [1, 3], [2, 1], [3, 0]]))
         )
-        self.assertTrue(np.array_equal(indices, np.array([2, 3, 0, 1])))
+        self.assertTrue(np.array_equal(backmap, np.array([2, 3, 0, 1])))
 
     def test_lexsort_along_3D_axis1(self) -> None:
         x = np.array([
@@ -33,7 +33,7 @@ class TestLexsortAlong(unittest.TestCase):
             [[19, 14], [5, 12], [6, 0]],
             [[23, 1], [10, 17], [9, 18]],
         ])
-        values, indices = lexsort_along(x, axis=1)
+        values, backmap = lexsort_along(x, axis=1)
         self.assertTrue(
             np.array_equal(
                 values,
@@ -45,7 +45,7 @@ class TestLexsortAlong(unittest.TestCase):
                 ]),
             )
         )
-        self.assertTrue(np.array_equal(indices, np.array([1, 0, 2])))
+        self.assertTrue(np.array_equal(backmap, np.array([1, 0, 2])))
 
     def test_lexsort_along_3D_axisminus1(self) -> None:
         x = np.array([
@@ -54,7 +54,7 @@ class TestLexsortAlong(unittest.TestCase):
             [[19, 14], [5, 12], [6, 0]],
             [[23, 1], [10, 17], [9, 18]],
         ])
-        values, indices = lexsort_along(x, axis=-1)
+        values, backmap = lexsort_along(x, axis=-1)
         self.assertTrue(
             np.array_equal(
                 values,
@@ -66,4 +66,4 @@ class TestLexsortAlong(unittest.TestCase):
                 ]),
             )
         )
-        self.assertTrue(np.array_equal(indices, np.array([1, 0])))
+        self.assertTrue(np.array_equal(backmap, np.array([1, 0])))

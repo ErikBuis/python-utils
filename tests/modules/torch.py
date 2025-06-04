@@ -97,23 +97,23 @@ class TestRavelMultiIndex(unittest.TestCase):
 class TestLexsortAlong(unittest.TestCase):
     def test_lexsort_along_1D_dim0(self) -> None:
         x = torch.as_tensor([4, 6, 2, 7, 0, 5, 1, 3])
-        values, indices = lexsort_along(x, dim=0)
+        values, backmap = lexsort_along(x, dim=0)
         self.assertTrue(
             torch.equal(values, torch.as_tensor([0, 1, 2, 3, 4, 5, 6, 7]))
         )
         self.assertTrue(
-            torch.equal(indices, torch.as_tensor([4, 6, 2, 7, 0, 5, 1, 3]))
+            torch.equal(backmap, torch.as_tensor([4, 6, 2, 7, 0, 5, 1, 3]))
         )
 
     def test_lexsort_along_2D_dim0(self) -> None:
         x = torch.as_tensor([[2, 1], [3, 0], [1, 2], [1, 3]])
-        values, indices = lexsort_along(x, dim=0)
+        values, backmap = lexsort_along(x, dim=0)
         self.assertTrue(
             torch.equal(
                 values, torch.as_tensor([[1, 2], [1, 3], [2, 1], [3, 0]])
             )
         )
-        self.assertTrue(torch.equal(indices, torch.as_tensor([2, 3, 0, 1])))
+        self.assertTrue(torch.equal(backmap, torch.as_tensor([2, 3, 0, 1])))
 
     def test_lexsort_along_3D_dim1(self) -> None:
         x = torch.as_tensor([
@@ -122,7 +122,7 @@ class TestLexsortAlong(unittest.TestCase):
             [[19, 14], [5, 12], [6, 0]],
             [[23, 1], [10, 17], [9, 18]],
         ])
-        values, indices = lexsort_along(x, dim=1)
+        values, backmap = lexsort_along(x, dim=1)
         self.assertTrue(
             torch.equal(
                 values,
@@ -134,7 +134,7 @@ class TestLexsortAlong(unittest.TestCase):
                 ]),
             )
         )
-        self.assertTrue(torch.equal(indices, torch.as_tensor([1, 0, 2])))
+        self.assertTrue(torch.equal(backmap, torch.as_tensor([1, 0, 2])))
 
     def test_lexsort_along_3D_dimminus1(self) -> None:
         x = torch.as_tensor([
@@ -143,7 +143,7 @@ class TestLexsortAlong(unittest.TestCase):
             [[19, 14], [5, 12], [6, 0]],
             [[23, 1], [10, 17], [9, 18]],
         ])
-        values, indices = lexsort_along(x, dim=-1)
+        values, backmap = lexsort_along(x, dim=-1)
         self.assertTrue(
             torch.equal(
                 values,
@@ -155,7 +155,7 @@ class TestLexsortAlong(unittest.TestCase):
                 ]),
             )
         )
-        self.assertTrue(torch.equal(indices, torch.as_tensor([1, 0])))
+        self.assertTrue(torch.equal(backmap, torch.as_tensor([1, 0])))
 
 
 class TestSwapIdcsVals(unittest.TestCase):
