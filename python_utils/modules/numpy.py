@@ -132,6 +132,90 @@ def swap_idcs_vals_duplicates(x: npt.NDArray) -> npt.NDArray:
     return np.argsort(x)
 
 
+def lexsort(
+    keys: npt.NDArray | tuple[npt.NDArray, ...], axis: int = -1
+) -> npt.NDArray:
+    """Like np.lexsort(), but MUCH faster.
+
+    Perform an indirect stable sort using a sequence of keys.
+
+    Given multiple sorting keys, which can be interpreted as elements of a
+    tuple, lexsort returns an array of integer indices that describes the sort
+    order of the given tuples. The last key in the tuple is used for the
+    primary sort order, the second-to-last key for the secondary sort order,
+    and so on. The first dimension is always interpreted as the dimension
+    along which the tuples lie.
+
+    Args:
+        keys: Array of shape [K, N_0, ..., N_axis, ..., N_{D-1}] or a tuple
+            containing K [N_0, ..., N_axis, ..., N_{D-1}]-shaped sequences. K
+            refers to the amount of elements in the tuples. The last element
+            is the primary sort key.
+        axis: Dimension to be indirectly sorted. By default, sort over the last
+            dimension.
+
+    Returns:
+        Array of indices that sort the keys along the specified axis.
+            Shape: [N_0, ..., N_axis, ..., N_{D-1}]
+
+    Examples:
+        >>> lexsort((np.array([ 1, 17, 18]),
+        >>>          np.array([23, 10,  9]),
+        >>>          np.array([14, 12,  0]),
+        >>>          np.array([19,  5,  6]),
+        >>>          np.array([21, 20, 22]),
+        >>>          np.array([ 7,  3,  8]),
+        >>>          np.array([13,  4,  2]),
+        >>>          np.array([15, 11, 16])))
+        array([1, 0, 2])
+
+        >>> lexsort(np.array([[4, 8, 2, 8, 3, 7, 3],
+        >>>                       [9, 4, 0, 4, 0, 4, 1],
+        >>>                       [1, 5, 1, 4, 3, 4, 4]]))
+        array([2, 0, 4, 6, 5, 3, 1])
+    """
+    if isinstance(keys, tuple):
+        keys = np.stack(keys)  # [K, N_0, ..., N_axis, ..., N_{D-1}]
+
+    # If the array is an integer array, first try sorting by representing
+    # each of the "tuples" as a single integer. This is much faster than
+    # lexsorting along the given dimension.
+    if keys.dtype in (
+        np.int8,
+        np.int16,
+        np.int32,
+        np.int64,
+        np.uint8,
+        np.uint16,
+        np.uint32,
+        np.uint64,
+    ):  # type: ignore
+        # Compute the minimum and maximum values for each key.
+        axes_flat = tuple(range(1, keys.ndim))
+        maxs = np.amax(keys, axis=axes_flat, keepdims=True)  # [K, 1, ..., 1]
+        mins = np.amin(keys, axis=axes_flat, keepdims=True)  # [K, 1, ..., 1]
+        extents = np.squeeze(maxs - mins + 1, axis=axes_flat)  # [K]
+        keys_dense = keys - mins  # [K, N_0, ..., N_axis, ..., N_{D-1}]
+
+        try:
+            # Convert the tuples to single integers.
+            idcs = np.ravel_multi_index(
+                keys_dense.astype(np.int64), extents, mode="raise", order="F"
+            )  # [N_0, ..., N_axis, ..., N_{D-1}]
+
+            # Sort the integers.
+            return np.argsort(
+                idcs, axis=axis
+            )  # [N_0, ..., N_axis, ..., N_{D-1}]
+        except ValueError:
+            # Overflow would occur when converting to integers.
+            pass
+
+    # If the array is not an integer array or if overflow would occur when
+    # converting to integers, we have to use np.lexsort().
+    return np.lexsort(keys, axis=axis)
+
+
 def lexsort_along(
     x: npt.NDArray, axis: int = -1
 ) -> tuple[npt.NDArray, npt.NDArray]:
@@ -235,7 +319,7 @@ def lexsort_along(
     y = np.flip(
         y, axis=(0,)
     )  # [N_0 * ... * N_{axis-1} * N_{axis+1} * ... * N_{D-1}, N_axis]
-    backmap = np.lexsort(y, axis=-1)  # [N_axis]
+    backmap = lexsort(y, axis=-1)  # [N_axis]
 
     # Sort the array along the given axis.
     x_sorted = x.take(backmap, axis)  # [N_0, ..., N_axis, ..., N_{D-1}]
