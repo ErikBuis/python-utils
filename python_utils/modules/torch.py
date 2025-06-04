@@ -18,6 +18,63 @@ from torch.utils.data.dataloader import default_collate
 default_collate_fn_map.update({type(None): collate_str_fn})
 
 
+def to_tensor(
+    object: object,
+    device: torch.device | str | int | None = None,
+    dtype: torch.dtype | None = None,
+) -> torch.Tensor:
+    """Convert an object to a tensor.
+
+    Warning: Does not copy the data if possible. Thus, the returned tensor
+    could share memory with the original object.
+
+    Args:
+        object: The object to convert to a tensor.
+        device: The desired device of the returned tensor. If None, the
+            device of the object will be used.
+        dtype: The desired data type of the returned tensor. If None, the
+            dtype of the object will be used.
+    """
+    # PyTorch supported types: bool, uint8, int8, int16, int32, int64, float16,
+    # float32, float64, complex64, and complex128.
+    if isinstance(object, torch.Tensor):
+        return object.to(device=device, dtype=dtype)
+
+    if isinstance(object, np.ndarray):
+        try:
+            return torch.from_numpy(object).to(device=device, dtype=dtype)
+        except TypeError as e:
+            # Try to convert to a supported type before calling from_numpy().
+            np2torch_fallbacks = {
+                "uint16": np.int16,  # torch.int16
+                "uint32": np.int32,  # torch.int32
+                "uint64": np.int64,  # torch.int64
+                "float128": np.float64,  # torch.float64
+                "complex256": np.complex128,  # torch.complex128
+            }
+            fallback = np2torch_fallbacks.get(object.dtype.name)
+            # Re-raise the original error if there is no fallback.
+            if fallback is None:
+                raise e
+            # Warn the user that we are converting to a different type.
+            warnings.warn(
+                f"Can't convert np.ndarray of type {object.dtype} to tensor."
+                f" Falling back to type {fallback}."
+            )
+            return torch.from_numpy(object.astype(fallback)).to(
+                device=device, dtype=dtype
+            )
+
+    # Last resort: because numpy recognizes more array-like types than torch,
+    # we try to convert to numpy first.
+    try:
+        return to_tensor(np.array(object), device=device, dtype=dtype)
+    except Exception as e:
+        raise TypeError(
+            f"Could not convert object of type {type(object)} to tensor."
+        ) from e
+
+
 def interp(
     x: torch.Tensor,
     xp: torch.Tensor,
@@ -105,7 +162,7 @@ def cumsum_start_0(
     dtype: torch.dtype | None = None,
     out: torch.Tensor | None = None,
 ) -> torch.Tensor:
-    """Like torch.cumsum, but adds a zero at the start of the tensor.
+    """Like torch.cumsum(), but adds a zero at the start of the tensor.
 
     Args:
         a: Input tensor.
@@ -148,63 +205,6 @@ def cumsum_start_0(
     zeros = torch.zeros(shape, device=device, dtype=dtype)
     cumsum = torch.cumsum(t, dim=dim, dtype=dtype)
     return torch.concat([zeros, cumsum], dim=dim)
-
-
-def to_tensor(
-    object: object,
-    device: torch.device | str | int | None = None,
-    dtype: torch.dtype | None = None,
-) -> torch.Tensor:
-    """Convert an object to a tensor.
-
-    Warning: Does not copy the data if possible. Thus, the returned tensor
-    could share memory with the original object.
-
-    Args:
-        object: The object to convert to a tensor.
-        device: The desired device of the returned tensor. If None, the
-            device of the object will be used.
-        dtype: The desired data type of the returned tensor. If None, the
-            dtype of the object will be used.
-    """
-    # Torch supported types: bool, uint8, int8, int16, int32, int64, float16,
-    # float32, float64, complex64, and complex128.
-    if isinstance(object, torch.Tensor):
-        return object.to(device=device, dtype=dtype)
-
-    if isinstance(object, np.ndarray):
-        try:
-            return torch.from_numpy(object).to(device=device, dtype=dtype)
-        except TypeError as e:
-            # Try to convert to a supported type before calling from_numpy().
-            np2torch_fallbacks = {
-                "uint16": np.int16,  # torch.int16
-                "uint32": np.int32,  # torch.int32
-                "uint64": np.int64,  # torch.int64
-                "float128": np.float64,  # torch.float64
-                "complex256": np.complex128,  # torch.complex128
-            }
-            fallback = np2torch_fallbacks.get(object.dtype.name)
-            # Re-raise the original error if there is no fallback.
-            if fallback is None:
-                raise e
-            # Warn the user that we are converting to a different type.
-            warnings.warn(
-                f"Can't convert np.ndarray of type {object.dtype} to tensor."
-                f" Falling back to type {fallback}."
-            )
-            return torch.from_numpy(object.astype(fallback)).to(
-                device=device, dtype=dtype
-            )
-
-    # Last resort: because numpy recognizes more array-like types than torch,
-    # we try to convert to numpy first.
-    try:
-        return to_tensor(np.array(object), device=device, dtype=dtype)
-    except Exception as e:
-        raise TypeError(
-            f"Could not convert object of type {type(object)} to tensor."
-        ) from e
 
 
 def swap_idcs_vals(x: torch.Tensor) -> torch.Tensor:
@@ -259,7 +259,7 @@ def swap_idcs_vals_duplicates(x: torch.Tensor) -> torch.Tensor:
             Shape: [N]
 
     Examples:
-        >>> x = torch.tensor([1, 2, 0, 1, 2])
+        >>> x = torch.tensor([1, 3, 0, 1, 3])
         >>> swap_idcs_vals_duplicates(x)
         tensor([2, 0, 3, 1, 4])
     """
@@ -268,7 +268,7 @@ def swap_idcs_vals_duplicates(x: torch.Tensor) -> torch.Tensor:
 
     # Believe it or not, this O(n log n) algorithm is actually faster than a
     # native implementation that uses a Python for loop with complexity O(n).
-    return torch.sort(x).indices
+    return torch.argsort(x)
 
 
 def ravel_multi_index(
@@ -345,7 +345,7 @@ def ravel_multi_index(
         multi_index = multi_index % dims
     elif mode == "clip":
         # Clip the multi-index to the range.
-        multi_index = torch.clamp(multi_index, torch.as_tensor(0), dims - 1)
+        multi_index = torch.clamp(multi_index, torch.tensor(0), dims - 1)
     else:
         raise ValueError(
             f"clipmode must be one of 'clip', 'raise', or 'wrap' (got '{mode}')"
@@ -420,11 +420,11 @@ def lexsort(
         return torch.argsort(idcs, dim=dim)  # [N_0, ..., N_dim, ..., N_{D-1}]
 
     # If the tensor is not an integer tensor or if overflow would occur when
-    # converting to integers, we have to use np.lexsort(). Unfortunately,
-    # torch doesn't have a lexsort() equivalent, so we have to use numpy here.
-    return torch.from_numpy(
-        np.lexsort(keys.detach().cpu().numpy(), axis=dim)
-    ).to(keys.device)
+    # converting to integers, we have to use np.lexsort(). Unfortunately, torch
+    # doesn't have a np.lexsort() equivalent, so we have to use numpy here.
+    return torch.from_numpy(np.lexsort(keys.numpy(force=True), axis=dim)).to(
+        keys.device
+    )
 
 
 def lexsort_along(
@@ -589,7 +589,7 @@ def unique_consecutive(
     | tuple[torch.Tensor, torch.Tensor]
     | tuple[torch.Tensor, torch.Tensor, torch.Tensor]
 ):
-    """Like torch.unique_consecutive, but WAY more efficient.
+    """Like torch.unique_consecutive(), but WAY more efficient.
 
     The returned unique elements are retrieved along the requested dimension,
     taking all the other dimensions as constant tuples.
@@ -869,7 +869,7 @@ def unique(
     | tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     | tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
 ):
-    """Like torch.unique, but WAY more efficient.
+    """Like torch.unique(), but WAY more efficient.
 
     The returned unique elements are retrieved along the requested dimension,
     taking all the other dimensions as constant tuples.
@@ -880,8 +880,8 @@ def unique(
         return_backmap: Whether to also return the backmap tensor.
             This can be used to sort the original tensor.
         return_inverse: Whether to also return the inverse mapping tensor.
-            This can be used to reconstruct the original tensor from the
-            unique tensor.
+            This can be used to reconstruct the original tensor from the unique
+            tensor.
         return_counts: Whether to also return the counts of each unique
             element.
         dim: The dimension to operate upon. If None, the unique of the
@@ -1040,8 +1040,8 @@ def unique(
         )
 
     # Sort along the given dimension, taking all the other dimensions as
-    # constant tuples. Torch's sort() doesn't work here since it will
-    # sort the other dimensions as well.
+    # constant tuples. PyTorch's sort() doesn't work here since it will sort the
+    # other dimensions as well.
     x_sorted, backmap = lexsort_along(
         x, dim=dim
     )  # [N_0, ..., N_dim, ..., N_{D-1}], [N_dim]
@@ -1127,12 +1127,12 @@ def collate_replace_corrupted(
         dataset: Dataset that the DataLoader is passing through.
         default_collate_fn: The collate function to call once the batch has no
             corrupted samples any more. If None,
-            torch.utils.data.dataloader.default_collate is called.
+            torch.utils.data.dataloader.default_collate() is called.
 
     Returns:
         Batch with new samples instead of corrupted ones.
     """
-    # Use torch.utils.data.dataloader.default_collate if no other default
+    # Use torch.utils.data.dataloader.default_collate() if no other default
     # collate function is specified.
     default_collate_fn = (
         default_collate_fn

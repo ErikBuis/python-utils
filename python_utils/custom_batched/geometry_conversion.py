@@ -739,7 +739,7 @@ def PolygonLike2PolygonLikeExterior(
     """
     if isinstance(polygon_like, Polygon):
         (exterior,) = Polygon2PolygonExterior(polygon_like, device, dtype)
-        V_ps = torch.as_tensor([len(exterior)], device=device)
+        V_ps = torch.tensor([len(exterior)], device=device)
         exterior = exterior.unsqueeze(0)
     else:
         exterior, V_ps = MultiPolygon2MultiPolygonExterior(
@@ -790,7 +790,7 @@ def PolygonLike2PolygonLikeInteriors(
     """
     if isinstance(polygon_like, Polygon):
         interiors, V_is = Polygon2PolygonInteriors(polygon_like, device, dtype)
-        I_ps = torch.as_tensor([len(interiors)], device=device)
+        I_ps = torch.tensor([len(interiors)], device=device)
         V_is = V_is.unsqueeze(0)
         interiors = interiors.unsqueeze(0)
     else:

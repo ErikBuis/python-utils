@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from python_utils.modules.numpy import lexsort_along
+from python_utils.modules.numpy import lexsort_along, unique
 
 
 class TestLexsortAlong(unittest.TestCase):
@@ -67,3 +67,126 @@ class TestLexsortAlong(unittest.TestCase):
             )
         )
         self.assertTrue(np.array_equal(backmap, np.array([1, 0])))
+
+
+class TestUnique(unittest.TestCase):
+    def test_unique_1D_axis0(self) -> None:
+        # Should be the same as axis=None in the 1D case.
+        x = np.array([9, 10, 9, 9, 10, 9])
+        axis = 0
+        uniques, backmap, inverse, counts = unique(
+            x,
+            return_backmap=True,
+            return_inverse=True,
+            return_counts=True,
+            axis=axis,
+        )
+        self.assertTrue(np.array_equal(uniques, np.array([9, 10])))
+        self.assertTrue(np.array_equal(backmap, np.array([0, 2, 3, 5, 1, 4])))
+        self.assertTrue(np.array_equal(inverse, np.array([0, 1, 0, 0, 1, 0])))
+        self.assertTrue(np.array_equal(counts, np.array([4, 2])))
+
+        self.assertTrue(
+            np.array_equal(x[backmap], np.array([9, 9, 9, 9, 10, 10]))
+        )
+
+        self.assertTrue(
+            np.array_equal(backmap[: counts[0]], np.array([0, 2, 3, 5]))
+        )
+
+        cumcounts = counts.cumsum(axis=0)
+        get_idcs = lambda i: backmap[
+            cumcounts[i - 1] : cumcounts[i]
+        ]  # noqa: E731
+        self.assertTrue(np.array_equal(get_idcs(1), np.array([1, 4])))
+
+    def test_unique_1D_axisNone(self) -> None:
+        # Not implemented, skip this test for now.
+        return
+
+    def test_unique_2D_axis1(self) -> None:
+        x = np.array(
+            [[9, 10, 7, 9], [10, 9, 8, 10], [8, 7, 9, 8], [7, 7, 9, 7]]
+        )
+        axis = 1
+        uniques, backmap, inverse, counts = unique(
+            x,
+            return_backmap=True,
+            return_inverse=True,
+            return_counts=True,
+            axis=axis,
+        )
+        self.assertTrue(
+            np.array_equal(
+                uniques,
+                np.array([[7, 9, 10], [8, 10, 9], [9, 8, 7], [9, 7, 7]]),
+            )
+        )
+        self.assertTrue(np.array_equal(backmap, np.array([2, 0, 3, 1])))
+        self.assertTrue(np.array_equal(inverse, np.array([1, 2, 0, 1])))
+        self.assertTrue(np.array_equal(counts, np.array([1, 2, 1])))
+
+        self.assertTrue(
+            np.array_equal(
+                x[:, backmap],
+                np.array(
+                    [[7, 9, 9, 10], [8, 10, 10, 9], [9, 8, 8, 7], [9, 7, 7, 7]]
+                ),
+            )
+        )
+
+        self.assertTrue(np.array_equal(backmap[: counts[0]], np.array([2])))
+
+        cumcounts = counts.cumsum(axis=0)
+        get_idcs = lambda i: backmap[
+            cumcounts[i - 1] : cumcounts[i]
+        ]  # noqa: E731
+        self.assertTrue(np.array_equal(get_idcs(1), np.array([0, 3])))
+
+    def test_unique_2D_axisNone(self) -> None:
+        # Not implenmented, skip this test for now.
+        return
+
+    def test_unique_3D_axis2(self) -> None:
+        x = np.array([
+            [[0, 2, 1, 2], [4, 5, 6, 5], [9, 7, 8, 7]],
+            [[4, 8, 2, 8], [3, 7, 3, 7], [0, 1, 2, 1]],
+        ])
+        axis = 2
+        uniques, backmap, inverse, counts = unique(
+            x,
+            return_backmap=True,
+            return_inverse=True,
+            return_counts=True,
+            axis=axis,
+        )
+        self.assertTrue(
+            np.array_equal(
+                uniques,
+                np.array([
+                    [[0, 1, 2], [4, 6, 5], [9, 8, 7]],
+                    [[4, 2, 8], [3, 3, 7], [0, 2, 1]],
+                ]),
+            )
+        )
+        self.assertTrue(np.array_equal(backmap, np.array([0, 2, 1, 3])))
+        self.assertTrue(np.array_equal(inverse, np.array([0, 2, 1, 2])))
+        self.assertTrue(np.array_equal(counts, np.array([1, 1, 2])))
+
+        self.assertTrue(
+            np.array_equal(
+                x[:, :, backmap],
+                np.array([
+                    [[0, 1, 2, 2], [4, 6, 5, 5], [9, 8, 7, 7]],
+                    [[4, 2, 8, 8], [3, 3, 7, 7], [0, 2, 1, 1]],
+                ]),
+            )
+        )
+
+        self.assertTrue(np.array_equal(backmap[: counts[0]], np.array([0])))
+
+        cumcounts = counts.cumsum(axis=0)
+        get_idcs = lambda i: backmap[
+            cumcounts[i - 1] : cumcounts[i]
+        ]  # noqa: E731
+        self.assertTrue(np.array_equal(get_idcs(1), np.array([2])))

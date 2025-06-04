@@ -313,7 +313,7 @@ def cut_polygon_around_points(
         return gpd.GeoSeries([polygon])
 
     _, vertices, _, _, point_region, regions = voronoi_constrain_to_rect(
-        points.cpu().numpy(), polygon.bounds
+        points.numpy(force=True), polygon.bounds
     )
 
     # Convert the regions to polygons.

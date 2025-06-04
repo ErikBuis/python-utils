@@ -23,7 +23,7 @@ def cumsum_start_0(
     dtype: np.dtype | None = None,
     out: npt.NDArray | None = None,
 ) -> npt.NDArray:
-    """Like np.cumsum, but adds a zero at the start of the array.
+    """Like np.cumsum(), but adds a zero at the start of the array.
 
     Args:
         a: Input array.
@@ -68,53 +68,68 @@ def cumsum_start_0(
     return np.concat([zeros, cumsum], axis=axis)
 
 
-def pad_sequence(
-    sequences: list[npt.ArrayLike],
-    batch_first: bool = False,
-    padding_value: Any = 0,
-) -> npt.NDArray:
-    """Pad a list of variable length arrays with padding_value.
+def swap_idcs_vals(x: npt.NDArray) -> npt.NDArray:
+    """Swap the indices and values of a 1D array.
 
-    Note: This function is the numpy equivalent of
-    torch.nn.utils.rnn.pad_sequence(). It is slower than the torch
-    implementation, so please use the latter if you are working with PyTorch
-    tensors. (Even better is .modules_batched.torch.pad_sequence_batched()
-    from this repository, since that function is faster than torch's version.
-    See the docstring of that function for more details.)
+    The input array is assumed to contain exactly all integers from 0 to
+    x.shape[0] - 1, in any order.
+
+    Warning: This function does not explicitly check if the input array
+    contains no duplicates. If x contains duplicates, no error will be raised
+    and undefined behaviour will occur!
 
     Args:
-        sequences: A sequence of variable length arrays.
-            Length: B
-            Inner shape: [L_b, *]
-        batch_first: Whether to return the batch dimension as the first
-            dimension. If False, the output will have shape [max(L_bs), B, *].
-            If True, the output will have shape [B, max(L_bs), *].
-        padding_value: The value to use for padding the inner sequences.
+        x: The array to swap.
+            Shape: [N]
 
     Returns:
-        Array of shape [max(L_bs), B, *] if batch_first is False, otherwise
-        array of shape [B, max(L_bs), *]. Padded with padding_value.
+        The swapped array.
+            Shape: [N]
+
+    Examples:
+        >>> x = np.array([2, 3, 0, 4, 1])
+        >>> swap_idcs_vals(x)
+        array([2, 4, 0, 1, 3])
     """
-    sequences_arr = [np.array(seq) for seq in sequences]
-    star_shape = sequences_arr[0].shape[1:]
-    assert all(
-        (arr.shape[1:] == star_shape) for arr in sequences_arr[1:]
-    ), "All arrays must have the same shape after the first dimension."
-    B = len(sequences_arr)
-    max_L_bs = max(len(arr) for arr in sequences_arr)
-    shape = (
-        (B, max_L_bs, *star_shape)
-        if batch_first
-        else (max_L_bs, B, *star_shape)
-    )
-    dtype = np.result_type(*sequences_arr)
-    padded = np.full(shape, padding_value, dtype=dtype)
-    for b, arr in enumerate(sequences_arr):
-        if batch_first:
-            padded[b, : len(arr)] = arr
-        else:
-            padded[: len(arr), b] = arr
-    return padded
+    if x.ndim != 1:
+        raise ValueError("x must be 1D.")
+
+    x_swapped = np.empty_like(x)
+    x_swapped[x] = np.arange(len(x))
+    return x_swapped
+
+
+def swap_idcs_vals_duplicates(x: npt.NDArray) -> npt.NDArray:
+    """Swap the indices and values of a 1D array, allowing duplicates.
+
+    The input array is assumed to contain integers from 0 to M <= N, in any
+    order, and may contain duplicates.
+
+    The output array will contain exactly all integers from 0 to len(x) - 1,
+    in any order.
+
+    If the input doesn't contain duplicates, you should use swap_idcs_vals()
+    instead since it is faster (especially for large arrays).
+
+    Args:
+        x: The array to swap.
+            Shape: [N]
+
+    Returns:
+        The swapped array.
+            Shape: [N]
+
+    Examples:
+        >>> x = np.array([1, 3, 0, 1, 3])
+        >>> swap_idcs_vals_duplicates(x)
+        array([2, 0, 3, 1, 4])
+    """
+    if x.ndim != 1:
+        raise ValueError("x must be 1D.")
+
+    # Believe it or not, this O(n log n) algorithm is actually faster than a
+    # native implementation that uses a Python for loop with complexity O(n).
+    return np.argsort(x)
 
 
 def lexsort_along(
@@ -279,7 +294,7 @@ def unique_consecutive(
     | tuple[npt.NDArray, npt.NDArray]
     | tuple[npt.NDArray, npt.NDArray, npt.NDArray]
 ):
-    """A consecutive version of np.unique.
+    """A consecutive version of np.unique().
 
     The returned unique elements are retrieved along the requested dimension,
     taking all the other dimensions as constant tuples.
@@ -292,10 +307,10 @@ def unique_consecutive(
             array.
         return_counts: Whether to also return the number of times each unique
             element occurred in the original array.
-        dim: The dimension to operate upon. If None, the unique of the flattened
-            input is returned. Otherwise, each of the arrays indexed by the
-            given dimension is treated as one of the elements to apply the
-            unique operation upon. See examples for more details.
+        axis: The dimension to operate upon. If None, the unique of the
+            flattened input is returned. Otherwise, each of the arrays indexed
+            by the given dimension is treated as one of the elements to apply
+            the unique operation upon. See examples for more details.
 
     Returns:
         Tuple containing:
@@ -460,6 +475,306 @@ def unique_consecutive(
         return uniques, *aux
     else:
         return uniques
+
+
+@overload
+def unique(  # type: ignore
+    x: npt.NDArray,
+    return_backmap: Literal[False] = ...,
+    return_inverse: Literal[False] = ...,
+    return_counts: Literal[False] = ...,
+    axis: int | None = None,
+) -> npt.NDArray:
+    pass
+
+
+@overload
+def unique(
+    x: npt.NDArray,
+    return_backmap: Literal[True] = ...,
+    return_inverse: Literal[False] = ...,
+    return_counts: Literal[False] = ...,
+    axis: int | None = None,
+) -> tuple[npt.NDArray, npt.NDArray]:
+    pass
+
+
+@overload
+def unique(
+    x: npt.NDArray,
+    return_backmap: Literal[False] = ...,
+    return_inverse: Literal[True] = ...,
+    return_counts: Literal[False] = ...,
+    axis: int | None = None,
+) -> tuple[npt.NDArray, npt.NDArray]:
+    pass
+
+
+@overload
+def unique(
+    x: npt.NDArray,
+    return_backmap: Literal[False] = ...,
+    return_inverse: Literal[False] = ...,
+    return_counts: Literal[True] = ...,
+    axis: int | None = None,
+) -> tuple[npt.NDArray, npt.NDArray]:
+    pass
+
+
+@overload
+def unique(
+    x: npt.NDArray,
+    return_backmap: Literal[True] = ...,
+    return_inverse: Literal[True] = ...,
+    return_counts: Literal[False] = ...,
+    axis: int | None = None,
+) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
+    pass
+
+
+@overload
+def unique(
+    x: npt.NDArray,
+    return_backmap: Literal[True] = ...,
+    return_inverse: Literal[False] = ...,
+    return_counts: Literal[True] = ...,
+    axis: int | None = None,
+) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
+    pass
+
+
+@overload
+def unique(
+    x: npt.NDArray,
+    return_backmap: Literal[False] = ...,
+    return_inverse: Literal[True] = ...,
+    return_counts: Literal[True] = ...,
+    axis: int | None = None,
+) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
+    pass
+
+
+@overload
+def unique(
+    x: npt.NDArray,
+    return_backmap: Literal[True] = ...,
+    return_inverse: Literal[True] = ...,
+    return_counts: Literal[True] = ...,
+    axis: int | None = None,
+) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray]:
+    pass
+
+
+def unique(
+    x: npt.NDArray,
+    return_backmap: bool = False,
+    return_inverse: bool = False,
+    return_counts: bool = False,
+    axis: int | None = None,
+) -> (
+    npt.NDArray
+    | tuple[npt.NDArray, npt.NDArray]
+    | tuple[npt.NDArray, npt.NDArray, npt.NDArray]
+    | tuple[npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray]
+):
+    """Like np.unique(), but WAY more efficient.
+
+    The returned unique elements are retrieved along the requested dimension,
+    taking all the other dimensions as constant tuples.
+
+    Args:
+        x: The input array.
+            Shape: [N_0, ..., N_axis, ..., N_{D-1}]
+        return_backmap: Whether to also return the backmap array.
+            This can be used to sort the original array.
+        return_inverse: Whether to also return the inverse mapping array.
+            This can be used to reconstruct the original array from the unique
+            array.
+        return_counts: Whether to also return the counts of each unique
+            element.
+        axis: The dimension to operate upon. If None, the unique of the
+            flattened input is returned. Otherwise, each of the arrays
+            indexed by the given dimension is treated as one of the elements
+            to apply the unique operation upon. See examples for more details.
+
+    Returns:
+        Tuple containing:
+        - The unique elements, guaranteed to be sorted along the given
+            dimension.
+            Shape: [N_0, ..., N_{axis-1}, U, N_{axis+1}, ..., N_{D-1}]
+        - (Optional) If return_backmap is True, the backmap array, which
+            contains the indices of the unique values in the original input.
+            The sorted version of x can be retrieved as follows:
+            >>> x_sorted = x.take(backmap, axis)
+            Shape: [N_axis]
+        - (Optional) If return_inverse is True, the indices where elements
+            in the original input ended up in the returned unique values.
+            The original array can be reconstructed as follows:
+            >>> x_reconstructed = uniques.take(inverse, axis)
+            Shape: [N_axis]
+        - (Optional) If return_counts is True, the counts for each unique
+            element.
+            Shape: [U]
+
+    Examples:
+        >>> # 1D example: -----------------------------------------------------
+        >>> x = np.array([9, 10, 9, 9, 10, 9])
+        >>> axis = 0
+
+        >>> uniques, backmap, inverse, counts = unique(
+        >>>     x,
+        >>>     return_backmap=True,
+        >>>     return_inverse=True,
+        >>>     return_counts=True,
+        >>>     axis=axis,
+        >>> )
+        >>> uniques
+        array([ 9, 10])
+        >>> backmap
+        array([0, 2, 3, 5, 1, 4])
+        >>> inverse
+        array([0, 1, 0, 0, 1, 0])
+        >>> counts
+        array([4, 2])
+
+        >>> # Get the lexicographically sorted version of x:
+        >>> x.take(backmap, axis)
+        array([ 9,  9,  9,  9, 10, 10])
+
+        >>> # Reconstruct the original array:
+        >>> uniques.take(inverse, axis)
+        array([ 9, 10,  9,  9, 10,  9])
+
+        >>> # 2D example: -----------------------------------------------------
+        >>> x = np.array([
+        >>>     [9, 10, 7, 9],
+        >>>     [10, 9, 8, 10],
+        >>>     [8, 7, 9, 8],
+        >>>     [7, 7, 9, 7],
+        >>> ])
+        >>> axis = 1
+
+        >>> uniques, backmap, inverse, counts = unique(
+        >>>     x,
+        >>>     return_backmap=True,
+        >>>     return_inverse=True,
+        >>>     return_counts=True,
+        >>>     axis=axis,
+        >>> )
+        >>> uniques
+        array([[ 7,  9, 10],
+                [ 8, 10,  9],
+                [ 9,  8,  7],
+                [ 9,  7,  7]])
+        >>> backmap
+        array([2, 0, 3, 1])
+        >>> inverse
+        array([1, 2, 0, 1])
+        >>> counts
+        array([1, 2, 1])
+
+        >>> # Get the lexicographically sorted version of x:
+        >>> x.take(backmap, axis)
+        array([[ 7,  9,  9, 10],
+                [ 8, 10, 10,  9],
+                [ 9,  8,  8,  7],
+                [ 9,  7,  7,  7]])
+
+        >>> # Reconstruct the original array:
+        >>> uniques.take(inverse, axis)
+        array([[ 9, 10,  7,  9],
+                [10,  9,  8, 10],
+                [ 8,  7,  9,  8],
+                [ 7,  7,  9,  7]])
+
+        >>> # 3D example: -----------------------------------------------------
+        >>> x = np.array([
+        >>>     [
+        >>>         [0, 2, 1, 2],
+        >>>         [4, 5, 6, 5],
+        >>>         [9, 7, 8, 7],
+        >>>     ],
+        >>>     [
+        >>>         [4, 8, 2, 8],
+        >>>         [3, 7, 3, 7],
+        >>>         [0, 1, 2, 1],
+        >>>     ],
+        >>> ])
+        >>> axis = 2
+
+        >>> uniques, backmap, inverse, counts = unique(
+        >>>     x,
+        >>>     return_backmap=True,
+        >>>     return_inverse=True,
+        >>>     return_counts=True,
+        >>>     axis=axis,
+        >>> )
+        >>> uniques
+        array([[[0, 1, 2],
+                 [4, 6, 5],
+                 [9, 8, 7]],
+                [[4, 2, 8],
+                 [3, 3, 7],
+                 [0, 2, 1]]])
+        >>> backmap
+        array([0, 2, 1, 3])
+        >>> inverse
+        array([0, 2, 1, 2])
+        >>> counts
+        array([1, 1, 2])
+
+        >>> # Get the lexicographically sorted version of x:
+        >>> x.take(backmap, axis)
+        array([[[0, 1, 2, 2],
+                 [4, 6, 5, 5],
+                 [9, 8, 7, 7]],
+                [[4, 2, 8, 8],
+                 [3, 3, 7, 7],
+                 [0, 2, 1, 1]]])
+
+        >>> # Reconstruct the original array:
+        >>> uniques.take(inverse, axis)
+        array([[[0, 2, 1, 2],
+                 [4, 5, 6, 5],
+                 [9, 7, 8, 7]],
+                [[4, 8, 2, 8],
+                 [3, 7, 3, 7],
+                 [0, 1, 2, 1]])
+    """
+    if axis is None:
+        raise NotImplementedError(
+            "axis=None is not implemented yet. Please specify a dimension"
+            " explicitly."
+        )
+
+    # Sort along the given dimension, taking all the other dimensions as
+    # constant tuples. NumPy's sort() doesn't work here since it will sort the
+    # other dimensions as well.
+    x_sorted, backmap = lexsort_along(
+        x, axis=axis
+    )  # [N_0, ..., N_axis, ..., N_{D-1}], [N_axis]
+
+    out = unique_consecutive(
+        x_sorted,
+        return_inverse=return_inverse,
+        return_counts=return_counts,
+        axis=axis,
+    )
+
+    aux = []
+    if return_backmap:
+        aux.append(backmap)
+    if return_inverse:
+        # The backmap wasn't taken into account by unique_consecutive(), so we
+        # have to do it ourselves.
+        backmap_inv = swap_idcs_vals(backmap)  # [N_axis]
+        aux.append(out[1][backmap_inv])
+    if return_counts:
+        aux.append(out[-1])
+
+    if aux:
+        return out[0], *aux
+    return out
 
 
 def unequal_seqs_add(a: npt.NDArray, b: npt.NDArray) -> npt.NDArray:

@@ -108,10 +108,10 @@ def pad_sequence_batched(
     This function is equivalent to torch.nn.utils.rnn.pad_sequence(), but
     surprisingly it is a bit faster, even if the padding value is not set to
     None! And if the padding value is set to None, the function will be even
-    faster, since it will not need to overwriting the allocated memory. The
-    former is because torch.nn.utils.rnn.pad_sequence() performs some extra
-    checks that we skip here. It is also a bit more flexible, since it allows
-    for the batch dimension to be at dim=1 instead of dim=0.
+    faster, since it will not need to overwrite the allocated memory. The former
+    is because torch.nn.utils.rnn.pad_sequence() performs some extra checks that
+    we skip here. It is also a bit more flexible, since it allows for the batch
+    dimension to be at dim=1 instead of dim=0.
 
     In conclusion, you should almost always use this function instead.
 
@@ -542,9 +542,9 @@ def interp_batched(
     right: torch.Tensor | None = None,
     period: torch.Tensor | None = None,
 ) -> torch.Tensor:
-    """Like numpy.interp, but for PyTorch tensors and batched.
+    """Like np.interp(), but for PyTorch tensors and batched.
 
-    This function is a direct translation of numpy.interp to PyTorch tensors.
+    This function is a direct translation of np.interp() to PyTorch tensors.
     It performs linear interpolation on a batch of 1D tensors.
 
     Args:
@@ -975,7 +975,7 @@ def unique_consecutive_batched(
     | tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     | tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
 ):
-    """A batched version of torch.unique_consecutive, but WAY more effiecient.
+    """A batched version of torch.unique_consecutive(), but WAY more effiecient.
 
     Note that dim refers to the index of the dimension to sort along AFTER the
     batch dimension. So e.g. if x has shape [B, N_0, N_1, N_2], then dim=0
@@ -1284,7 +1284,7 @@ def unique_batched(
         torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor
     ]
 ):
-    """A batched version of torch.unique, but WAY more efficient.
+    """A batched version of torch.unique(), but WAY more efficient.
 
     Note that dim refers to the index of the dimension to sort along AFTER the
     batch dimension. So e.g. if x has shape [B, N_0, N_1, N_2], then dim=0

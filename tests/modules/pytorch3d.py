@@ -59,7 +59,7 @@ class TestGetMatrixRotateVecAToVecB(unittest.TestCase):
             )
 
         # Prevent floating point trickery.
-        from_n = torch.as_tensor([1, 0, 0], dtype=self.DTYPE).unsqueeze(
+        from_n = torch.tensor([1, 0, 0], dtype=self.DTYPE).unsqueeze(
             0
         )  # [1, 3]
         to_n = from_n.clone()  # [1, 3]
@@ -88,7 +88,7 @@ class TestGetMatrixRotateVecAToVecB(unittest.TestCase):
             )
 
         # Prevent floating point trickery.
-        from_n = torch.as_tensor([1, 0, 0], dtype=self.DTYPE).unsqueeze(
+        from_n = torch.tensor([1, 0, 0], dtype=self.DTYPE).unsqueeze(
             0
         )  # [1, 3]
         to_n = -from_n.clone()  # [1, 3]
