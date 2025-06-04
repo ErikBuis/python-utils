@@ -595,18 +595,17 @@ def unique_consecutive(
     taking all the other dimensions as constant tuples.
 
     Args:
-        x: The input tensor. If it contains equal values, they must be
-            consecutive along the given dimension.
+        x: The input tensor. Must be sorted along the given dimension.
             Shape: [N_0, ..., N_dim, ..., N_{D-1}]
         return_inverse: Whether to also return the inverse mapping tensor.
-            This can be used to reconstruct the original tensor from the
-            unique tensor.
-        return_counts: Whether to also return the counts for each unique
-            element.
-        dim: The dimension to operate upon. If None, the unique of the
-            flattened input is returned. Otherwise, each of the tensors
-            indexed by the given dimension is treated as one of the elements
-            to apply the unique operation upon. See examples for more details.
+            This can be used to reconstruct the original tensor from the unique
+            tensor.
+        return_counts: Whether to also return the number of times each unique
+            element occurred in the original tensor.
+        dim: The dimension to operate upon. If None, the unique of the flattened
+            input is returned. Otherwise, each of the tensors indexed by the
+            given dimension is treated as one of the elements to apply the
+            unique operation upon. See examples for more details.
 
     Returns:
         Tuple containing:
@@ -679,7 +678,7 @@ def unique_consecutive(
         >>>     [
         >>>         [4, 2, 8, 8],
         >>>         [3, 3, 7, 7],
-        >>>         [0, 2, 1, 1]
+        >>>         [0, 2, 1, 1],
         >>>     ],
         >>> ])
         >>> dim = 2

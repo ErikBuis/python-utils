@@ -122,7 +122,7 @@ def lexsort_along(
 ) -> tuple[npt.NDArray, npt.NDArray]:
     """Sort an array along axis, taking all others as tuples.
 
-    This is like np.sort(), but the other axes are treated as tuples.
+    This is like np.sort(), but the other dimensions are treated as tuples.
     This function is roughly equivalent to the following Python code, but it is
     much faster.
     >>> np.stack(
@@ -139,7 +139,7 @@ def lexsort_along(
     Args:
         x: The array to sort.
             Shape: [N_0, ..., N_axis, ..., N_{D-1}]
-        axis: The axis to sort along.
+        axis: The dimension to sort along.
 
     Returns:
         Tuple containing:
@@ -287,33 +287,36 @@ def unique_consecutive(
     Args:
         x: The input array. Must be sorted along the given dimension.
             Shape: [N_0, ..., N_axis, ..., N_{D-1}]
-        return_inverse: Whether to also return the indices for where elements
-            in the original input ended up in the returned unique list.
-        return_counts: Whether to also return the counts for each unique
-            element.
-        axis: The dimension to operate upon. If None, the unique of the
-            flattened input is returned. Otherwise, each of the arrays
-            indexed by the given dimension is treated as one of the elements
-            to apply the unique operation upon. See examples for more details.
+        return_inverse: Whether to also return the inverse mapping array.
+            This can be used to reconstruct the original array from the unique
+            array.
+        return_counts: Whether to also return the number of times each unique
+            element occurred in the original array.
+        dim: The dimension to operate upon. If None, the unique of the flattened
+            input is returned. Otherwise, each of the arrays indexed by the
+            given dimension is treated as one of the elements to apply the
+            unique operation upon. See examples for more details.
 
     Returns:
         Tuple containing:
         - The unique elements.
-            Shape: [N_0, ..., N_{axis-1}, N_unique, N_{axis+1}, ..., N_{D-1}]
+            Shape: [N_0, ..., N_{axis-1}, U, N_{axis+1}, ..., N_{D-1}]
         - (Optional) If return_inverse is True, the indices where elements
-            in the original input ended up in the returned unique values.
+            in the original array ended up in the returned unique values.
+            The original array can be reconstructed as follows:
+            >>> x_reconstructed = uniques.take(inverse, axis)
             Shape: [N_axis]
         - (Optional) If return_counts is True, the counts for each unique
             element.
-            Shape: [N_unique]
+            Shape: [U]
 
     Examples:
         >>> # 1D example: -----------------------------------------------------
         >>> x = np.array([9, 9, 9, 9, 10, 10])
-        >>> dim = 0
+        >>> axis = 0
 
         >>> uniques, inverse, counts = unique_consecutive(
-        >>>     x, return_inverse=True, return_counts=True, dim=dim
+        >>>     x, return_inverse=True, return_counts=True, axis=axis
         >>> )
         >>> uniques
         array([9, 10])
@@ -322,6 +325,10 @@ def unique_consecutive(
         >>> counts
         array([4, 2])
 
+        >>> # Reconstruct the original array:
+        >>> uniques.take(inverse, axis)
+        array([ 9,  9,  9,  9, 10, 10])
+
         >>> # 2D example: -----------------------------------------------------
         >>> x = np.array([
         >>>     [7,  9,  9, 10],
@@ -329,48 +336,74 @@ def unique_consecutive(
         >>>     [9,  8,  8,  7],
         >>>     [9,  7,  7,  7],
         >>> ])
-        >>> dim = 1
+        >>> axis = 1
 
         >>> uniques, inverse, counts = unique_consecutive(
-        >>>     x, return_inverse=True, return_counts=True, dim=dim
+        >>>     x, return_inverse=True, return_counts=True, axis=axis
         >>> )
         >>> uniques
         array([[7, 9, 10],
-                [8, 10, 9],
-                [9, 8, 7],
-                [9, 7, 7]])
+               [8, 10, 9],
+               [9, 8, 7],
+               [9, 7, 7]])
         >>> inverse
         array([1, 2, 0, 1])
         >>> counts
         array([1, 2, 1])
 
+        >>> # Reconstruct the original array:
+        >>> uniques.take(inverse, axis)
+        array([[ 7,  9,  9, 10],
+               [ 8, 10, 10,  9],
+               [ 9,  8,  8,  7],
+               [ 9,  7,  7,  7]])
+
         >>> # 3D example: -----------------------------------------------------
         >>> x = np.array([
-        >>>     [[0, 1, 2, 2], [4, 6, 5, 5], [9, 8, 7, 7]],
-        >>>     [[4, 2, 8, 8], [3, 3, 7, 7], [0, 2, 1, 1]],
+        >>>     [
+        >>>         [0, 1, 2, 2],
+        >>>         [4, 6, 5, 5],
+        >>>         [9, 8, 7, 7],
+        >>>     ],
+        >>>     [
+        >>>         [4, 2, 8, 8],
+        >>>         [3, 3, 7, 7],
+        >>>         [0, 2, 1, 1],
+        >>>     ],
         >>> ])
-        >>> dim = 2
+        >>> axis = 2
 
         >>> uniques, inverse, counts = unique_consecutive(
-        >>>     x, return_inverse=True, return_counts=True, dim=dim
+        >>>     x, return_inverse=True, return_counts=True, axis=axis
         >>> )
         >>> uniques
         array([[[0, 1, 2],
-                 [4, 6, 5],
-                 [9, 8, 7]],
-                [[4, 2, 8],
-                 [3, 3, 7],
-                 [0, 2, 1]]])
+                [4, 6, 5],
+                [9, 8, 7]],
+               [[4, 2, 8],
+                [3, 3, 7],
+                [0, 2, 1]]])
         >>> inverse
-        array([0, 2, 1, 2])
+        array([0, 1, 2, 2])
         >>> counts
         array([1, 1, 2])
+
+    >>> # Reconstruct the original array:
+    >>> uniques.take(inverse, axis)
+    array([[[0, 1, 2, 2],
+            [4, 6, 5, 5],
+            [9, 8, 7, 7]],
+           [[4, 2, 8, 8],
+            [3, 3, 7, 7],
+            [0, 2, 1, 1]]])
     """
     if axis is None:
         raise NotImplementedError(
             "axis=None is not implemented yet. Please specify a dimension"
             " explicitly."
         )
+
+    N_axis = x.shape[axis]
 
     # Flatten all dimensions except the one we want to operate on.
     if x.ndim == 1:
@@ -380,19 +413,27 @@ def unique_consecutive(
             x, axis, -1
         )  # [N_0, ..., N_{axis-1}, N_{axis+1}, ..., N_{D-1}, N_axis]
         y = y.reshape(
-            -1, y.shape[-1]
+            -1, N_axis
         )  # [N_0 * ... * N_{axis-1} * N_{axis+1} * ... * N_{D-1}, N_axis]
 
     # Find the indices where the values change.
     is_change = np.concat(
         [np.array([True]), np.any(y[:, :-1] != y[:, 1:], axis=0)], axis=0
     )  # [N_axis]
+    is_change = np.concat([
+        (
+            np.ones(1, dtype=np.bool)
+            if N_axis > 0
+            else np.empty(0, dtype=np.bool)
+        ),  # [1] or [0]
+        np.any(y[:, :-1] != y[:, 1:], axis=0),  # [N_axis - 1] or [0]
+    ])  # [N_axis]
 
     # Find the unique values.
-    idcs = is_change.nonzero()[0]  # [N_unique]
-    unique = x.take(
+    idcs = is_change.nonzero()[0]  # [U]
+    uniques = x.take(
         idcs, axis
-    )  # [N_0, ..., N_{axis-1}, N_unique, N_{axis+1}, ..., N_{D-1}]
+    )  # [N_0, ..., N_{axis-1}, U, N_{axis+1}, ..., N_{D-1}]
 
     # Calculate auxiliary values.
     aux = []
@@ -404,14 +445,21 @@ def unique_consecutive(
     if return_counts:
         # Find the counts for each unique element.
         counts = np.diff(
-            np.concat([idcs, np.array([x.shape[axis]])], axis=0)
-        )  # [N_unique]
+            np.concat([
+                idcs,  # [U]
+                (
+                    np.full((1,), N_axis, dtype=np.int64)
+                    if N_axis > 0
+                    else np.empty(0, dtype=np.int64)
+                ),  # [1] or [0]
+            ])
+        )  # [U]
         aux.append(counts)
 
     if aux:
-        return unique, *aux
+        return uniques, *aux
     else:
-        return unique
+        return uniques
 
 
 def unequal_seqs_add(a: npt.NDArray, b: npt.NDArray) -> npt.NDArray:
