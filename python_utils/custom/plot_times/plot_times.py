@@ -89,12 +89,7 @@ def plot_times(
 
     # Calculate the times the algorithms take to execute and save them.
     cache[cache_key] = measure_times(
-        times,
-        ns.tolist(),  # type: ignore
-        ms.tolist(),  # type: ignore
-        map_to_inputs,
-        algorithm1,
-        algorithm2,
+        times, ns.tolist(), ms.tolist(), map_to_inputs, algorithm1, algorithm2
     )
     pickle.dump(cache, open(path_to_cache, "wb"))
 
