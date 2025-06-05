@@ -218,13 +218,13 @@ class Translate(Transform3D):
         super().__init__(device=device, dtype=dtype)
 
         # Perform error handling.
-        x = torch.tensor(x, device=device, dtype=dtype)
+        x = torch.as_tensor(x, device=device, dtype=dtype)
         if x.ndim == 0:
             x = x.unsqueeze(0)
-        y = torch.tensor(y, device=device, dtype=dtype)
+        y = torch.as_tensor(y, device=device, dtype=dtype)
         if y.ndim == 0:
             y = y.unsqueeze(0)
-        z = torch.tensor(z, device=device, dtype=dtype)
+        z = torch.as_tensor(z, device=device, dtype=dtype)
         if z.ndim == 0:
             z = z.unsqueeze(0)
         if x.ndim != 1 or y.ndim != 1 or z.ndim != 1:
@@ -289,13 +289,13 @@ class Scale(Transform3D):
         super().__init__(device=device, dtype=dtype)
 
         # Perform error handling.
-        x = torch.tensor(x, device=device, dtype=dtype)
+        x = torch.as_tensor(x, device=device, dtype=dtype)
         if x.ndim == 0:
             x = x.unsqueeze(0)
-        y = torch.tensor(y, device=device, dtype=dtype)
+        y = torch.as_tensor(y, device=device, dtype=dtype)
         if y.ndim == 0:
             y = y.unsqueeze(0)
-        z = torch.tensor(z, device=device, dtype=dtype)
+        z = torch.as_tensor(z, device=device, dtype=dtype)
         if z.ndim == 0:
             z = z.unsqueeze(0)
         if x.ndim != 1 or y.ndim != 1 or z.ndim != 1:
@@ -430,7 +430,7 @@ class RotateAxisAngle(Rotate):
             dtype: The data type of the transformation matrix.
         """
         # Perform error handling.
-        angle = torch.tensor(angle, device=device, dtype=dtype)
+        angle = torch.as_tensor(angle, device=device, dtype=dtype)
         if angle.ndim == 0:
             angle = angle.unsqueeze(0)
         if angle.ndim != 1:

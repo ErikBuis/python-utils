@@ -374,7 +374,7 @@ def LinearRing2LinearRingVertices(
     Returns:
         The vertices of the LinearRing object as a LinearRingVertices object.
     """
-    vertices = torch.tensor(
+    vertices = torch.as_tensor(
         linearring.coords, device=device, dtype=dtype
     )  # [V, 2]
     return LinearRingVertices(vertices)

@@ -248,11 +248,13 @@ def is_point_in_polygon_batched(
     if points.ndim == 1:
         points = points.unsqueeze(0)
 
-    exterior = torch.tensor(polygon.exterior.coords, device=device, dtype=dtype)
+    exterior = torch.as_tensor(
+        polygon.exterior.coords, device=device, dtype=dtype
+    )
     if not polygon.interiors:
         return __is_point_in_polygon_simple_batched(exterior, points)
     interiors = [
-        torch.tensor(interior.coords, device=device, dtype=dtype)
+        torch.as_tensor(interior.coords, device=device, dtype=dtype)
         for interior in polygon.interiors
     ]
     return __is_point_in_polygon_complex_batched(exterior, interiors, points)
