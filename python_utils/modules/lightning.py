@@ -5,48 +5,41 @@ import os
 import time
 from collections import defaultdict
 from glob import glob
-from typing import Any, TypeVar
+from typing import Any, cast
 
 import lightning.pytorch as pl
 import lightning.pytorch.callbacks as pl_callbacks
-import lightning.pytorch.loggers as pl_loggers
 import torch
 
 logger = logging.getLogger(__name__)
 
-LightningModuleT = TypeVar("LightningModuleT", bound=pl.LightningModule)
 
+def prepare_best_model_loading(
+    trainer: pl.Trainer, model: pl.LightningModule, **kwargs: Any
+) -> None:
+    """Prepare the PyTorch Lightning trainer to load the best model.
 
-def load_best_model(
-    trainer: pl.Trainer,
-    model: LightningModuleT,
-    reuse_version: bool = False,
-    **kwargs: Any,
-) -> LightningModuleT:
-    """Set up the best previously trained model for testing.
+    This function is used to load the best model from the checkpoints saved
+    during training. It is useful when you want to test/validate/predict using
+    the best model after training, without having to specfy the path to the
+    best model manually. It will automatically find the best model based on
+    the monitor and mode used in the ModelCheckpoint callback of the trainer.
+
+    After calling this function, you can call the `trainer.test()`,
+    `trainer.validate()`, or `trainer.predict()` methods with the
+    `ckpt_path="best"` argument to let PyTorch Lightning load the best
+    model automatically.
 
     Args:
         trainer: The PyTorch Lightning trainer.
         model: An 'empty' instance of the LightningModule that has only been
             initialized.
-        reuse_version: Whether to reuse the version of the logger that was
-            used during training. This is useful to prevent TensorBoard from
-            creating a new directory for the test results.
-            Warning: This argument is not yet implemented.
         **kwargs: Additional keyword arguments needed to initialize the model,
             such as when the save_hyperparameters() method was never called
             or when save_hyperparameters(ignore=[...]) was used to ignore
             certain hyperparameters. Can also be used to override saved
             hyperparameter values.
-
-    Returns:
-        The trained model, loaded from the checkpoint.
     """
-    if reuse_version:
-        raise NotImplementedError(
-            "The reuse_version argument is not yet implemented."
-        )
-
     # Unfortunately, we cannot use the trainer.test(ckpt_path="best") method
     # without first having called trainer.fit(), since the path to the best
     # model is saved in the trainer.checkpoint_callback.best_model_path
@@ -69,10 +62,10 @@ def load_best_model(
     ):
         raise ValueError("The trainer has no checkpoint callback")
     dirpath = trainer.checkpoint_callback.dirpath
-    list_of_checkpoints = glob(f"{dirpath}/*.ckpt")
-    if len(list_of_checkpoints) == 0:
+    ckpt_path_candidates = glob(f"{dirpath}/*.ckpt")
+    if len(ckpt_path_candidates) == 0:
         raise ValueError(
-            'ckpt_path="best" is set but ModelCheckpoint has not saved any'
+            "ckpt_path='best' is set but ModelCheckpoint has not saved any"
             f" checkpoints to '{dirpath}'"
         )
 
@@ -81,7 +74,7 @@ def load_best_model(
     # models_dict will be a dict with the following structure:
     # {
     #     (monitor, mode): [
-    #         (best_model_score, creation_time, checkpoint, internal_state),
+    #         (best_model_score, creation_time, ckpt_path),
     #         ...
     #     ],
     #     ...
@@ -91,16 +84,13 @@ def load_best_model(
     # - mode: Mode that was used to monitor the metric, e.g. 'min' or 'max'.
     # - best_model_score: The best score of the model for the monitored metric.
     # - creation_time: Time when the checkpoint was created.
-    # - checkpoint: Path to the checkpoint file as a string.
-    # - internal_state: A dictionary containing the internal state of the
-    #   ModelCheckpoint callback, which includes the best_model_score.
-    map_location = trainer.strategy.root_device
+    # - ckpt_path: Path to the checkpoint file as a string.
     models_dict: dict[
-        tuple[str, str], list[tuple[float, float, str, dict[str, Any]]]
+        tuple[str, str], list[tuple[float | None, float, str]]
     ] = defaultdict(list)
-    for checkpoint in list_of_checkpoints:
+    for ckpt_path in ckpt_path_candidates:
         curr_model = torch.load(
-            checkpoint, map_location=map_location, weights_only=True
+            ckpt_path, map_location="cpu", weights_only=True
         )
         for callback_name, internal_state in curr_model["callbacks"].items():
             if callback_name.startswith("ModelCheckpoint"):
@@ -109,9 +99,8 @@ def load_best_model(
                     (curr_kwargs["monitor"], curr_kwargs["mode"])
                 ].append((
                     internal_state["best_model_score"],
-                    os.path.getctime(checkpoint),
-                    checkpoint,
-                    internal_state,
+                    os.path.getctime(ckpt_path),
+                    ckpt_path,
                 ))
                 break
     if not models_dict:
@@ -162,13 +151,37 @@ def load_best_model(
                 ),
             )
             logger.error(
-                "Multiple saved models found, but none of their"
-                " (monitor, mode) combinations match the Trainer's"
-                " ModelCheckpoint. The saved (monitor, mode) combinations"
-                f" found are {list(models_dict.keys())!r}, but the Trainer's"
+                "Multiple saved models found, but none of their (monitor,"
+                " mode) combinations match the Trainer's ModelCheckpoint. The"
+                " saved (monitor, mode) combinations found are"
+                f" {list(models_dict.keys())!r}, but the Trainer's"
                 f" ModelCheckpoint is {monitor_mode_trainer!r}. Using the most"
                 f" recenty saved model, which is {monitor_mode!r}."
             )
+
+    # At this point, we have a list of candidate models that match the
+    # (monitor, mode) combination of the Trainer's ModelCheckpoint. We
+    # will now filter out models that have no best_model_score set and warn
+    # the user about it.
+    for i, (best_model_score, _, ckpt_path) in reversed(
+        list(enumerate(candidate_models))
+    ):
+        if best_model_score is None:
+            logger.warning(
+                f"Skipping checkpoint at '{ckpt_path}' because it has no"
+                " `best_model_score`. If you want to use this checkpoint"
+                " anyway, please specify the path to the checkpoint manually"
+                " using `ckpt_path='path/to/your/model.ckpt'`."
+            )
+            del candidate_models[i]
+    if not candidate_models:
+        raise FileNotFoundError(
+            "No checkpoints found with a valid `best_model_score` for the"
+            f" (monitor, mode) combination {monitor_mode!r}. Note that we only"
+            " searched through models which had their (monitor, mode) set to"
+            f" {monitor_mode!r}."
+        )
+    candidate_models = cast(list[tuple[float, float, str]], candidate_models)
 
     # Sort the models by their best score, then by creation time.
     sorted_models = sorted(
@@ -186,14 +199,14 @@ def load_best_model(
 
     # Check if the best model's state_dict is compatible with the given model.
     expected_state_dict_keys = set(model.state_dict().keys())
-    for best_model_score, ctime, checkpoint, internal_state in sorted_models:
+    for best_model_score, ctime, ckpt_path in sorted_models:
         try:
             best_model = model.__class__.load_from_checkpoint(
-                checkpoint, map_location=map_location, **kwargs
+                ckpt_path, map_location=trainer.strategy.root_device, **kwargs
             )
         except (TypeError, RuntimeError) as e:
             logger.warning(
-                f"Could not load model from '{checkpoint}'. This is likely due"
+                f"Could not load model from '{ckpt_path}'. This is likely due"
                 " to a change in the model architecture or hyperparameters."
                 " Skipping this checkpoint and trying the next one.\nOriginal"
                 f" error message: {e}"
@@ -203,7 +216,7 @@ def load_best_model(
         found_state_dict_keys = set(best_model.state_dict().keys())
         if expected_state_dict_keys != found_state_dict_keys:
             logger.warning(
-                f"The state_dict of the model loaded from '{checkpoint}' is not"
+                f"The state_dict of the model loaded from '{ckpt_path}' is not"
                 " compatible with the provided LightningModule. The keys in"
                 " the state_dict are different. This is likely due to a change"
                 " in the model architecture or hyperparameters. Skipping this"
@@ -214,7 +227,7 @@ def load_best_model(
             continue
 
         logger.info(
-            f"Found best model at '{checkpoint}' with"
+            f"Found best model at '{ckpt_path}' with"
             f" {monitor_mode[0]}={best_model_score}. File was created on"
             f" {time.ctime(ctime)}."
         )
@@ -227,30 +240,4 @@ def load_best_model(
         )
 
     # Hack the trainer to think that we have just trained a model.
-    for key, value in internal_state.items():
-        setattr(trainer.checkpoint_callback, key, value)
-
-    # Set the logger to the version that was used during training.
-    if reuse_version:
-        if isinstance(trainer.logger, pl_loggers.TensorBoardLogger):
-            # TODO Loop through all logger versions and determine which one was
-            # TODO used during training. This is a bit tricky, since the logger
-            # TODO version is not saved in the checkpoint.
-            # trainer.logger = pl_loggers.TensorBoardLogger(
-            #     save_dir=TODO,
-            #     name=TODO,
-            #     version=TODO,
-            #     default_hp_metric=(
-            #         trainer.logger._default_hp_metric,
-            #     ),
-            # )
-            pass
-        else:
-            logger.warning(
-                "The reuse_version argument is set, but the logger used"
-                " during training is not supported yet. Thus, the logger "
-                " version will not be reused."
-            )
-
-    # Return the best model.
-    return best_model
+    trainer.checkpoint_callback.best_model_path = ckpt_path
