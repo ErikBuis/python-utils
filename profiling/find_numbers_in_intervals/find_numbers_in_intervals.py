@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import argparse
-import logging
 import random
 from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
+from loguru import logger
 
-from ...geometry import Interval, NumberSet
+from python_utils.custom.geometry import Interval, NumberSet
+
+from .. import configure_root_logger
 from ..plot_times import plot_times
 
 
@@ -92,15 +94,15 @@ if __name__ == "__main__":
         help="The logging level to use.",
     )
 
+    # Parse the command line arguments.
     args = parser.parse_args()
 
-    # Configure the logger.
-    logging.basicConfig(
-        level=args.logging_level,
-        format="%(asctime)s %(levelname)s %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    # Configure the root logger.
+    configure_root_logger(args.logging_level)
 
-    logging.debug(f"{args=}")
+    # Log the command line arguments for reproducibility.
+    logger.debug(f"{args=}")
 
-    main(args)
+    # Run the program.
+    with logger.catch():
+        main(args)

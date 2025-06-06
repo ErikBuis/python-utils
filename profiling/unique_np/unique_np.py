@@ -1,40 +1,49 @@
 from __future__ import annotations
 
 import argparse
-import logging
 import random
 from typing import Any
 
 import numpy as np
-import torch
+import numpy.typing as npt
+from loguru import logger
 
-from python_utils.modules.torch import unique
+from python_utils.modules.numpy import unique
 
+from .. import configure_root_logger
 from ..plot_times import plot_times
 
 
 def approach_1(
-    x: torch.Tensor, dim: int
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Approach 1: Use PyTorch's built-in unique function."""
-    return torch.unique(x, return_inverse=True, return_counts=True, dim=dim)
+    x: npt.NDArray, axis: int
+) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray]:
+    """Approach 1: Use NumPy's built-in unique function."""
+    return np.unique(
+        x, return_index=True, return_inverse=True, return_counts=True, axis=axis
+    )
 
 
 def approach_2(
-    x: torch.Tensor, dim: int
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    x: npt.NDArray, axis: int
+) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray]:
     """Approach 2: Use custom unique function."""
-    return unique(x, return_inverse=True, return_counts=True, dim=dim)
+    return unique(
+        x,
+        return_backmap=True,
+        return_inverse=True,
+        return_counts=True,
+        axis=axis,
+    )
 
 
 def map_to_inputs(
     amount_rows: int, amount_cols: int
-) -> tuple[tuple[torch.Tensor], dict[str, Any]]:
+) -> tuple[tuple[npt.NDArray], dict[str, Any]]:
     """Map input parameters to function arguments.
 
     Args:
-        amount_rows: The number of rows in the tensor.
-        amount_cols: The number of columns in the tensor.
+        amount_rows: The number of rows in the array.
+        amount_cols: The number of columns in the array.
 
     Returns:
         Tuple containing positional args and keyword args for the algorithms.
@@ -42,11 +51,11 @@ def map_to_inputs(
     # Set random seed for reproducibility.
     random.seed(69)
 
-    # Generate a random tensor with the specified dimensions.
-    x = torch.randint(0, 10, size=(amount_rows, amount_cols))
+    # Generate a random array with the specified dimensions.
+    x = np.random.randint(0, 10, size=(amount_rows, amount_cols))
 
     # Return the inputs.
-    return (x,), {"dim": 0}
+    return (x,), {"axis": 0}
 
 
 def main(args: argparse.Namespace) -> None:
@@ -64,8 +73,8 @@ def main(args: argparse.Namespace) -> None:
         map_to_inputs,
         approach_1,
         approach_2,
-        "PyTorch unique comparison",
-        "PyTorch's torch.unique",
+        "NumPy unique comparison",
+        "NumPy's np.unique",
         "Custom unique function",
         "Amount of rows",
         "Amount of columns",
@@ -87,15 +96,15 @@ if __name__ == "__main__":
         help="The logging level to use.",
     )
 
+    # Parse the command line arguments.
     args = parser.parse_args()
 
-    # Configure the logger.
-    logging.basicConfig(
-        level=args.logging_level,
-        format="%(asctime)s %(levelname)s %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    # Configure the root logger.
+    configure_root_logger(args.logging_level)
 
-    logging.debug(f"{args=}")
+    # Log the command line arguments for reproducibility.
+    logger.debug(f"{args=}")
 
-    main(args)
+    # Run the program.
+    with logger.catch():
+        main(args)
