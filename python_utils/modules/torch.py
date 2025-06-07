@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import random
-import warnings
 from math import prod
 from typing import Any, Callable, Literal, overload
 
@@ -42,29 +41,7 @@ def to_tensor(
         return object.to(device=device, dtype=dtype)
 
     if isinstance(object, np.ndarray):
-        try:
-            return torch.from_numpy(object).to(device=device, dtype=dtype)
-        except TypeError as e:
-            # Try to convert to a supported type before calling from_numpy().
-            np2torch_fallbacks = {
-                "uint16": np.int16,  # torch.int16
-                "uint32": np.int32,  # torch.int32
-                "uint64": np.int64,  # torch.int64
-                "float128": np.float64,  # torch.float64
-                "complex256": np.complex128,  # torch.complex128
-            }
-            fallback = np2torch_fallbacks.get(object.dtype.name)
-            # Re-raise the original error if there is no fallback.
-            if fallback is None:
-                raise e
-            # Warn the user that we are converting to a different type.
-            warnings.warn(
-                f"Can't convert np.ndarray of type {object.dtype} to tensor."
-                f" Falling back to type {fallback}."
-            )
-            return torch.from_numpy(object.astype(fallback)).to(
-                device=device, dtype=dtype
-            )
+        return torch.from_numpy(object).to(device=device, dtype=dtype)
 
     # Last resort: because numpy recognizes more array-like types than torch,
     # we try to convert to numpy first.

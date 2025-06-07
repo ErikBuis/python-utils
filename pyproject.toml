@@ -50,6 +50,7 @@ explicit = true
 dev = [
     "ipykernel>=6.29.5",
     "ipython>=8.18.1",
+    "line-profiler>=4.2.0",
     "pre-commit>=4.1.0",
     "pytest>=8.3.4",
 ]

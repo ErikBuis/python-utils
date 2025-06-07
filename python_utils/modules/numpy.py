@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Generator
 from typing import Any, Generic, Literal, TypeVar, overload
 
 import numpy as np
@@ -7,6 +8,8 @@ import numpy.typing as npt
 from typing_extensions import override
 
 T = TypeVar("T")
+NpGeneric1 = TypeVar("NpGeneric1", bound=np.generic)
+NpGeneric2 = TypeVar("NpGeneric2", bound=np.generic)
 
 
 class NDArrayGeneric(np.ndarray, Generic[T]):
@@ -137,7 +140,7 @@ def lexsort(
 ) -> npt.NDArray:
     """Like np.lexsort(), but MUCH faster.
 
-    Perform an indirect stable sort using a sequence of keys.
+    Perform an indirect sort using a sequence of keys.
 
     Given multiple sorting keys, which can be interpreted as elements of a
     tuple, lexsort returns an array of integer indices that describes the sort
@@ -145,6 +148,10 @@ def lexsort(
     primary sort order, the second-to-last key for the secondary sort order,
     and so on. The first dimension is always interpreted as the dimension
     along which the tuples lie.
+
+    Warning: Unlike np.lexsort(), this function does not perform a stable sort.
+    This means that the order of equal elements is not preserved. If you need a
+    stable sort, you should use np.lexsort() instead.
 
     Args:
         keys: Array of shape [K, N_0, ..., N_axis, ..., N_{D-1}] or a tuple
@@ -180,16 +187,7 @@ def lexsort(
     # If the array is an integer array, first try sorting by representing
     # each of the "tuples" as a single integer. This is much faster than
     # lexsorting along the given dimension.
-    if keys.dtype in (
-        np.int8,
-        np.int16,
-        np.int32,
-        np.int64,
-        np.uint8,
-        np.uint16,
-        np.uint32,
-        np.uint64,
-    ):  # type: ignore
+    if np.issubdtype(keys.dtype, np.integer):
         # Compute the minimum and maximum values for each key.
         axes_flat = tuple(range(1, keys.ndim))
         maxs = np.amax(keys, axis=axes_flat, keepdims=True)  # [K, 1, ..., 1]
@@ -521,9 +519,7 @@ def unique_consecutive(
     )  # [N_axis]
     is_change = np.concat([
         (
-            np.ones(1, dtype=np.bool)
-            if N_axis > 0
-            else np.empty(0, dtype=np.bool)
+            np.ones(1, dtype=bool) if N_axis > 0 else np.empty(0, dtype=bool)
         ),  # [1] or [0]
         np.any(y[:, :-1] != y[:, 1:], axis=0),  # [N_axis - 1] or [0]
     ])  # [N_axis]
@@ -866,6 +862,38 @@ def unique(
     return out
 
 
+def groupby(
+    keys: npt.NDArray[NpGeneric1], vals: npt.NDArray[NpGeneric2]
+) -> Generator[tuple[NpGeneric1, npt.NDArray[NpGeneric2]]]:
+    """Group values by keys.
+
+    Args:
+        keys: The keys to group by.
+            Shape: [N]
+        vals: The values to group.
+            Shape: [N]
+
+    Yields:
+        Tuples containing:
+        - A unique key. Will be yielded in sorted order.
+        - The values that correspond to the key. Not guaranteed to be sorted.
+            Shape: [N_key]
+    """
+    # Create a mapping from keys to values.
+    keys_unique, backmap, counts = unique(
+        keys, return_backmap=True, return_counts=True, axis=0
+    )  # [E_unique], [E], [E_unique]
+    vals = vals[backmap]  # sort values to match keys_unique
+    end_slices = np.cumsum(counts)  # [E_unique]
+    start_slices = end_slices - counts  # [E_unique]
+
+    # Map each key to its corresponding values.
+    for key, start_slice, end_slice in zip(
+        keys_unique, start_slices, end_slices
+    ):
+        yield key, vals[start_slice:end_slice]
+
+
 def unequal_seqs_add(a: npt.NDArray, b: npt.NDArray) -> npt.NDArray:
     """Add two arrays, and adjust the size of the result if necessary.
 
@@ -903,7 +931,7 @@ def update_normalized_histogram(
 
     Args:
         old_value_avg: The average of the old values in the histogram.
-        old_histogram: The old normalized histogram.
+        old_histogram: The old normalized histogram. Will be updated in-place.
             Shape: [bins]
         amount_old_values: The amount of old values in the histogram.
         new_values: The new values to add to the histogram.

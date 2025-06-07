@@ -15,7 +15,7 @@ def voronoi_constrain_to_rect(
 ) -> tuple[
     npt.NDArray[np.float64],
     npt.NDArray[np.float64],
-    npt.NDArray[np.intc],
+    npt.NDArray[np.int32],
     list[list[int]],
     npt.NDArray[np.signedinteger],
     list[list[int]],
