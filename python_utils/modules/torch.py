@@ -383,15 +383,19 @@ def lexsort(
     # If the tensor is an integer tensor, first try sorting by representing
     # each of the "tuples" as a single integer. This is much faster than
     # lexsorting along the given dimension.
-    if keys.dtype in (
-        torch.int8,
-        torch.int16,
-        torch.int32,
-        torch.int64,
-        torch.uint8,
-        torch.uint16,
-        torch.uint32,
-        torch.uint64,
+    if (
+        keys.dtype
+        in (
+            torch.int8,
+            torch.int16,
+            torch.int32,
+            torch.int64,
+            torch.uint8,
+            torch.uint16,
+            torch.uint32,
+            torch.uint64,
+        )
+        and keys.numel() != 0
     ):
         # Compute the minimum and maximum values for each key.
         dims_flat = tuple(range(1, keys.ndim))

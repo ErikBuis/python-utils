@@ -187,7 +187,7 @@ def lexsort(
     # If the array is an integer array, first try sorting by representing
     # each of the "tuples" as a single integer. This is much faster than
     # lexsorting along the given dimension.
-    if np.issubdtype(keys.dtype, np.integer):
+    if np.issubdtype(keys.dtype, np.integer) and keys.size != 0:
         # Compute the minimum and maximum values for each key.
         axes_flat = tuple(range(1, keys.ndim))
         maxs = np.amax(keys, axis=axes_flat, keepdims=True)  # [K, 1, ..., 1]
