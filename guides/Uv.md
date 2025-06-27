@@ -123,7 +123,7 @@ This subsection provides a brief overview of the most commonly used `uv` command
             Write-Host "[ERROR] Python venv not found: $venv_name" -ForegroundColor Red
             return
         }
-        Write-Host "[INFO] Activate Python venv: $venv_name (via $activator)"
+        Write-Host "[INFO] Successfully activated Python venv: $venv_name (via $activator)"
 
         . $activator
     }
@@ -147,7 +147,7 @@ This subsection provides a brief overview of the most commonly used `uv` command
             echo "[ERROR] Python venv not found: ${venv_name}"
             return
         fi
-        echo "[INFO] Activate Python venv: ${venv_name} (via ${activator})"
+        echo "[INFO] Successfully activated Python venv: ${venv_name} (via ${activator})"
 
         . "${activator}"
     }
