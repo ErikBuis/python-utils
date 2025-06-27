@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Literal, Optional, TypeVar, Union, cast, overload
+from typing import Literal, TypeVar, cast, overload
 
 import numpy as np
 import numpy.typing as npt
@@ -22,17 +22,13 @@ def create_func_values2idcs(
 def create_func_values2idcs(
     values_unique: npt.NDArray[NPGeneric],
     handle_missing_values: Literal[True] = ...,
-) -> Callable[
-    [npt.NDArray[NPGeneric]], npt.NDArray[Union[np.int64, np.float64]]
-]:
+) -> Callable[[npt.NDArray[NPGeneric]], npt.NDArray[np.int64 | np.float64]]:
     pass
 
 
 def create_func_values2idcs(
     values_unique: npt.NDArray[NPGeneric], handle_missing_values: bool = False
-) -> Callable[
-    [npt.NDArray[NPGeneric]], npt.NDArray[Union[np.int64, np.float64]]
-]:
+) -> Callable[[npt.NDArray[NPGeneric]], npt.NDArray[np.int64 | np.float64]]:
     """Create a function that maps each value to its index in the given array.
 
     Args:
@@ -109,22 +105,18 @@ def remap_series_to_idcs(
     series: pd.Series, values_unique: None = ...
 ) -> tuple[
     npt.NDArray[NPGeneric],
-    Callable[
-        [npt.NDArray[NPGeneric]], npt.NDArray[Union[np.int64, np.float64]]
-    ],
-    npt.NDArray[Union[np.int64, np.float64]],
+    Callable[[npt.NDArray[NPGeneric]], npt.NDArray[np.int64 | np.float64]],
+    npt.NDArray[np.int64 | np.float64],
 ]:
     pass
 
 
 def remap_series_to_idcs(
-    series: pd.Series, values_unique: Optional[npt.NDArray[NPGeneric]] = None
+    series: pd.Series, values_unique: npt.NDArray[NPGeneric] | None = None
 ) -> tuple[
     npt.NDArray[NPGeneric],
-    Callable[
-        [npt.NDArray[NPGeneric]], npt.NDArray[Union[np.int64, np.float64]]
-    ],
-    npt.NDArray[Union[np.int64, np.float64]],
+    Callable[[npt.NDArray[NPGeneric]], npt.NDArray[np.int64 | np.float64]],
+    npt.NDArray[np.int64 | np.float64],
 ]:
     """Map each unique value in a series to an index.
 
