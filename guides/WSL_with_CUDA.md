@@ -62,6 +62,17 @@ To install WSL and CUDA on Windows, follow the steps below:
     Finally, restart the WSL terminal and enter `echo $XDG_RUNTIME_DIR` to check if the variable has been set correctly.
 
 
+## Test the installation with PyTorch
+If you would like to use CUDA with PyTorch, there are a few more steps to take. First, create and activate a virtual environment. To test if everything is working correctly, run the following Python script in an `ipython3` shell or Python file:
+```python
+import torch
+print(torch.cuda.is_available())
+for i in range(torch.cuda.device_count()):
+    print(torch.cuda.get_device_properties(i))
+```
+If this prints `True` and the properties of your GPU, you are good to go.
+
+
 # Extras
 The following parts of the tutorial are totally optional and only for those who want to further customize their WSL environment. If you are not interested in this, you are now done with the installation process. Enjoy your CUDA-enabled WSL environment!
 
