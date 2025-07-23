@@ -351,16 +351,14 @@ def apply_mask_batched(
     values: torch.Tensor,
     mask: torch.Tensor,
     L_bs: torch.Tensor,
-    max_L_bs: int,
     padding_value: Any = None,
-) -> tuple[torch.Tensor, torch.Tensor, int]:
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Apply an additonal mask to a batch of values.
 
     All values that are not marked for removal by the mask will be kept, while
     the remaining values will be moved to the front of the tensor. Since the
     number of kept values in each sample can change, the function will also
-    return the number of kept values in each sample (L_bs_kept) and the maximum
-    number of kept values of any element in the batch (max_L_bs_kept).
+    return the number of kept values in each sample.
 
     Args:
         values: The values to apply the mask to. Padding could be arbitrary.
@@ -371,8 +369,6 @@ def apply_mask_batched(
             Shape: [B, max(L_bs)]
         L_bs: The number of valid values in each sample.
             Shape: [B]
-        max_L_bs: The maximum number of values of any element in the batch.
-            Must be equal to max(L_bs).
         padding_value: The value to pad the values with. If None, the values
             are padded with random values. This is faster than padding with
             a specific value.
@@ -381,12 +377,11 @@ def apply_mask_batched(
         Tuple containing:
         - The values with the given mask applied. Padded with padding_value.
             Shape: [B, max(L_bs_kept), *]
-        - The number of kept values in each sample (L_bs_kept).
+        - The number of kept values in each sample.
             Shape: [B]
-        - The maximum number of kept values of any element in the batch.
-            Must be equal to max(L_bs_kept).
     """
     # Create a mask that indicates which values should be kept in each sample.
+    max_L_bs = values.shape[1]
     mask = mask & mask_padding_batched(L_bs, max_L_bs)  # [B, max(L_bs)]
     L_bs_kept = mask.sum(dim=1)  # [B]
     max_L_bs_kept = int(L_bs_kept.max())
@@ -396,7 +391,7 @@ def apply_mask_batched(
         values[mask], L_bs_kept, max_L_bs_kept, padding_value=padding_value
     )  # [B, max(L_bs_kept), *]
 
-    return values, L_bs_kept, max_L_bs_kept
+    return values, L_bs_kept
 
 
 def arange_batched(
