@@ -356,19 +356,18 @@ def apply_mask_batched(
 ) -> tuple[torch.Tensor, torch.Tensor, int]:
     """Apply an additonal mask to a batch of values.
 
-    All values that are not marked as valid in the given mask will be removed,
-    while the remaining values will be moved to the front of the tensor. Since
-    the number of valid values in each sample can change, this function will
-    also return the new number of valid values in each sample (new_L_bs) and
-    the new maximum number of valid values of any element in the batch
-    (new_max_L_bs).
+    All values that are not marked for removal by the mask will be kept, while
+    the remaining values will be moved to the front of the tensor. Since the
+    number of kept values in each sample can change, the function will also
+    return the number of kept values in each sample (L_bs_kept) and the maximum
+    number of kept values of any element in the batch (max_L_bs_kept).
 
     Args:
         values: The values to apply the mask to. Padding could be arbitrary.
             Shape: [B, max(L_bs), *]
-        mask: The mask to apply. Padding could be arbitrary, since this
-            function will apply the original mask internally in addition to
-            the new mask.
+        mask: The mask to apply. Padding could be arbitrary, since the function
+            will apply the original mask internally in addition to the given
+            mask.
             Shape: [B, max(L_bs)]
         L_bs: The number of valid values in each sample.
             Shape: [B]
@@ -380,24 +379,24 @@ def apply_mask_batched(
 
     Returns:
         Tuple containing:
-        - The values with the condition added. Padded with padding_value.
-            Shape: [B, max(new_L_bs), *]
-        - The new number of valid values in each sample.
+        - The values with the given mask applied. Padded with padding_value.
+            Shape: [B, max(L_bs_kept), *]
+        - The number of kept values in each sample (L_bs_kept).
             Shape: [B]
-        - The new maximum number of values of any element in the batch.
-            Must be equal to max(new_L_bs).
+        - The maximum number of kept values of any element in the batch.
+            Must be equal to max(L_bs_kept).
     """
-    # Create a mask that indicates which values are valid in each sample.
+    # Create a mask that indicates which values should be kept in each sample.
     mask = mask & mask_padding_batched(L_bs, max_L_bs)  # [B, max(L_bs)]
-    new_L_bs = mask.sum(dim=1)  # [B]
-    new_max_L_bs = int(new_L_bs.max())
+    L_bs_kept = mask.sum(dim=1)  # [B]
+    max_L_bs_kept = int(L_bs_kept.max())
 
     # Move the masked values to the front of the tensor.
     values = pad_packed_batched(
-        values[mask], new_L_bs, new_max_L_bs, padding_value=padding_value
-    )  # [B, max(new_L_bs), *]
+        values[mask], L_bs_kept, max_L_bs_kept, padding_value=padding_value
+    )  # [B, max(L_bs_kept), *]
 
-    return values, new_L_bs, new_max_L_bs
+    return values, L_bs_kept, max_L_bs_kept
 
 
 def arange_batched(
