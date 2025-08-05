@@ -1,17 +1,192 @@
+# pyright: reportMissingImports=false
+
 from __future__ import annotations
 
+import argparse
+import inspect
 import logging
 import os
 import time
+import types
 from collections import defaultdict
+from collections.abc import Sequence
 from glob import glob
 from typing import Any, cast
 
 import lightning.pytorch as pl
 import lightning.pytorch.callbacks as pl_callbacks
 import torch
+from typing_extensions import override
+
+try:
+    from omegaconf import OmegaConf
+except ImportError:
+    OmegaConf = None
 
 logger = logging.getLogger(__name__)
+logging_logger = logger
+
+
+class OnlySaveDirectHyperparameters(pl.LightningModule):
+    """Class that only saves hparams directly passed to the class' constructor.
+
+    This class is a workaround for the issue that PyTorch Lightning's
+    save_hyperparameters() method saves all arguments passed to the constructor,
+    including those from super- and subclasses. This can lead to bugs when
+    some (keyword)arguments are passed on to the constructor of a superclass via
+    *args or **kwargs, since the superclass might want to ignore some of those
+    arguments when saving hyperparameters. This class allows you to only save
+    the hyperparameters that are directly passed to the constructor of the
+    class that calls the save_hyperparameters() method, while still allowing
+    you to pass *args and **kwargs to the superclass constructor.
+
+    Example usage:
+    >>> class MyParentModel(OnlySaveDirectHyperparameters):
+    ...     def __init__(self, arg1: str, arg2: int, *args, **kwargs):
+    ...         super().__init__(*args, **kwargs)
+    ...         self.save_hyperparameters("arg2")
+    ...
+    >>> class MyModel(MyParentModel):
+    ...     def __init__(self, arg3: float, arg4: bool, *args, **kwargs):
+    ...         super().__init__(*args, **kwargs)
+    ...         self.save_hyperparameters(ignore="arg4")
+    ...
+    >>> my_model = MyModel(
+    ...     arg1="test_string",
+    ...     arg2=42,
+    ...     arg3=3.14,
+    ...     arg4=True,
+    ...     some_other_kwarg="ignored",
+    ... )
+    >>> my_model.hparams
+    {'arg2': '42', 'arg3': 3.14}
+    """
+
+    @override
+    def save_hyperparameters(
+        self,
+        *args: Any,
+        ignore: Sequence[str] | str | None = None,
+        frame: types.FrameType | None = None,
+        logger: bool = True,
+    ) -> None:
+        """Only save hparams directly passed to the calling class' constructor.
+
+        Args:
+            *args: Arguments to save as hyperparameters. Can be a single object
+                of type dict, NameSpace or OmegaConf specifying a mapping from
+                argument names to values, or strings representing argument names
+                from your class' __init__().
+            ignore: An argument name or list of argument names from class
+                `__init__` to be ignored.
+            frame: The frame from which to extract the calling class'
+                constructor arguments. If not provided, the frame corresponding
+                to the function calling this method will be used.
+            logger: Whether to log the hyperparameters being saved to the
+                trainer's logger.
+        """
+        # Get the frame that called this function.
+        if not frame:
+            current_frame = inspect.currentframe()
+            if current_frame:
+                frame = current_frame.f_back
+        if not isinstance(frame, types.FrameType):
+            raise AttributeError(
+                "There is no `frame` available while being required."
+            )
+
+        # Get the arguments of the calling class' constructor.
+        _, _, _, local_vars = inspect.getargvalues(frame)
+        cls = local_vars["__class__"]
+        parameters = dict(inspect.signature(cls.__init__).parameters)
+
+        # Ignore the self, *args, and **kwargs arguments.
+        ignore_args = {"self", "args", "kwargs"}
+        for arg in ignore_args:
+            del parameters[arg]
+
+        # Convert the provided args into a dictionary or list of strings.
+        if not args:
+            extracted_args = {}
+        elif len(args) == 1:
+            arg_first = args[0]
+            if OmegaConf is not None and isinstance(arg_first, OmegaConf):
+                container = OmegaConf.to_container(arg_first, resolve=True)
+                if container is None:
+                    extracted_args = {}
+                elif isinstance(container, list):
+                    extracted_args = container
+                elif isinstance(container, dict):
+                    extracted_args = cast(dict[str, Any], container)
+                elif isinstance(container, tuple):
+                    extracted_args = list(container)
+                elif isinstance(container, str):
+                    extracted_args = [container]
+                else:
+                    raise TypeError(
+                        f"Unsupported type for OmegaConf: {type(container)}."
+                        " Expected dict, list, tuple, or str."
+                    )
+            elif isinstance(arg_first, dict):
+                extracted_args = arg_first
+            elif isinstance(arg_first, argparse.Namespace):
+                extracted_args = arg_first.__dict__
+            else:
+                extracted_args = [arg_first]
+        elif all(isinstance(arg, str) for arg in args):
+            extracted_args = cast(list[str], list(args))
+        else:
+            raise TypeError(
+                f"Unsupported type for args: {type(args)}. Expected dict,"
+                " argparse.Namespace, OmegaConf, str, or sequence of strings."
+            )
+
+        # Only include arguments the user specified.
+        if not extracted_args:
+            direct_args = parameters
+        elif isinstance(extracted_args, dict):
+            direct_args = {}
+            for arg, value in extracted_args.items():
+                if arg in parameters:
+                    direct_args[arg] = value
+                else:
+                    logging_logger.error(
+                        f"Argument '{arg}' specified in `*args` but not found"
+                        f" in the constructor of `{cls.__name__}`, which only"
+                        f" has {list(parameters.keys())}."
+                    )
+        else:
+            direct_args = []
+            for arg in extracted_args:
+                if arg in parameters:
+                    direct_args.append(arg)
+                else:
+                    logging_logger.error(
+                        f"Argument '{arg}' specified in `*args` but not found"
+                        f" in the constructor of `{cls.__name__}`, which only"
+                        f" has {list(parameters.keys())}."
+                    )
+
+        # Filter out arguments the user wants to ignore.
+        if ignore is not None:
+            if isinstance(ignore, str):
+                ignore = [ignore]
+            for ignored_arg in ignore:
+                try:
+                    if isinstance(direct_args, dict):
+                        del direct_args[ignored_arg]
+                    else:
+                        direct_args.remove(ignored_arg)
+                except KeyError:
+                    logging_logger.error(
+                        f"Argument '{ignored_arg}' specified in `ignore` but"
+                        f" not found in the constructor of `{cls.__name__}`,"
+                        f" which only has {list(parameters.keys())}."
+                    )
+
+        return super().save_hyperparameters(
+            *direct_args, frame=frame, logger=logger
+        )
 
 
 def prepare_best_model_loading(
