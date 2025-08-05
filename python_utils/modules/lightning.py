@@ -103,7 +103,7 @@ class OnlySaveDirectHyperparameters(pl.LightningModule):
         # Ignore the self, *args, and **kwargs arguments.
         ignore_args = {"self", "args", "kwargs"}
         for arg in ignore_args:
-            del parameters[arg]
+            parameters.pop(arg, None)
 
         # Convert the provided args into a dictionary or list of strings.
         if not args:
