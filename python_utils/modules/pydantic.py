@@ -197,7 +197,7 @@ try:
             return self.model_copy(
                 update={
                     k: move_data_to_device(getattr(self, k), device)
-                    for k in self.model_fields
+                    for k in self.__class__.model_fields
                 }
             )
 
