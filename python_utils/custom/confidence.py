@@ -316,6 +316,8 @@ def bootstrap_confidence_intervals_abs(
     x_query: npt.NDArray[np.floating],
     conf_levels: Sequence[float],
     n_bootstraps: int = 500,
+    curve_fit_kwargs: dict[str, Any] = {},
+    ransac_regressor_kwargs: dict[str, Any] = {},
 ) -> list[npt.NDArray[np.floating]]:
     """Find confidence intervals using wild bootstrapping around the x-axis.
 
@@ -326,8 +328,8 @@ def bootstrap_confidence_intervals_abs(
     the absolute values of the data points.
 
     Args:
-        x_data, y_data, x_query, conf_levels, n_bootstraps: Same as in
-        `bootstrap_confidence_intervals`.
+        x_data, y_data, x_query, conf_levels, n_bootstraps, curve_fit_kwargs,
+        ransac_regressor_kwargs: Same as in `bootstrap_confidence_intervals`.
 
     Returns:
         List of bounds of the confidence intervals, one for each confidence
@@ -350,6 +352,27 @@ def bootstrap_confidence_intervals_abs(
     x_data = np.concatenate([x_data, x_data])  # [2 * N]
     y_data = np.concatenate([y_data, -y_data])  # [2 * N]
 
+    # Since we are not fitting a model, we should set the `maxfev` and
+    # `max_trials` parameters to 1. We will warn the user if they tried to set
+    # these parameters to a different value, since that is not suitable for
+    # this function.
+    from loguru import logger
+
+    if "maxfev" in curve_fit_kwargs:
+        logger.warning(
+            "The `maxfev` parameter will always be set to 1 automatically due"
+            " to the nature of this function. Overwriting it to 1 now. For more"
+            " information, see the documentation."
+        )
+        curve_fit_kwargs["maxfev"] = 1
+    if "max_trials" in ransac_regressor_kwargs:
+        logger.warning(
+            "The `maxfev` parameter will always be set to 1 automatically due"
+            " to the nature of this function. Overwriting it to 1 now. For more"
+            " information, see the documentation."
+        )
+        ransac_regressor_kwargs["max_trials"] = 1
+
     # Perform the bootstrap confidence intervals calculation.
     with warnings.catch_warnings():
         warnings.filterwarnings(
@@ -363,8 +386,8 @@ def bootstrap_confidence_intervals_abs(
             x_query,
             conf_levels,
             n_bootstraps=n_bootstraps,
-            curve_fit_kwargs={"maxfev": 1},
-            ransac_regressor_kwargs={"max_trials": 1},
+            curve_fit_kwargs=curve_fit_kwargs,
+            ransac_regressor_kwargs=ransac_regressor_kwargs,
         )  # _, C x 2 x [M]
 
     # Take the mean of the lower and upper bounds of the confidence intervals.
