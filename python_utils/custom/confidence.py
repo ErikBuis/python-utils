@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import inspect
+import logging
 import sys
 import warnings
 from collections.abc import Sequence
@@ -17,8 +18,12 @@ from sklearn.exceptions import NotFittedError
 from sklearn.linear_model import RANSACRegressor
 from sklearn.neighbors import NearestNeighbors
 
+logger = logging.getLogger(__name__)
 
-def _mammen_rvs(size: int) -> npt.NDArray[np.float64]:
+
+def _mammen_rvs(
+    size: int, rng: np.random.Generator | None = None
+) -> npt.NDArray[np.float64]:
     """Generate Mammen random variables.
 
     Mammen random variables are used in the wild bootstrap method for robust
@@ -32,15 +37,20 @@ def _mammen_rvs(size: int) -> npt.NDArray[np.float64]:
 
     Args:
         size: The number of Mammen random variables to generate.
+        rng: Optional random number generator for reproducibility. If None, the
+            default NumPy random generator will be used.
 
     Returns:
         An array of Mammen random variables of the specified size.
     """
+    if rng is None:
+        rng = np.random.default_rng()
+
     sqrt5 = np.sqrt(5)
     p = (sqrt5 + 1) / (2 * sqrt5)
     w1 = (1 - sqrt5) / 2
     w2 = (1 + sqrt5) / 2
-    return np.where(np.random.rand(size) < p, w1, w2)
+    return np.where(rng.random(size) < p, w1, w2)
 
 
 class _ModelWrapper(BaseEstimator):
@@ -138,6 +148,7 @@ def bootstrap_confidence_intervals(
     x_query: npt.NDArray[np.floating],
     conf_levels: Sequence[float],
     n_bootstraps: int = 500,
+    seed: int | None = None,
     curve_fit_kwargs: dict[str, Any] = {},
     ransac_regressor_kwargs: dict[str, Any] = {},
 ) -> tuple[
@@ -186,6 +197,8 @@ def bootstrap_confidence_intervals(
         n_bootstraps: The number of bootstrap samples to generate. A higher
             number of bootstraps will result in more smooth and accurate
             confidence intervals, but will also increase the computation time.
+        seed: Random seed for reproducibility. If provided, the random number
+            generator will be seeded with this value.
         curve_fit_kwargs: Keyword arguments to pass to
             `scipy.optimize.curve_fit`.
         ransac_regressor_kwargs: Keyword arguments to pass to
@@ -223,6 +236,8 @@ def bootstrap_confidence_intervals(
     #    intervals. These bounds are then smoothed using a Gaussian filter to
     #    reduce the disparity between neighboring query points.
 
+    rng = np.random.default_rng(seed)
+
     # Reshape the data to ensure it is 2D, as required by sklearn.
     N = len(x_data)  # Number of data points
     x_data_reshaped = x_data.reshape(-1, 1)  # [N, 1]
@@ -233,6 +248,8 @@ def bootstrap_confidence_intervals(
         ransac_regressor_kwargs["min_samples"] = max(
             len(inspect.signature(model_func).parameters), N // 4
         )
+    if "random_state" not in ransac_regressor_kwargs:
+        ransac_regressor_kwargs["random_state"] = seed
     ransac = RANSACRegressor(
         estimator=_ModelWrapper(model_func, curve_fit_kwargs=curve_fit_kwargs),
         **ransac_regressor_kwargs,
@@ -263,7 +280,7 @@ def bootstrap_confidence_intervals(
         np.expand_dims(residuals, 0), nbr_idcs, axis=1
     )  # [M, K]
     local_residuals = np.stack([
-        np.random.choice(
+        rng.choice(
             residuals_rearranged_i, size=n_bootstraps, p=weights_i
         )  # [n_bootstraps]
         for residuals_rearranged_i, weights_i in zip(
@@ -275,7 +292,7 @@ def bootstrap_confidence_intervals(
     y_pred_boots = []
     for b in range(n_bootstraps):
         # Generate wild bootstrap noise using Mammen random variables.
-        wild_noise_boot = residuals * _mammen_rvs(N)  # [N]
+        wild_noise_boot = residuals * _mammen_rvs(N, rng=rng)  # [N]
         y_boot = y_fit + wild_noise_boot  # [N]
 
         # Fit model to bootstrapped data.
@@ -316,6 +333,7 @@ def bootstrap_confidence_intervals_abs(
     x_query: npt.NDArray[np.floating],
     conf_levels: Sequence[float],
     n_bootstraps: int = 500,
+    seed: int | None = None,
     curve_fit_kwargs: dict[str, Any] = {},
     ransac_regressor_kwargs: dict[str, Any] = {},
 ) -> list[npt.NDArray[np.floating]]:
@@ -328,8 +346,9 @@ def bootstrap_confidence_intervals_abs(
     the absolute values of the data points.
 
     Args:
-        x_data, y_data, x_query, conf_levels, n_bootstraps, curve_fit_kwargs,
-        ransac_regressor_kwargs: Same as in `bootstrap_confidence_intervals`.
+        x_data, y_data, x_query, conf_levels, n_bootstraps, seed,
+        curve_fit_kwargs, ransac_regressor_kwargs: Same as in
+        `bootstrap_confidence_intervals`.
 
     Returns:
         List of bounds of the confidence intervals, one for each confidence
@@ -356,8 +375,6 @@ def bootstrap_confidence_intervals_abs(
     # `max_trials` parameters to 1. We will warn the user if they tried to set
     # these parameters to a different value, since that is not suitable for
     # this function.
-    from loguru import logger
-
     if "maxfev" in curve_fit_kwargs:
         logger.warning(
             "The `maxfev` parameter will always be set to 1 automatically due"
@@ -386,6 +403,7 @@ def bootstrap_confidence_intervals_abs(
             x_query,
             conf_levels,
             n_bootstraps=n_bootstraps,
+            seed=seed,
             curve_fit_kwargs=curve_fit_kwargs,
             ransac_regressor_kwargs=ransac_regressor_kwargs,
         )  # _, C x 2 x [M]
