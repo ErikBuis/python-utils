@@ -52,21 +52,21 @@ def get_scalar_mappable(
                 scalar_mappable.norm(value).
 
     Examples:
-        >>> # The following example will create a mapping to the colors red,
-        >>> # green, and blue, which will be distributed as follows:
-        >>> #                       0.7                            0.3
-        >>> #  |------------------------------------------|------------------|
-        >>> # red                                       green              blue
-        >>> # The values will be mapped to the colors as follows:
-        >>> #  |------------------------------------------|------------------|
-        >>> #  1              2              3               4               5
-        >>> # fully         orange        yellow           mostly         fully
-        >>> #  red          -ish          /green            green          blue
-        >>> get_scalar_mappable(
-        >>>     [1, 2, 3, 4, 5],
-        >>>     ["red", "green", "blue"],
-        >>>     [0.7 * (5 - 1)],
-        >>> )
+    >>> # The following example will create a mapping to the colors red, green,
+    ... # and blue, which will be distributed as follows:
+    ... #                       0.7                            0.3
+    ... #  |------------------------------------------|------------------|
+    ... # red                                       green              blue
+    ... # The values will be mapped to the colors as follows:
+    ... #  |------------------------------------------|------------------|
+    ... #  1              2              3               4               5
+    ... # fully         orange        yellow           mostly         fully
+    ... #  red          -ish          /green            green          blue
+    >>> get_scalar_mappable(
+    ...     [1, 2, 3, 4, 5],
+    ...     ["red", "green", "blue"],
+    ...     [0.7 * (5 - 1)],
+    ... )
     """
     values = np.array(values)
     colors = np.array(colors)

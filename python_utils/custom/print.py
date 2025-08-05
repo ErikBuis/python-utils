@@ -147,23 +147,22 @@ def __stringify_fast_sequence_consecutive(
         - The number of characters that can still be added to the current line
             after the function has finished.
 
-    Example:
+    Examples:
     >>> cached_strs = []
     >>> plan_succeeded, strs, line_len_left = (
-    >>>     __stringify_fast_concatenated(
-    >>>         ["item 1", "item 2", "item 3", "item 4", "item 5"],
-    >>>         indent_level=0,
-    >>>         max_line_len=80,
-    >>>         ignore=None,
-    >>>         line_len_left=80,
-    >>>         cached_strs=cached_strs,
-    >>>     )
-    >>> )
-
+    ...     __stringify_fast_concatenated(
+    ...         ["item 1", "item 2", "item 3", "item 4", "item 5"],
+    ...         indent_level=0,
+    ...         max_line_len=80,
+    ...         ignore=None,
+    ...         line_len_left=80,
+    ...         cached_strs=cached_strs,
+    ...     )
+    ... )
     >>> "".join(
-    >>>     cached_strs[s_or_i][0] if isinstance(s_or_i, int) else s_or_i
-    >>>     for s_or_i in strs
-    >>> )
+    ...     cached_strs[s_or_i][0] if isinstance(s_or_i, int) else s_or_i
+    ...     for s_or_i in strs
+    ... )
     "'item 1', 'item 2', 'item 3', 'item 4', 'item 5'"
     """
     input_line_len_left = line_len_left
@@ -241,16 +240,15 @@ def __stringify_fast_sequence_separated(
         reconstruct the final string, the strings must be joined in the order
         they appear in the list.
 
-    Example:
+    Examples:
     >>> strs = __stringify_fast_newlines(
-    >>>     ["item 1", "item 2", "item 3", "item 4", "item 5"],
-    >>>     indent_level=1,
-    >>>     max_line_len=80,
-    >>>     ignore=None,
-    >>>     line_len_left=76,
-    >>>     cached_strs=[],
-    >>> )
-
+    ...     ["item 1", "item 2", "item 3", "item 4", "item 5"],
+    ...     indent_level=1,
+    ...     max_line_len=80,
+    ...     ignore=None,
+    ...     line_len_left=76,
+    ...     cached_strs=[],
+    ... )
     >>> "".join(strs)
     "    'item 1',\n    'item 2',\n    'item 3',\n    'item 4',\n    'item 5',"
     """
@@ -321,23 +319,22 @@ def __stringify_fast_dict_consecutive(
         - The number of characters that can still be added to the current line
             after the function has finished.
 
-    Example:
+    Examples:
     >>> cached_strs = []
     >>> plan_succeeded, strs, line_len_left = (
-    >>>     __stringify_fast_dict_consecutively(
-    >>>         {"key 1": "value 1", "key 2": "value 2", "key 3": "value 3"},
-    >>>         indent_level=0,
-    >>>         max_line_len=80,
-    >>>         ignore=None,
-    >>>         line_len_left=80,
-    >>>         cached_strs=cached_strs,
-    >>>     )
-    >>> )
-
+    ...     __stringify_fast_dict_consecutively(
+    ...         {"key 1": "value 1", "key 2": "value 2", "key 3": "value 3"},
+    ...         indent_level=0,
+    ...         max_line_len=80,
+    ...         ignore=None,
+    ...         line_len_left=80,
+    ...         cached_strs=cached_strs,
+    ...     )
+    ... )
     >>> "".join(
-    >>>     cached_strs[s_or_i][0] if isinstance(s_or_i, int) else s_or_i
-    >>>     for s_or_i in strs
-    >>> )
+    ...     cached_strs[s_or_i][0] if isinstance(s_or_i, int) else s_or_i
+    ...     for s_or_i in strs
+    ... )
     "'key 1': 'value 1', 'key 2': 'value 2', 'key 3': 'value 3'"
     """
     input_line_len_left = line_len_left
@@ -443,16 +440,15 @@ def __stringify_fast_dict_separated(
         reconstruct the final string, the strings must be joined in the order
         they appear in the list.
 
-    Example:
+    Examples:
     >>> strs = __stringify_fast_dict_separated(
-    >>>     {"key 1": "value 1", "key 2": "value 2", "key 3": "value 3"},
-    >>>     indent_level=1,
-    >>>     max_line_len=80,
-    >>>     ignore=None,
-    >>>     line_len_left=76,
-    >>>     cached_strs=[],
-    >>> )
-
+    ...     {"key 1": "value 1", "key 2": "value 2", "key 3": "value 3"},
+    ...     indent_level=1,
+    ...     max_line_len=80,
+    ...     ignore=None,
+    ...     line_len_left=76,
+    ...     cached_strs=[],
+    ... )
     >>> "".join(strs)
     "    'key 1': 'value 1',\n    'key 2': 'value 2',\n    'key 3': 'value 3',"
     """

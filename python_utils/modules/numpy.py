@@ -90,9 +90,9 @@ def swap_idcs_vals(x: npt.NDArray) -> npt.NDArray:
             Shape: [N]
 
     Examples:
-        >>> x = np.array([2, 3, 0, 4, 1])
-        >>> swap_idcs_vals(x)
-        array([2, 4, 0, 1, 3])
+    >>> x = np.array([2, 3, 0, 4, 1])
+    >>> swap_idcs_vals(x)
+    array([2, 4, 0, 1, 3])
     """
     if x.ndim != 1:
         raise ValueError("x must be 1D.")
@@ -123,9 +123,9 @@ def swap_idcs_vals_duplicates(x: npt.NDArray) -> npt.NDArray:
             Shape: [N]
 
     Examples:
-        >>> x = np.array([1, 3, 0, 1, 3])
-        >>> swap_idcs_vals_duplicates(x)
-        array([2, 0, 3, 1, 4])
+    >>> x = np.array([1, 3, 0, 1, 3])
+    >>> swap_idcs_vals_duplicates(x)
+    array([2, 0, 3, 1, 4])
     """
     if x.ndim != 1:
         raise ValueError("x must be 1D.")
@@ -166,20 +166,20 @@ def lexsort(
             Shape: [N_0, ..., N_axis, ..., N_{D-1}]
 
     Examples:
-        >>> lexsort((np.array([ 1, 17, 18]),
-        >>>          np.array([23, 10,  9]),
-        >>>          np.array([14, 12,  0]),
-        >>>          np.array([19,  5,  6]),
-        >>>          np.array([21, 20, 22]),
-        >>>          np.array([ 7,  3,  8]),
-        >>>          np.array([13,  4,  2]),
-        >>>          np.array([15, 11, 16])))
-        array([1, 0, 2])
+    >>> lexsort((np.array([ 1, 17, 18]),
+    ...          np.array([23, 10,  9]),
+    ...          np.array([14, 12,  0]),
+    ...          np.array([19,  5,  6]),
+    ...          np.array([21, 20, 22]),
+    ...          np.array([ 7,  3,  8]),
+    ...          np.array([13,  4,  2]),
+    ...          np.array([15, 11, 16])))
+    array([1, 0, 2])
 
-        >>> lexsort(np.array([[4, 8, 2, 8, 3, 7, 3],
-        >>>                       [9, 4, 0, 4, 0, 4, 1],
-        >>>                       [1, 5, 1, 4, 3, 4, 4]]))
-        array([2, 0, 4, 6, 5, 3, 1])
+    >>> lexsort(np.array([[4, 8, 2, 8, 3, 7, 3],
+    ...                   [9, 4, 0, 4, 0, 4, 1],
+    ...                   [1, 5, 1, 4, 3, 4, 4]]))
+    array([2, 0, 4, 6, 5, 3, 1])
     """
     if isinstance(keys, tuple):
         keys = np.stack(keys)  # [K, N_0, ..., N_axis, ..., N_{D-1}]
@@ -223,12 +223,12 @@ def lexsort_along(
     This function is roughly equivalent to the following Python code, but it is
     much faster.
     >>> np.stack(
-    >>>     sorted(
-    >>>         [np.take(x, i, axis=axis) for i in range(x.shape[axis])],
-    >>>         key=tuple,
-    >>>     ),
-    >>>     axis=axis,
-    >>> )
+    ...     sorted(
+    ...         [np.take(x, i, axis=axis) for i in range(x.shape[axis])],
+    ...         key=tuple,
+    ...     ),
+    ...     axis=axis,
+    ... )
 
     The sort is always stable, meaning that the order of equal elements is
     preserved.
@@ -249,55 +249,55 @@ def lexsort_along(
             Shape: [N_axis]
 
     Examples:
-        >>> x = np.array([
-        >>>     [2, 1],
-        >>>     [3, 0],
-        >>>     [1, 2],
-        >>>     [1, 3],
-        >>> ])
-        >>> axis = 0
+    >>> x = np.array([
+    ...     [2, 1],
+    ...     [3, 0],
+    ...     [1, 2],
+    ...     [1, 3],
+    ... ])
+    >>> axis = 0
 
-        >>> x_sorted, backmap = lexsort_along(x, axis=axis)
-        >>> x_sorted
-        array([[1, 2],
-               [1, 3],
-               [2, 1],
-               [3, 0]])
-        >>> backmap
-        array([2, 3, 0, 1]))
+    >>> x_sorted, backmap = lexsort_along(x, axis=axis)
+    >>> x_sorted
+    array([[1, 2],
+           [1, 3],
+           [2, 1],
+           [3, 0]])
+    >>> backmap
+    array([2, 3, 0, 1]))
 
-        >>> # Get the lexicographically sorted version of x:
-        >>> x.take(backmap)
-        array([[1, 2],
-               [1, 3],
-               [2, 1],
-               [3, 0]])
+    >>> # Get the lexicographically sorted version of x:
+    >>> x.take(backmap)
+    array([[1, 2],
+           [1, 3],
+           [2, 1],
+           [3, 0]])
     """
     # We can use np.lexsort() to sort only the requested dimension.
     # First, we prepare the array for np.lexsort(). The input to this function
     # must be a tuple of array-like objects, that are evaluated from last to
     # first. This is quite confusing, so I'll put an example here. If we have:
     # >>> x = array([[[15, 13],
-    # >>>             [11,  4],
-    # >>>             [16,  2]],
-    # >>>            [[ 7, 21],
-    # >>>             [ 3, 20],
-    # >>>             [ 8, 22]],
-    # >>>            [[19, 14],
-    # >>>             [ 5, 12],
-    # >>>             [ 6,  0]],
-    # >>>            [[23,  1],
-    # >>>             [10, 17],
-    # >>>             [ 9, 18]]])
+    # ...             [11,  4],
+    # ...             [16,  2]],
+    # ...            [[ 7, 21],
+    # ...             [ 3, 20],
+    # ...             [ 8, 22]],
+    # ...            [[19, 14],
+    # ...             [ 5, 12],
+    # ...             [ 6,  0]],
+    # ...            [[23,  1],
+    # ...             [10, 17],
+    # ...             [ 9, 18]]])
     # And axis=1, then the input to np.lexsort() must be:
     # >>> np.lexsort(array([[ 1, 17, 18],
-    # >>>                   [23, 10,  9],
-    # >>>                   [14, 12,  0],
-    # >>>                   [19,  5,  6],
-    # >>>                   [21, 20, 22],
-    # >>>                   [ 7,  3,  8],
-    # >>>                   [13,  4,  2],
-    # >>>                   [15, 11, 16]]))
+    # ...                   [23, 10,  9],
+    # ...                   [14, 12,  0],
+    # ...                   [19,  5,  6],
+    # ...                   [21, 20, 22],
+    # ...                   [ 7,  3,  8],
+    # ...                   [13,  4,  2],
+    # ...                   [15, 11, 16]]))
     # Note that the first row is evaluated last and the last row is evaluated
     # first. We can now see that the sorting order will be 11 < 15 < 16, so
     # np.lexsort() will return array([1, 0, 2]). I thouroughly tested what the
@@ -408,82 +408,82 @@ def unique_consecutive(
             Shape: [U]
 
     Examples:
-        >>> # 1D example: -----------------------------------------------------
-        >>> x = np.array([9, 9, 9, 9, 10, 10])
-        >>> axis = 0
+    >>> # 1D example: -----------------------------------------------------
+    >>> x = np.array([9, 9, 9, 9, 10, 10])
+    >>> axis = 0
 
-        >>> uniques, inverse, counts = unique_consecutive(
-        >>>     x, return_inverse=True, return_counts=True, axis=axis
-        >>> )
-        >>> uniques
-        array([9, 10])
-        >>> inverse
-        array([0, 0, 0, 0, 1, 1])
-        >>> counts
-        array([4, 2])
+    >>> uniques, inverse, counts = unique_consecutive(
+    ...     x, return_inverse=True, return_counts=True, axis=axis
+    ... )
+    >>> uniques
+    array([9, 10])
+    >>> inverse
+    array([0, 0, 0, 0, 1, 1])
+    >>> counts
+    array([4, 2])
 
-        >>> # Reconstruct the original array:
-        >>> uniques.take(inverse, axis)
-        array([ 9,  9,  9,  9, 10, 10])
+    >>> # Reconstruct the original array:
+    >>> uniques.take(inverse, axis)
+    array([ 9,  9,  9,  9, 10, 10])
 
-        >>> # 2D example: -----------------------------------------------------
-        >>> x = np.array([
-        >>>     [7,  9,  9, 10],
-        >>>     [8, 10, 10,  9],
-        >>>     [9,  8,  8,  7],
-        >>>     [9,  7,  7,  7],
-        >>> ])
-        >>> axis = 1
+    >>> # 2D example: -----------------------------------------------------
+    >>> x = np.array([
+    ...     [7,  9,  9, 10],
+    ...     [8, 10, 10,  9],
+    ...     [9,  8,  8,  7],
+    ...     [9,  7,  7,  7],
+    ... ])
+    >>> axis = 1
 
-        >>> uniques, inverse, counts = unique_consecutive(
-        >>>     x, return_inverse=True, return_counts=True, axis=axis
-        >>> )
-        >>> uniques
-        array([[7, 9, 10],
-               [8, 10, 9],
-               [9, 8, 7],
-               [9, 7, 7]])
-        >>> inverse
-        array([1, 2, 0, 1])
-        >>> counts
-        array([1, 2, 1])
+    >>> uniques, inverse, counts = unique_consecutive(
+    ...     x, return_inverse=True, return_counts=True, axis=axis
+    ... )
+    >>> uniques
+    array([[7, 9, 10],
+           [8, 10, 9],
+           [9, 8, 7],
+           [9, 7, 7]])
+    >>> inverse
+    array([1, 2, 0, 1])
+    >>> counts
+    array([1, 2, 1])
 
-        >>> # Reconstruct the original array:
-        >>> uniques.take(inverse, axis)
-        array([[ 7,  9,  9, 10],
-               [ 8, 10, 10,  9],
-               [ 9,  8,  8,  7],
-               [ 9,  7,  7,  7]])
+    >>> # Reconstruct the original array:
+    >>> uniques.take(inverse, axis)
+    array([[ 7,  9,  9, 10],
+           [ 8, 10, 10,  9],
+           [ 9,  8,  8,  7],
+           [ 9,  7,  7,  7]])
 
-        >>> # 3D example: -----------------------------------------------------
-        >>> x = np.array([
-        >>>     [
-        >>>         [0, 1, 2, 2],
-        >>>         [4, 6, 5, 5],
-        >>>         [9, 8, 7, 7],
-        >>>     ],
-        >>>     [
-        >>>         [4, 2, 8, 8],
-        >>>         [3, 3, 7, 7],
-        >>>         [0, 2, 1, 1],
-        >>>     ],
-        >>> ])
-        >>> axis = 2
+    >>> # 3D example: -----------------------------------------------------
+    >>> x = np.array([
+    ...     [
+    ...         [0, 1, 2, 2],
+    ...         [4, 6, 5, 5],
+    ...         [9, 8, 7, 7],
+    ...     ],
+    ...     [
+    ...         [4, 2, 8, 8],
+    ...         [3, 3, 7, 7],
+    ...         [0, 2, 1, 1],
+    ...     ],
+    ... ])
+    >>> axis = 2
 
-        >>> uniques, inverse, counts = unique_consecutive(
-        >>>     x, return_inverse=True, return_counts=True, axis=axis
-        >>> )
-        >>> uniques
-        array([[[0, 1, 2],
-                [4, 6, 5],
-                [9, 8, 7]],
-               [[4, 2, 8],
-                [3, 3, 7],
-                [0, 2, 1]]])
-        >>> inverse
-        array([0, 1, 2, 2])
-        >>> counts
-        array([1, 1, 2])
+    >>> uniques, inverse, counts = unique_consecutive(
+    ...     x, return_inverse=True, return_counts=True, axis=axis
+    ... )
+    >>> uniques
+    array([[[0, 1, 2],
+            [4, 6, 5],
+            [9, 8, 7]],
+           [[4, 2, 8],
+            [3, 3, 7],
+            [0, 2, 1]]])
+    >>> inverse
+    array([0, 1, 2, 2])
+    >>> counts
+    array([1, 1, 2])
 
     >>> # Reconstruct the original array:
     >>> uniques.take(inverse, axis)
@@ -702,129 +702,129 @@ def unique(
             Shape: [U]
 
     Examples:
-        >>> # 1D example: -----------------------------------------------------
-        >>> x = np.array([9, 10, 9, 9, 10, 9])
-        >>> axis = 0
+    >>> # 1D example: -----------------------------------------------------
+    >>> x = np.array([9, 10, 9, 9, 10, 9])
+    >>> axis = 0
 
-        >>> uniques, backmap, inverse, counts = unique(
-        >>>     x,
-        >>>     return_backmap=True,
-        >>>     return_inverse=True,
-        >>>     return_counts=True,
-        >>>     axis=axis,
-        >>> )
-        >>> uniques
-        array([ 9, 10])
-        >>> backmap
-        array([0, 2, 3, 5, 1, 4])
-        >>> inverse
-        array([0, 1, 0, 0, 1, 0])
-        >>> counts
-        array([4, 2])
+    >>> uniques, backmap, inverse, counts = unique(
+    ...     x,
+    ...     return_backmap=True,
+    ...     return_inverse=True,
+    ...     return_counts=True,
+    ...     axis=axis,
+    ... )
+    >>> uniques
+    array([ 9, 10])
+    >>> backmap
+    array([0, 2, 3, 5, 1, 4])
+    >>> inverse
+    array([0, 1, 0, 0, 1, 0])
+    >>> counts
+    array([4, 2])
 
-        >>> # Get the lexicographically sorted version of x:
-        >>> x.take(backmap, axis)
-        array([ 9,  9,  9,  9, 10, 10])
+    >>> # Get the lexicographically sorted version of x:
+    >>> x.take(backmap, axis)
+    array([ 9,  9,  9,  9, 10, 10])
 
-        >>> # Reconstruct the original array:
-        >>> uniques.take(inverse, axis)
-        array([ 9, 10,  9,  9, 10,  9])
+    >>> # Reconstruct the original array:
+    >>> uniques.take(inverse, axis)
+    array([ 9, 10,  9,  9, 10,  9])
 
-        >>> # 2D example: -----------------------------------------------------
-        >>> x = np.array([
-        >>>     [9, 10, 7, 9],
-        >>>     [10, 9, 8, 10],
-        >>>     [8, 7, 9, 8],
-        >>>     [7, 7, 9, 7],
-        >>> ])
-        >>> axis = 1
+    >>> # 2D example: -----------------------------------------------------
+    >>> x = np.array([
+    ...     [9, 10, 7, 9],
+    ...     [10, 9, 8, 10],
+    ...     [8, 7, 9, 8],
+    ...     [7, 7, 9, 7],
+    ... ])
+    >>> axis = 1
 
-        >>> uniques, backmap, inverse, counts = unique(
-        >>>     x,
-        >>>     return_backmap=True,
-        >>>     return_inverse=True,
-        >>>     return_counts=True,
-        >>>     axis=axis,
-        >>> )
-        >>> uniques
-        array([[ 7,  9, 10],
-                [ 8, 10,  9],
-                [ 9,  8,  7],
-                [ 9,  7,  7]])
-        >>> backmap
-        array([2, 0, 3, 1])
-        >>> inverse
-        array([1, 2, 0, 1])
-        >>> counts
-        array([1, 2, 1])
+    >>> uniques, backmap, inverse, counts = unique(
+    ...     x,
+    ...     return_backmap=True,
+    ...     return_inverse=True,
+    ...     return_counts=True,
+    ...     axis=axis,
+    ... )
+    >>> uniques
+    array([[ 7,  9, 10],
+           [ 8, 10,  9],
+           [ 9,  8,  7],
+           [ 9,  7,  7]])
+    >>> backmap
+    array([2, 0, 3, 1])
+    >>> inverse
+    array([1, 2, 0, 1])
+    >>> counts
+    array([1, 2, 1])
 
-        >>> # Get the lexicographically sorted version of x:
-        >>> x.take(backmap, axis)
-        array([[ 7,  9,  9, 10],
-                [ 8, 10, 10,  9],
-                [ 9,  8,  8,  7],
-                [ 9,  7,  7,  7]])
+    >>> # Get the lexicographically sorted version of x:
+    >>> x.take(backmap, axis)
+    array([[ 7,  9,  9, 10],
+           [ 8, 10, 10,  9],
+           [ 9,  8,  8,  7],
+           [ 9,  7,  7,  7]])
 
-        >>> # Reconstruct the original array:
-        >>> uniques.take(inverse, axis)
-        array([[ 9, 10,  7,  9],
-                [10,  9,  8, 10],
-                [ 8,  7,  9,  8],
-                [ 7,  7,  9,  7]])
+    >>> # Reconstruct the original array:
+    >>> uniques.take(inverse, axis)
+    array([[ 9, 10,  7,  9],
+           [10,  9,  8, 10],
+           [ 8,  7,  9,  8],
+           [ 7,  7,  9,  7]])
 
-        >>> # 3D example: -----------------------------------------------------
-        >>> x = np.array([
-        >>>     [
-        >>>         [0, 2, 1, 2],
-        >>>         [4, 5, 6, 5],
-        >>>         [9, 7, 8, 7],
-        >>>     ],
-        >>>     [
-        >>>         [4, 8, 2, 8],
-        >>>         [3, 7, 3, 7],
-        >>>         [0, 1, 2, 1],
-        >>>     ],
-        >>> ])
-        >>> axis = 2
+    >>> # 3D example: -----------------------------------------------------
+    >>> x = np.array([
+    ...     [
+    ...         [0, 2, 1, 2],
+    ...         [4, 5, 6, 5],
+    ...         [9, 7, 8, 7],
+    ...     ],
+    ...     [
+    ...         [4, 8, 2, 8],
+    ...         [3, 7, 3, 7],
+    ...         [0, 1, 2, 1],
+    ...     ],
+    ... ])
+    >>> axis = 2
 
-        >>> uniques, backmap, inverse, counts = unique(
-        >>>     x,
-        >>>     return_backmap=True,
-        >>>     return_inverse=True,
-        >>>     return_counts=True,
-        >>>     axis=axis,
-        >>> )
-        >>> uniques
-        array([[[0, 1, 2],
-                 [4, 6, 5],
-                 [9, 8, 7]],
-                [[4, 2, 8],
-                 [3, 3, 7],
-                 [0, 2, 1]]])
-        >>> backmap
-        array([0, 2, 1, 3])
-        >>> inverse
-        array([0, 2, 1, 2])
-        >>> counts
-        array([1, 1, 2])
+    >>> uniques, backmap, inverse, counts = unique(
+    ...     x,
+    ...     return_backmap=True,
+    ...     return_inverse=True,
+    ...     return_counts=True,
+    ...     axis=axis,
+    ... )
+    >>> uniques
+    array([[[0, 1, 2],
+            [4, 6, 5],
+            [9, 8, 7]],
+           [[4, 2, 8],
+            [3, 3, 7],
+            [0, 2, 1]]])
+    >>> backmap
+    array([0, 2, 1, 3])
+    >>> inverse
+    array([0, 2, 1, 2])
+    >>> counts
+    array([1, 1, 2])
 
-        >>> # Get the lexicographically sorted version of x:
-        >>> x.take(backmap, axis)
-        array([[[0, 1, 2, 2],
-                 [4, 6, 5, 5],
-                 [9, 8, 7, 7]],
-                [[4, 2, 8, 8],
-                 [3, 3, 7, 7],
-                 [0, 2, 1, 1]]])
+    >>> # Get the lexicographically sorted version of x:
+    >>> x.take(backmap, axis)
+    array([[[0, 1, 2, 2],
+            [4, 6, 5, 5],
+            [9, 8, 7, 7]],
+           [[4, 2, 8, 8],
+            [3, 3, 7, 7],
+            [0, 2, 1, 1]]])
 
-        >>> # Reconstruct the original array:
-        >>> uniques.take(inverse, axis)
-        array([[[0, 2, 1, 2],
-                 [4, 5, 6, 5],
-                 [9, 7, 8, 7]],
-                [[4, 8, 2, 8],
-                 [3, 7, 3, 7],
-                 [0, 1, 2, 1]])
+    >>> # Reconstruct the original array:
+    >>> uniques.take(inverse, axis)
+    array([[[0, 2, 1, 2],
+            [4, 5, 6, 5],
+            [9, 7, 8, 7]],
+           [[4, 8, 2, 8],
+            [3, 7, 3, 7],
+            [0, 1, 2, 1]])
     """
     if axis is None:
         raise NotImplementedError(

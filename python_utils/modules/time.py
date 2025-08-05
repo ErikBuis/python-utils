@@ -31,54 +31,54 @@ def human_readable_time(
         A human-readable string representing the given time.
 
     Examples:
-        Under one minute:
-        >>> human_readable_time(1234567890)
-        '1.23 s'
-        >>> human_readable_time(1234567890, significant_digits=2)
-        '1.2 s'
-        >>> human_readable_time(1234567890, significant_digits=1)
-        '1 s'
-        >>> human_readable_time(234567890)
-        '235 ms'
-        >>> human_readable_time(234567890, significant_digits=2)
-        '0.23 s'  # note that 230 ms would have 3 significant digits
-        >>> human_readable_time(12345678900)
-        '12.3 s'
-        >>> human_readable_time(12345678900, significant_digits=2)
-        '12 s'
-        >>> human_readable_time(12345678900, significant_digits=1)
-        '12 s'  # only case where significant digits are not respected
-        >>> human_readable_time(1995123456)
-        '2.00 s'
-        >>> human_readable_time(9995123456)
-        '10.0 s'
-        >>> human_readable_time(1234567890, abbreviate=False)
-        '1.23 seconds'
-        >>> human_readable_time(234567890, abbreviate=False)
-        '235 milliseconds'
+    Under one minute:
+    >>> human_readable_time(1234567890)
+    '1.23 s'
+    >>> human_readable_time(1234567890, significant_digits=2)
+    '1.2 s'
+    >>> human_readable_time(1234567890, significant_digits=1)
+    '1 s'
+    >>> human_readable_time(234567890)
+    '235 ms'
+    >>> human_readable_time(234567890, significant_digits=2)
+    '0.23 s'  # note that 230 ms would have 3 significant digits
+    >>> human_readable_time(12345678900)
+    '12.3 s'
+    >>> human_readable_time(12345678900, significant_digits=2)
+    '12 s'
+    >>> human_readable_time(12345678900, significant_digits=1)
+    '12 s'  # only case where significant digits are not respected
+    >>> human_readable_time(1995123456)
+    '2.00 s'
+    >>> human_readable_time(9995123456)
+    '10.0 s'
+    >>> human_readable_time(1234567890, abbreviate=False)
+    '1.23 seconds'
+    >>> human_readable_time(234567890, abbreviate=False)
+    '235 milliseconds'
 
-        Over or equal to one minute:
-        >>> human_readable_time((3 * 60 * 60 + 14 * 60 + 15) * 1_000_000_000)
-        '3h 14m 15s'  # no spaces are added before the units
-        >>> human_readable_time(
-        >>>     (3 * 60 * 60 + 14 * 60 + 15) * 1_000_000_000,
-        >>>     abbreviate=False,
-        >>> )
-        '3 hours 14 minutes 15 seconds'  # spaces are added before the units
-        >>> human_readable_time(
-        >>>     (3 * 60 * 60 + 14 * 60 + 15) * 1_000_000_000 + 23456789,
-        >>>     significant_digits=5,
-        >>> )
-        '3h 14m 15s'
-        >>> human_readable_time(
-        >>>     (3 * 60 * 60 + 14 * 60 + 15) * 1_000_000_000 + 23456789,
-        >>>     significant_digits=6,
-        '3h 14m 15.2s'
-        >>> human_readable_time(
-        >>>     (3 * 60 * 60 + 7 * 60 + 15) * 1_000_000_000 + 23456789,
-        >>>     significant_digits=6,
-        >>> )
-        '3h 7m 15.2s'  # note that the 0 before the 7 counts as a sig. digit
+    Over or equal to one minute:
+    >>> human_readable_time((3 * 60 * 60 + 14 * 60 + 15) * 1_000_000_000)
+    '3h 14m 15s'  # no spaces are added before the units
+    >>> human_readable_time(
+    ...     (3 * 60 * 60 + 14 * 60 + 15) * 1_000_000_000,
+    ...     abbreviate=False,
+    ... )
+    '3 hours 14 minutes 15 seconds'  # spaces are added before the units
+    >>> human_readable_time(
+    ...     (3 * 60 * 60 + 14 * 60 + 15) * 1_000_000_000 + 23456789,
+    ...     significant_digits=5,
+    ... )
+    '3h 14m 15s'
+    >>> human_readable_time(
+    ...     (3 * 60 * 60 + 14 * 60 + 15) * 1_000_000_000 + 23456789,
+    ...     significant_digits=6,
+    '3h 14m 15.2s'
+    >>> human_readable_time(
+    ...     (3 * 60 * 60 + 7 * 60 + 15) * 1_000_000_000 + 23456789,
+    ...     significant_digits=6,
+    ... )
+    '3h 7m 15.2s'  # note that the 0 before the 7 counts as a sig. digit
     """
     if significant_digits < 1:
         raise ValueError("significant_digits must be at least 1.")

@@ -40,7 +40,7 @@ class OnlySaveDirectHyperparameters(pl.LightningModule):
     class that calls the save_hyperparameters() method, while still allowing
     you to pass *args and **kwargs to the superclass constructor.
 
-    Example usage:
+    Examples:
     >>> class MyParentModel(OnlySaveDirectHyperparameters):
     ...     def __init__(self, arg1: str, arg2: int, *args, **kwargs):
     ...         super().__init__(*args, **kwargs)

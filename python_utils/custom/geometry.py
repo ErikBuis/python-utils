@@ -491,12 +491,12 @@ class NumberSet:
         NumberSet(0, Interval('[', 1, 5, ')'), 10)
 
         >>> NumberSet(
-        >>>     Interval("(", 3, 4, "]"),
-        >>>     8.7,
-        >>>     Interval("(", 3.1, 10, ")"),
-        >>>     2.4,
-        >>>     3,
-        >>> )
+        ...     Interval("(", 3, 4, "]"),
+        ...     8.7,
+        ...     Interval("(", 3.1, 10, ")"),
+        ...     2.4,
+        ...     3,
+        ... )
         NumberSet(2.4, Interval('[', 3, 10, ')'))
         """
         # We maintain a sorted list of boundary values for fast lookup.
@@ -2194,9 +2194,10 @@ class GeometricObject2D(ABC):
         >>> u = GeometricObject(a, b)
         >>> v = GeometricObject(a, b + 0.2)
         >>> u.epsilon = 0.5  # don't set it nearly this large
-        >>>
-        >>> print(u == v)  # True
-        >>> print(v == u)  # False
+        >>> u == v
+        True
+        >>> v == u
+        False
 
         You'll probably never have to change epsilon from the default value,
         but in rare situations you might find that either the margin is too

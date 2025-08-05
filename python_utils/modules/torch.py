@@ -204,9 +204,9 @@ def swap_idcs_vals(x: torch.Tensor) -> torch.Tensor:
             Shape: [N]
 
     Examples:
-        >>> x = torch.tensor([2, 3, 0, 4, 1])
-        >>> swap_idcs_vals(x)
-        tensor([2, 4, 0, 1, 3])
+    >>> x = torch.tensor([2, 3, 0, 4, 1])
+    >>> swap_idcs_vals(x)
+    tensor([2, 4, 0, 1, 3])
     """
     if x.ndim != 1:
         raise ValueError("x must be 1D.")
@@ -237,9 +237,9 @@ def swap_idcs_vals_duplicates(x: torch.Tensor) -> torch.Tensor:
             Shape: [N]
 
     Examples:
-        >>> x = torch.tensor([1, 3, 0, 1, 3])
-        >>> swap_idcs_vals_duplicates(x)
-        tensor([2, 0, 3, 1, 4])
+    >>> x = torch.tensor([1, 3, 0, 1, 3])
+    >>> swap_idcs_vals_duplicates(x)
+    tensor([2, 0, 3, 1, 4])
     """
     if x.ndim != 1:
         raise ValueError("x must be 1D.")
@@ -362,20 +362,20 @@ def lexsort(
             Shape: [N_0, ..., N_dim, ..., N_{D-1}]
 
     Examples:
-        >>> lexsort((torch.tensor([ 1, 17, 18]),
-        >>>          torch.tensor([23, 10,  9]),
-        >>>          torch.tensor([14, 12,  0]),
-        >>>          torch.tensor([19,  5,  6]),
-        >>>          torch.tensor([21, 20, 22]),
-        >>>          torch.tensor([ 7,  3,  8]),
-        >>>          torch.tensor([13,  4,  2]),
-        >>>          torch.tensor([15, 11, 16])))
-        tensor([1, 0, 2])
+    >>> lexsort((torch.tensor([ 1, 17, 18]),
+    ...          torch.tensor([23, 10,  9]),
+    ...          torch.tensor([14, 12,  0]),
+    ...          torch.tensor([19,  5,  6]),
+    ...          torch.tensor([21, 20, 22]),
+    ...          torch.tensor([ 7,  3,  8]),
+    ...          torch.tensor([13,  4,  2]),
+    ...          torch.tensor([15, 11, 16])))
+    tensor([1, 0, 2])
 
-        >>> lexsort(torch.tensor([[4, 8, 2, 8, 3, 7, 3],
-        >>>                       [9, 4, 0, 4, 0, 4, 1],
-        >>>                       [1, 5, 1, 4, 3, 4, 4]]))
-        tensor([2, 0, 4, 6, 5, 3, 1])
+    >>> lexsort(torch.tensor([[4, 8, 2, 8, 3, 7, 3],
+    ...                       [9, 4, 0, 4, 0, 4, 1],
+    ...                       [1, 5, 1, 4, 3, 4, 4]]))
+    tensor([2, 0, 4, 6, 5, 3, 1])
     """
     if isinstance(keys, tuple):
         keys = torch.stack(keys)  # [K, N_0, ..., N_dim, ..., N_{D-1}]
@@ -435,12 +435,12 @@ def lexsort_along(
     This function is roughly equivalent to the following Python code, but it is
     much faster.
     >>> torch.stack(
-    >>>     sorted(
-    >>>         x.unbind(dim),
-    >>>         key=lambda t: tuple(t),
-    >>>     ),
-    >>>     dim=dim,
-    >>> )
+    ...     sorted(
+    ...         x.unbind(dim),
+    ...         key=lambda t: tuple(t),
+    ...     ),
+    ...     dim=dim,
+    ... )
 
     The sort is always stable, meaning that the order of equal elements is
     preserved.
@@ -461,55 +461,55 @@ def lexsort_along(
             Shape: [N_dim]
 
     Examples:
-        >>> x = torch.tensor([
-        >>>     [2, 1],
-        >>>     [3, 0],
-        >>>     [1, 2],
-        >>>     [1, 3],
-        >>> ])
-        >>> dim = 0
+    >>> x = torch.tensor([
+    ...     [2, 1],
+    ...     [3, 0],
+    ...     [1, 2],
+    ...     [1, 3],
+    ... ])
+    >>> dim = 0
 
-        >>> x_sorted, backmap = lexsort_along(x, dim=dim)
-        >>> x_sorted
-        tensor([[1, 2],
-                [1, 3],
-                [2, 1],
-                [3, 0]])
-        >>> backmap
-        tensor([2, 3, 0, 1]))
+    >>> x_sorted, backmap = lexsort_along(x, dim=dim)
+    >>> x_sorted
+    tensor([[1, 2],
+            [1, 3],
+            [2, 1],
+            [3, 0]])
+    >>> backmap
+    tensor([2, 3, 0, 1]))
 
-        >>> # Get the lexicographically sorted version of x:
-        >>> x.index_select(dim, backmap)
-        tensor([[1, 2],
-                [1, 3],
-                [2, 1],
-                [3, 0]])
+    >>> # Get the lexicographically sorted version of x:
+    >>> x.index_select(dim, backmap)
+    tensor([[1, 2],
+            [1, 3],
+            [2, 1],
+            [3, 0]])
     """
     # We can use lexsort() to sort only the requested dimension.
     # First, we prepare the tensor for lexsort(). The input to this function
     # must be a tuple of array-like objects, that are evaluated from last to
     # first. This is quite confusing, so I'll put an example here. If we have:
     # >>> x = tensor([[[15, 13],
-    # >>>              [11,  4],
-    # >>>              [16,  2]],
-    # >>>             [[ 7, 21],
-    # >>>              [ 3, 20],
-    # >>>              [ 8, 22]],
-    # >>>             [[19, 14],
-    # >>>              [ 5, 12],
-    # >>>              [ 6,  0]],
-    # >>>             [[23,  1],
-    # >>>              [10, 17],
-    # >>>              [ 9, 18]]])
+    # ...              [11,  4],
+    # ...              [16,  2]],
+    # ...             [[ 7, 21],
+    # ...              [ 3, 20],
+    # ...              [ 8, 22]],
+    # ...             [[19, 14],
+    # ...              [ 5, 12],
+    # ...              [ 6,  0]],
+    # ...             [[23,  1],
+    # ...              [10, 17],
+    # ...              [ 9, 18]]])
     # And dim=1, then the input to lexsort() must be:
     # >>> lexsort(tensor([[ 1, 17, 18],
-    # >>>                 [23, 10,  9],
-    # >>>                 [14, 12,  0],
-    # >>>                 [19,  5,  6],
-    # >>>                 [21, 20, 22],
-    # >>>                 [ 7,  3,  8],
-    # >>>                 [13,  4,  2],
-    # >>>                 [15, 11, 16]]))
+    # ...                 [23, 10,  9],
+    # ...                 [14, 12,  0],
+    # ...                 [19,  5,  6],
+    # ...                 [21, 20, 22],
+    # ...                 [ 7,  3,  8],
+    # ...                 [13,  4,  2],
+    # ...                 [15, 11, 16]]))
     # Note that the first row is evaluated last and the last row is evaluated
     # first. We can now see that the sorting order will be 11 < 15 < 16, so
     # lexsort() will return tensor([1, 0, 2]). I thouroughly tested what the
@@ -620,91 +620,91 @@ def unique_consecutive(
             Shape: [U]
 
     Examples:
-        >>> # 1D example: -----------------------------------------------------
-        >>> x = torch.tensor([9, 9, 9, 9, 10, 10])
-        >>> dim = 0
+    >>> # 1D example: -----------------------------------------------------
+    >>> x = torch.tensor([9, 9, 9, 9, 10, 10])
+    >>> dim = 0
 
-        >>> uniques, inverse, counts = unique_consecutive(
-        >>>     x, return_inverse=True, return_counts=True, dim=dim
-        >>> )
-        >>> uniques
-        tensor([ 9, 10])
-        >>> inverse
-        tensor([0, 0, 0, 0, 1, 1])
-        >>> counts
-        tensor([4, 2])
+    >>> uniques, inverse, counts = unique_consecutive(
+    ...     x, return_inverse=True, return_counts=True, dim=dim
+    ... )
+    >>> uniques
+    tensor([ 9, 10])
+    >>> inverse
+    tensor([0, 0, 0, 0, 1, 1])
+    >>> counts
+    tensor([4, 2])
 
-        >>> # Reconstruct the original tensor:
-        >>> uniques.index_select(dim, inverse)
-        tensor([ 9,  9,  9,  9, 10, 10])
+    >>> # Reconstruct the original tensor:
+    >>> uniques.index_select(dim, inverse)
+    tensor([ 9,  9,  9,  9, 10, 10])
 
-        >>> # 2D example: -----------------------------------------------------
-        >>> x = torch.tensor([
-        >>>     [7,  9,  9, 10],
-        >>>     [8, 10, 10,  9],
-        >>>     [9,  8,  8,  7],
-        >>>     [9,  7,  7,  7],
-        >>> ])
-        >>> dim = 1
+    >>> # 2D example: -----------------------------------------------------
+    >>> x = torch.tensor([
+    ...     [7,  9,  9, 10],
+    ...     [8, 10, 10,  9],
+    ...     [9,  8,  8,  7],
+    ...     [9,  7,  7,  7],
+    ... ])
+    >>> dim = 1
 
-        >>> uniques, inverse, counts = unique_consecutive(
-        >>>     x, return_inverse=True, return_counts=True, dim=dim
-        >>> )
-        >>> uniques
-        tensor([[ 7,  9, 10],
-                [ 8, 10,  9],
-                [ 9,  8,  7],
-                [ 9,  7,  7]])
-        >>> inverse
-        tensor([0, 1, 1, 2])
-        >>> counts
-        tensor([1, 2, 1])
+    >>> uniques, inverse, counts = unique_consecutive(
+    ...     x, return_inverse=True, return_counts=True, dim=dim
+    ... )
+    >>> uniques
+    tensor([[ 7,  9, 10],
+            [ 8, 10,  9],
+            [ 9,  8,  7],
+            [ 9,  7,  7]])
+    >>> inverse
+    tensor([0, 1, 1, 2])
+    >>> counts
+    tensor([1, 2, 1])
 
-        >>> # Reconstruct the original tensor:
-        >>> uniques.index_select(dim, inverse)
-        tensor([[ 7,  9,  9, 10],
-                [ 8, 10, 10,  9],
-                [ 9,  8,  8,  7],
-                [ 9,  7,  7,  7]])
+    >>> # Reconstruct the original tensor:
+    >>> uniques.index_select(dim, inverse)
+    tensor([[ 7,  9,  9, 10],
+            [ 8, 10, 10,  9],
+            [ 9,  8,  8,  7],
+            [ 9,  7,  7,  7]])
 
-        >>> # 3D example: -----------------------------------------------------
-        >>> x = torch.tensor([
-        >>>     [
-        >>>         [0, 1, 2, 2],
-        >>>         [4, 6, 5, 5],
-        >>>         [9, 8, 7, 7],
-        >>>     ],
-        >>>     [
-        >>>         [4, 2, 8, 8],
-        >>>         [3, 3, 7, 7],
-        >>>         [0, 2, 1, 1],
-        >>>     ],
-        >>> ])
-        >>> dim = 2
+    >>> # 3D example: -----------------------------------------------------
+    >>> x = torch.tensor([
+    ...     [
+    ...         [0, 1, 2, 2],
+    ...         [4, 6, 5, 5],
+    ...         [9, 8, 7, 7],
+    ...     ],
+    ...     [
+    ...         [4, 2, 8, 8],
+    ...         [3, 3, 7, 7],
+    ...         [0, 2, 1, 1],
+    ...     ],
+    ... ])
+    >>> dim = 2
 
-        >>> uniques, inverse, counts = unique_consecutive(
-        >>>     x, return_inverse=True, return_counts=True, dim=dim
-        >>> )
-        >>> uniques
-        tensor([[[0, 1, 2],
-                 [4, 6, 5],
-                 [9, 8, 7]],
-                [[4, 2, 8],
-                 [3, 3, 7],
-                 [0, 2, 1]]])
-        >>> inverse
-        tensor([0, 1, 2, 2])
-        >>> counts
-        tensor([1, 1, 2])
+    >>> uniques, inverse, counts = unique_consecutive(
+    ...     x, return_inverse=True, return_counts=True, dim=dim
+    ... )
+    >>> uniques
+    tensor([[[0, 1, 2],
+             [4, 6, 5],
+             [9, 8, 7]],
+            [[4, 2, 8],
+             [3, 3, 7],
+             [0, 2, 1]]])
+    >>> inverse
+    tensor([0, 1, 2, 2])
+    >>> counts
+    tensor([1, 1, 2])
 
-        >>> # Reconstruct the original tensor:
-        >>> uniques.index_select(dim, inverse)
-        tensor([[[0, 1, 2, 2],
-                 [4, 6, 5, 5],
-                 [9, 8, 7, 7]],
-                [[4, 2, 8, 8],
-                 [3, 3, 7, 7],
-                 [0, 2, 1, 1]])
+    >>> # Reconstruct the original tensor:
+    >>> uniques.index_select(dim, inverse)
+    tensor([[[0, 1, 2, 2],
+             [4, 6, 5, 5],
+             [9, 8, 7, 7]],
+            [[4, 2, 8, 8],
+             [3, 3, 7, 7],
+             [0, 2, 1, 1]])
     """
     if dim is None:
         raise NotImplementedError(
@@ -908,129 +908,129 @@ def unique(
             Shape: [U]
 
     Examples:
-        >>> # 1D example: -----------------------------------------------------
-        >>> x = torch.tensor([9, 10, 9, 9, 10, 9])
-        >>> dim = 0
+    >>> # 1D example: -----------------------------------------------------
+    >>> x = torch.tensor([9, 10, 9, 9, 10, 9])
+    >>> dim = 0
 
-        >>> uniques, backmap, inverse, counts = unique(
-        >>>     x,
-        >>>     return_backmap=True,
-        >>>     return_inverse=True,
-        >>>     return_counts=True,
-        >>>     dim=dim,
-        >>> )
-        >>> uniques
-        tensor([ 9, 10])
-        >>> backmap
-        tensor([0, 2, 3, 5, 1, 4])
-        >>> inverse
-        tensor([0, 1, 0, 0, 1, 0])
-        >>> counts
-        tensor([4, 2])
+    >>> uniques, backmap, inverse, counts = unique(
+    ...     x,
+    ...     return_backmap=True,
+    ...     return_inverse=True,
+    ...     return_counts=True,
+    ...     dim=dim,
+    ... )
+    >>> uniques
+    tensor([ 9, 10])
+    >>> backmap
+    tensor([0, 2, 3, 5, 1, 4])
+    >>> inverse
+    tensor([0, 1, 0, 0, 1, 0])
+    >>> counts
+    tensor([4, 2])
 
-        >>> # Get the lexicographically sorted version of x:
-        >>> x.index_select(dim, backmap)
-        tensor([ 9,  9,  9,  9, 10, 10])
+    >>> # Get the lexicographically sorted version of x:
+    >>> x.index_select(dim, backmap)
+    tensor([ 9,  9,  9,  9, 10, 10])
 
-        >>> # Reconstruct the original tensor:
-        >>> uniques.index_select(dim, inverse)
-        tensor([ 9, 10,  9,  9, 10,  9])
+    >>> # Reconstruct the original tensor:
+    >>> uniques.index_select(dim, inverse)
+    tensor([ 9, 10,  9,  9, 10,  9])
 
-        >>> # 2D example: -----------------------------------------------------
-        >>> x = torch.tensor([
-        >>>     [9, 10, 7, 9],
-        >>>     [10, 9, 8, 10],
-        >>>     [8, 7, 9, 8],
-        >>>     [7, 7, 9, 7],
-        >>> ])
-        >>> dim = 1
+    >>> # 2D example: -----------------------------------------------------
+    >>> x = torch.tensor([
+    ...     [9, 10, 7, 9],
+    ...     [10, 9, 8, 10],
+    ...     [8, 7, 9, 8],
+    ...     [7, 7, 9, 7],
+    ... ])
+    >>> dim = 1
 
-        >>> uniques, backmap, inverse, counts = unique(
-        >>>     x,
-        >>>     return_backmap=True,
-        >>>     return_inverse=True,
-        >>>     return_counts=True,
-        >>>     dim=dim,
-        >>> )
-        >>> uniques
-        tensor([[ 7,  9, 10],
-                [ 8, 10,  9],
-                [ 9,  8,  7],
-                [ 9,  7,  7]])
-        >>> backmap
-        tensor([2, 0, 3, 1])
-        >>> inverse
-        tensor([1, 2, 0, 1])
-        >>> counts
-        tensor([1, 2, 1])
+    >>> uniques, backmap, inverse, counts = unique(
+    ...     x,
+    ...     return_backmap=True,
+    ...     return_inverse=True,
+    ...     return_counts=True,
+    ...     dim=dim,
+    ... )
+    >>> uniques
+    tensor([[ 7,  9, 10],
+            [ 8, 10,  9],
+            [ 9,  8,  7],
+            [ 9,  7,  7]])
+    >>> backmap
+    tensor([2, 0, 3, 1])
+    >>> inverse
+    tensor([1, 2, 0, 1])
+    >>> counts
+    tensor([1, 2, 1])
 
-        >>> # Get the lexicographically sorted version of x:
-        >>> x.index_select(dim, backmap)
-        tensor([[ 7,  9,  9, 10],
-                [ 8, 10, 10,  9],
-                [ 9,  8,  8,  7],
-                [ 9,  7,  7,  7]])
+    >>> # Get the lexicographically sorted version of x:
+    >>> x.index_select(dim, backmap)
+    tensor([[ 7,  9,  9, 10],
+            [ 8, 10, 10,  9],
+            [ 9,  8,  8,  7],
+            [ 9,  7,  7,  7]])
 
-        >>> # Reconstruct the original tensor:
-        >>> uniques.index_select(dim, inverse)
-        tensor([[ 9, 10,  7,  9],
-                [10,  9,  8, 10],
-                [ 8,  7,  9,  8],
-                [ 7,  7,  9,  7]])
+    >>> # Reconstruct the original tensor:
+    >>> uniques.index_select(dim, inverse)
+    tensor([[ 9, 10,  7,  9],
+            [10,  9,  8, 10],
+            [ 8,  7,  9,  8],
+            [ 7,  7,  9,  7]])
 
-        >>> # 3D example: -----------------------------------------------------
-        >>> x = torch.tensor([
-        >>>     [
-        >>>         [0, 2, 1, 2],
-        >>>         [4, 5, 6, 5],
-        >>>         [9, 7, 8, 7],
-        >>>     ],
-        >>>     [
-        >>>         [4, 8, 2, 8],
-        >>>         [3, 7, 3, 7],
-        >>>         [0, 1, 2, 1],
-        >>>     ],
-        >>> ])
-        >>> dim = 2
+    >>> # 3D example: -----------------------------------------------------
+    >>> x = torch.tensor([
+    ...     [
+    ...         [0, 2, 1, 2],
+    ...         [4, 5, 6, 5],
+    ...         [9, 7, 8, 7],
+    ...     ],
+    ...     [
+    ...         [4, 8, 2, 8],
+    ...         [3, 7, 3, 7],
+    ...         [0, 1, 2, 1],
+    ...     ],
+    ... ])
+    >>> dim = 2
 
-        >>> uniques, backmap, inverse, counts = unique(
-        >>>     x,
-        >>>     return_backmap=True,
-        >>>     return_inverse=True,
-        >>>     return_counts=True,
-        >>>     dim=dim,
-        >>> )
-        >>> uniques
-        tensor([[[0, 1, 2],
-                 [4, 6, 5],
-                 [9, 8, 7]],
-                [[4, 2, 8],
-                 [3, 3, 7],
-                 [0, 2, 1]]])
-        >>> backmap
-        tensor([0, 2, 1, 3])
-        >>> inverse
-        tensor([0, 2, 1, 2])
-        >>> counts
-        tensor([1, 1, 2])
+    >>> uniques, backmap, inverse, counts = unique(
+    ...     x,
+    ...     return_backmap=True,
+    ...     return_inverse=True,
+    ...     return_counts=True,
+    ...     dim=dim,
+    ... )
+    >>> uniques
+    tensor([[[0, 1, 2],
+             [4, 6, 5],
+             [9, 8, 7]],
+            [[4, 2, 8],
+             [3, 3, 7],
+             [0, 2, 1]]])
+    >>> backmap
+    tensor([0, 2, 1, 3])
+    >>> inverse
+    tensor([0, 2, 1, 2])
+    >>> counts
+    tensor([1, 1, 2])
 
-        >>> # Get the lexicographically sorted version of x:
-        >>> x.index_select(dim, backmap)
-        tensor([[[0, 1, 2, 2],
-                 [4, 6, 5, 5],
-                 [9, 8, 7, 7]],
-                [[4, 2, 8, 8],
-                 [3, 3, 7, 7],
-                 [0, 2, 1, 1]]])
+    >>> # Get the lexicographically sorted version of x:
+    >>> x.index_select(dim, backmap)
+    tensor([[[0, 1, 2, 2],
+             [4, 6, 5, 5],
+             [9, 8, 7, 7]],
+            [[4, 2, 8, 8],
+             [3, 3, 7, 7],
+             [0, 2, 1, 1]]])
 
-        >>> # Reconstruct the original tensor:
-        >>> uniques.index_select(dim, inverse)
-        tensor([[[0, 2, 1, 2],
-                 [4, 5, 6, 5],
-                 [9, 7, 8, 7]],
-                [[4, 8, 2, 8],
-                 [3, 7, 3, 7],
-                 [0, 1, 2, 1]])
+    >>> # Reconstruct the original tensor:
+    >>> uniques.index_select(dim, inverse)
+    tensor([[[0, 2, 1, 2],
+             [4, 5, 6, 5],
+             [9, 7, 8, 7]],
+            [[4, 8, 2, 8],
+             [3, 7, 3, 7],
+             [0, 1, 2, 1]])
     """
     if dim is None:
         raise NotImplementedError(
