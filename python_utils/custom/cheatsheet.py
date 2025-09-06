@@ -1403,48 +1403,54 @@ class SegTree:
 
 
 def aho_corasick(
-    words: Iterable[str], target: str
-) -> Iterator[tuple[str, int]]:
-    """Aho-Corasick's algorithm finds all matches of all words in a string.
+    sources: Iterable[str], targets: Iterable[str]
+) -> Iterator[tuple[int, int, int]]:
+    """Aho-Corasick's algorithm finds all target substrings in a source string.
 
-    Complexity: O(n + m + z)
-        n: The amount of characters in the target string.
-        m: The sum of the amount of characters in the words to search.
-        z: The amount of total macthes returned.
+    Complexity: O(N + M + Z)
+        N: Sum of characters in the sources.
+        M: Sum of characters in the targets.
+        Z: Total matches returned.
         Note that since we have to go through all characters and matches at
         least once, this is the theoretical limit in terms of efficiency.
 
     Args:
-        words: The words to search for in the target string.
+        sources: The strings to search in.
             Length: K
-            Length of inner strings: m_k
-        target: The string to search for the words in.
-            Length: n
+            Length of inner strings: N_k
+        targets: The substrings to search for.
+            Length: L
+            Length of inner strings: M_l
 
     Yields:
         Tuple containing:
-        - The word found in the target string.
-        - The index in the target string of the last letter in word. The
-            matches are always returned in order of increasing index_in_target.
+        - The index of the source string in which the target was found.
+        - The index of the target that was found.
+        - The index in the source string of the last letter in the target.
+
+        Note that the matches are always returned in order of:
+        1. Increasing index in list of sources.
+        2. Increasing character index in source.
+        3. Decreasing target length.
     """
     from collections import deque
 
-    # First build the trie: O(m).
+    # First build the trie: O(M).
     # Each node is represented by a list containing:
     # [0] A dict pointing to the node's children.
     # [1] The suffix link of this node.
     # [2] The output link of this node (or None).
-    # [3] A word if the node corresponds to the end of a word (or None).
+    # [3] The target index if the node corresponds to a target end (or None).
     trie = [{}, None, None, None]
-    for word in words:
+    for i, target in enumerate(targets):
         # Traverse the trie, going into branch c at every step.
         curr_node = trie
-        for c in word:
+        for c in target:
             curr_node = curr_node[0].setdefault(c, [{}, None, None, None])
-        # Save the word at the ending node.
-        curr_node[3] = word
+        # Save the target index at the ending node.
+        curr_node[3] = i
 
-    # Now add the suffix links and output links to the trie: O(n).
+    # Now add the suffix links and output links to the trie: O(M).
     # Perform a BFS of the trie, excluding the root:
     # - Call the character leading to the node c.
     # - Call the node where the parent's suffix link points to x.
@@ -1453,7 +1459,7 @@ def aho_corasick(
     # - Otherwise, set x to the node pointed at by x's suffix link and repeat.
     # Now we can find the output link of the node.
     # - Call the node where node's suffix link points to y.
-    # - If y is a word, the node's output link points to y.
+    # - If y is a target, the node's output link points to y.
     # - Otherwise, the node's output link points to y's output link.
     queue = deque((trie,))
     while queue:
@@ -1477,20 +1483,21 @@ def aho_corasick(
             y = node[1]
             node[2] = y if y[3] is not None else y[2]
 
-    # Finally, perform the matching algorithm: O(n + z).
-    node = trie
-    for i, c in enumerate(target):
-        # Follow suffix links.
-        while c not in node[0]:
-            if node is trie:
-                break
-            node = node[1]
-        node = node[0].get(c, trie)
-        # Output a word if this node corresponds to (the end of) a word.
-        if node[3] is not None:
-            yield (node[3], i)
-        # Output all words in the chain of output links starting at this node.
-        output_link = node[2]
-        while output_link is not None:
-            yield (output_link[3], i)
-            output_link = output_link[2]
+    # Finally, perform the matching algorithm: O(N + Z).
+    for i, source in enumerate(sources):
+        node = trie
+        for j, c in enumerate(source):
+            # Follow suffix links.
+            while c not in node[0]:
+                if node is trie:
+                    break
+                node = node[1]
+            node = node[0].get(c, trie)
+            # Yield a target if this node corresponds to (the end of) a target.
+            if node[3] is not None:
+                yield (i, node[3], j)
+            # Yield all targets in the chain of output links at this node.
+            output_link = node[2]
+            while output_link is not None:
+                yield (i, output_link[3], j)
+                output_link = output_link[2]

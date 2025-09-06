@@ -798,5 +798,84 @@ class TestPrim(unittest.TestCase):
         self.assertListEqual(mst, [[], [], [], [], [], [(6, 1)], [(5, 1)]])
 
 
+class TestAhoCorasick(unittest.TestCase):
+    def test_aho_corasick_single_source_single_target(self) -> None:
+        sources = ["hello world"]
+        targets = ["world"]
+        result = list(cheatsheet.aho_corasick(sources, targets))
+        self.assertListEqual(result, [(0, 0, 10)])
+
+    def test_aho_corasick_single_source_multiple_targets(self) -> None:
+        sources = ["hello world hello"]
+        targets = ["hello", "world"]
+        result = list(cheatsheet.aho_corasick(sources, targets))
+        self.assertListEqual(result, [(0, 0, 4), (0, 1, 10), (0, 0, 16)])
+
+    def test_aho_corasick_multiple_sources_single_target(self) -> None:
+        sources = ["hello", "world", "hello world"]
+        targets = ["hello"]
+        result = list(cheatsheet.aho_corasick(sources, targets))
+        self.assertListEqual(result, [(0, 0, 4), (2, 0, 4)])
+
+    def test_aho_corasick_multiple_sources_multiple_targets(self) -> None:
+        sources = ["abcdef", "bcdefghi", "defghijkl"]
+        targets = ["abc", "def", "hij"]
+        result = list(cheatsheet.aho_corasick(sources, targets))
+        self.assertListEqual(
+            result, [(0, 0, 2), (0, 1, 5), (1, 1, 4), (2, 1, 2), (2, 2, 6)]
+        )
+
+    def test_aho_corasick_overlapping_patterns(self) -> None:
+        sources = ["abcabc"]
+        targets = ["abc", "bca", "cab"]
+        result = list(cheatsheet.aho_corasick(sources, targets))
+        self.assertListEqual(
+            result, [(0, 0, 2), (0, 1, 3), (0, 2, 4), (0, 0, 5)]
+        )
+
+    def test_aho_corasick_no_matches(self) -> None:
+        sources = ["hello world"]
+        targets = ["xyz", "abc"]
+        result = list(cheatsheet.aho_corasick(sources, targets))
+        self.assertListEqual(result, [])
+
+    def test_aho_corasick_empty_sources(self) -> None:
+        sources = []
+        targets = ["hello"]
+        result = list(cheatsheet.aho_corasick(sources, targets))
+        self.assertListEqual(result, [])
+
+    def test_aho_corasick_empty_targets(self) -> None:
+        sources = ["hello world"]
+        targets = []
+        result = list(cheatsheet.aho_corasick(sources, targets))
+        self.assertListEqual(result, [])
+
+    def test_aho_corasick_single_character_patterns(self) -> None:
+        sources = ["aaaaa"]
+        targets = ["a", "aa", "aaa", "aaaa", "aaaaa"]
+        result = list(cheatsheet.aho_corasick(sources, targets))
+        self.assertListEqual(
+            result,
+            [
+                (0, 0, 0),
+                (0, 1, 1),
+                (0, 0, 1),
+                (0, 2, 2),
+                (0, 1, 2),
+                (0, 0, 2),
+                (0, 3, 3),
+                (0, 2, 3),
+                (0, 1, 3),
+                (0, 0, 3),
+                (0, 4, 4),
+                (0, 3, 4),
+                (0, 2, 4),
+                (0, 1, 4),
+                (0, 0, 4),
+            ],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
