@@ -80,6 +80,7 @@ class TestUnique(unittest.TestCase):
             return_inverse=True,
             return_counts=True,
             axis=axis,
+            stable=True,
         )
         self.assertTrue(np.array_equal(uniques, np.array([9, 10])))
         self.assertTrue(np.array_equal(backmap, np.array([0, 2, 3, 5, 1, 4])))
@@ -115,6 +116,7 @@ class TestUnique(unittest.TestCase):
             return_inverse=True,
             return_counts=True,
             axis=axis,
+            stable=True,
         )
         self.assertTrue(
             np.array_equal(
@@ -159,6 +161,7 @@ class TestUnique(unittest.TestCase):
             return_inverse=True,
             return_counts=True,
             axis=axis,
+            stable=True,
         )
         self.assertTrue(
             np.array_equal(

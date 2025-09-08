@@ -8,8 +8,10 @@ import numpy.typing as npt
 from typing_extensions import override
 
 T = TypeVar("T")
+NpGeneric = TypeVar("NpGeneric", bound=np.generic)
 NpGeneric1 = TypeVar("NpGeneric1", bound=np.generic)
 NpGeneric2 = TypeVar("NpGeneric2", bound=np.generic)
+NpInteger = TypeVar("NpInteger", bound=np.integer)
 
 
 class NDArrayGeneric(np.ndarray, Generic[T]):
@@ -18,6 +20,98 @@ class NDArrayGeneric(np.ndarray, Generic[T]):
     @override
     def __getitem__(self, key: Any) -> T:
         return super().__getitem__(key)  # type: ignore
+
+
+# ############################ NUMPY-SPECIFIC UTILS ############################
+
+
+def unequal_seqs_add(
+    a: npt.NDArray[NpGeneric], b: npt.NDArray[NpGeneric]
+) -> npt.NDArray[NpGeneric]:
+    """Add two arrays, and adjust the size of the result if necessary.
+
+    Args:
+        a: The first array.
+            Shape: [N]
+        b: The second array.
+            Shape: [M]
+
+    Returns:
+        The sum of the two arrays.
+            Shape: [max(N, M)]
+    """
+    if len(a) < len(b):
+        a = np.pad(a, (0, len(b) - len(a)))
+    elif len(a) > len(b):
+        b = np.pad(b, (0, len(a) - len(b)))
+    return a + b  # type: ignore
+
+
+def init_normalized_histogram(
+    bin_edges: npt.ArrayLike,
+) -> tuple[float, npt.NDArray[np.float64]]:
+    """Initialize a normalized histogram.
+
+    Args:
+        bin_edges: The bin edges of the histogram.
+            Shape: [bins + 1]
+
+    Returns:
+        Tuple containing:
+        - The initial average of the histogram (0).
+        - The initial normalized histogram (all zeros).
+            Shape: [bins]
+    """
+    return 0, np.zeros(len(bin_edges) - 1)  # type: ignore
+
+
+def update_normalized_histogram(
+    old_value_avg: float,
+    old_histogram: npt.NDArray[np.float64],
+    amount_old_values: int,
+    new_values: npt.ArrayLike,
+    bin_edges: npt.ArrayLike,
+) -> tuple[float, npt.NDArray[np.float64]]:
+    """Update a normalized histogram with new values.
+
+    Args:
+        old_value_avg: The average of the old values in the histogram.
+        old_histogram: The old normalized histogram. Will be updated in-place.
+            Shape: [bins]
+        amount_old_values: The amount of old values in the histogram.
+        new_values: The new values to add to the histogram.
+            Shape: [amount_new_values]
+        bin_edges: The bin edges of the histogram.
+            Length: [bins + 1]
+
+    Returns:
+        Tuple containing:
+        - The updated average of the histogram.
+        - The updated normalized histogram.
+            Shape: [bins]
+    """
+    new_values = np.array(new_values)
+
+    # Update the average of the histogram.
+    updated_value_avg = (
+        old_value_avg * amount_old_values + new_values.mean() * len(new_values)
+    ) / (amount_old_values + len(new_values))
+
+    # Create a normalized histogram of the new values.
+    new_histogram = np.histogram(new_values, bin_edges)[0] / len(new_values)
+
+    # Weigh both histograms by the amount of values they contain.
+    old_histogram *= amount_old_values
+    new_histogram *= len(new_values)
+    updated_histogram = (old_histogram + new_histogram) / (
+        amount_old_values + len(new_values)
+    )
+
+    # Add the histograms and renormalize them.
+    return updated_value_avg, updated_histogram
+
+
+# ######################### NUMPY & TORCH SHARED UTILS #########################
 
 
 def cumsum_start_0(
@@ -71,7 +165,232 @@ def cumsum_start_0(
     return np.concat([zeros, cumsum], axis=axis)
 
 
-def swap_idcs_vals(x: npt.NDArray) -> npt.NDArray:
+def get_starts_segments(x: npt.NDArray, axis: int = 0) -> npt.NDArray[np.intp]:
+    """Find the start index of each consecutive segment.
+
+    Args:
+        x: The input array. Consecutive equal values will be grouped.
+            Shape: [N_0, ..., N_axis, ..., N_{D-1}]
+        axis: The dimension along which the segments are lined up.
+
+    Returns:
+        The start indices for each consecutive segment in x.
+            Shape: [S]
+
+    Examples:
+    >>> get_starts_segments(np.array([4, 4, 4, 2, 2, 8, 3, 3, 3, 3]))
+    array([0, 3, 5, 6])
+    """
+    N_axis = x.shape[axis]
+
+    # Find the indices where the values change.
+    is_change = (
+        np.concat([
+            np.ones(1, dtype=np.bool_),
+            np.any(
+                x.take(np.arange(0, N_axis - 1), axis)
+                != x.take(np.arange(1, N_axis), axis),
+                axis=tuple(i for i in range(x.ndim) if i != axis),
+            ),
+        ])
+        if N_axis > 0
+        else np.empty(0, dtype=np.bool_)
+    )  # [N_axis]
+
+    # Find the start of each consecutive segment.
+    return is_change.nonzero()[0]  # [S]
+
+
+@overload
+def get_lengths_segments(  # type: ignore
+    x: npt.NDArray, axis: int = 0, return_starts: Literal[False] = ...
+) -> npt.NDArray[np.int64]:
+    pass
+
+
+@overload
+def get_lengths_segments(
+    x: npt.NDArray, axis: int = 0, return_starts: Literal[True] = ...
+) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.intp]]:
+    pass
+
+
+def get_lengths_segments(
+    x: npt.NDArray, axis: int = 0, return_starts: bool = False
+) -> (
+    npt.NDArray[np.int64] | tuple[npt.NDArray[np.int64], npt.NDArray[np.int64]]
+):
+    """Count the length of each consecutive segment.
+
+    Args:
+        x: The input array. Consecutive equal values will be grouped.
+            Shape: [N_0, ..., N_axis, ..., N_{D-1}]
+        axis: The dimension along which the segments are lined up.
+        return_starts: Whether to also return the start indices of each
+            consecutive segment.
+
+    Returns:
+        Tuple containing:
+        - The lengths for each consecutive segment in x.
+            Shape: [S]
+        - (Optional) If return_starts is True, the start indices for each
+            consecutive segment in x.
+            Shape: [S]
+
+    Examples:
+    >>> get_lengths_segments(np.array([4, 4, 4, 2, 2, 8, 3, 3, 3, 3]))
+    array([3, 2, 1, 4])
+    """
+    N_axis = x.shape[axis]
+
+    # Find the start of each consecutive segment.
+    starts = get_starts_segments(x, axis=axis)  # [S]
+
+    # Find the length of each consecutive segment.
+    lengths = (
+        np.diff(starts, append=np.full((1,), N_axis, dtype=np.int64))
+        if N_axis > 0
+        else np.empty(0, dtype=np.int64)
+    )  # [S]
+
+    if return_starts:
+        return lengths, starts
+    return lengths
+
+
+@overload
+def inner_indices_segments(  # type: ignore
+    x: npt.NDArray,
+    axis: int = 0,
+    return_lengths: Literal[False] = ...,
+    return_starts: Literal[False] = ...,
+) -> npt.NDArray[np.intp]:
+    pass
+
+
+@overload
+def inner_indices_segments(
+    x: npt.NDArray,
+    axis: int = 0,
+    return_lengths: Literal[True] = ...,
+    return_starts: Literal[False] = ...,
+) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.int64]]:
+    pass
+
+
+@overload
+def inner_indices_segments(
+    x: npt.NDArray,
+    axis: int = 0,
+    return_lengths: Literal[False] = ...,
+    return_starts: Literal[True] = ...,
+) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]:
+    pass
+
+
+@overload
+def inner_indices_segments(
+    x: npt.NDArray,
+    axis: int = 0,
+    return_lengths: Literal[True] = ...,
+    return_starts: Literal[True] = ...,
+) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.int64], npt.NDArray[np.intp]]:
+    pass
+
+
+def inner_indices_segments(
+    x: npt.NDArray,
+    axis: int = 0,
+    return_lengths: bool = False,
+    return_starts: bool = False,
+) -> (
+    npt.NDArray[np.intp]
+    | tuple[npt.NDArray[np.intp], npt.NDArray[np.int64]]
+    | tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]
+    | tuple[npt.NDArray[np.intp], npt.NDArray[np.int64], npt.NDArray[np.intp]]
+):
+    """Construct the inner indices for each consecutive segment.
+
+    Args:
+        x: The input array. Consecutive equal values will be grouped.
+            Shape: [N_0, ..., N_axis, ..., N_{D-1}]
+        axis: The dimension along which the segments are lined up.
+        return_lengths: Whether to also return the lengths of each
+            consecutive segment.
+        return_starts: Whether to also return the start indices of each
+            consecutive segment.
+
+    Returns:
+        Tuple containing:
+        - The inner indices for each consecutive segment in x.
+            Shape: [N_axis]
+        - (Optional) If return_lengths is True, the lengths for each
+            consecutive segment in x.
+            Shape: [S]
+        - (Optional) If return_starts is True, the start indices for each
+            consecutive segment in x.
+            Shape: [S]
+
+    Examples:
+    >>> inner_indices_segments(np.array([4, 4, 4, 2, 2, 8, 3, 3, 3, 3]))
+    array([0, 1, 2, 0, 1, 0, 0, 1, 2, 3])
+    """
+    N_axis = x.shape[axis]
+
+    # Find the start and length of each consecutive segment.
+    lengths, starts = get_lengths_segments(
+        x, axis=axis, return_starts=True
+    )  # [S], [S]
+
+    # Create the index array.
+    inner_idcs = (
+        np.arange(N_axis, dtype=np.intp)
+        - np.repeat(starts, lengths)
+    )  # [N_axis]  # fmt: skip
+
+    if return_lengths and return_starts:
+        return inner_idcs, lengths, starts
+    if return_lengths:
+        return inner_idcs, lengths
+    if return_starts:
+        return inner_idcs, starts
+    return inner_idcs
+
+
+def count_freqs_until(
+    x: npt.NDArray[np.integer], high: int
+) -> npt.NDArray[np.int64]:
+    """Count the frequency of each consecutive value, with values in [0, high).
+
+    Args:
+        x: The array for which to count the frequency of each integer value.
+            Consecutive values in x are grouped together. It is assumed that
+            every segment has a unique integer value that is not present in any
+            other segment. The values in x must be in the range [0, high).
+            Shape: [N]
+        high: The highest value to include in the count (exclusive). May be
+            higher than the maximum value in x, in which case the remaining
+            values will be set to 0.
+
+    Returns:
+        The frequency of each element in x in range [0, high).
+            Shape: [high]
+
+    Examples:
+    >>> count_freqs_until(np.array([4, 4, 4, 2, 2, 8, 3, 3, 3, 3]), high=10)
+    array([0, 0, 2, 4, 3, 0, 0, 0, 1, 0])
+    """
+    if x.ndim != 1:
+        raise ValueError("x must be a 1D array.")
+
+    freqs = np.zeros(high, dtype=np.int64)  # [high]
+    lengths, starts = get_lengths_segments(x, return_starts=True)  # [S], [S]
+    unique = x[starts]  # [S]
+    freqs[unique] = lengths
+    return freqs
+
+
+def swap_idcs_vals(x: npt.NDArray[NpInteger]) -> npt.NDArray[NpInteger]:
     """Swap the indices and values of a 1D array.
 
     The input array is assumed to contain exactly all integers from 0 to
@@ -98,11 +417,13 @@ def swap_idcs_vals(x: npt.NDArray) -> npt.NDArray:
         raise ValueError("x must be 1D.")
 
     x_swapped = np.empty_like(x)
-    x_swapped[x] = np.arange(len(x))
+    x_swapped[x] = np.arange(len(x), dtype=x.dtype)
     return x_swapped
 
 
-def swap_idcs_vals_duplicates(x: npt.NDArray) -> npt.NDArray:
+def swap_idcs_vals_duplicates(
+    x: npt.NDArray[NpInteger], stable: bool = False
+) -> npt.NDArray[NpInteger]:
     """Swap the indices and values of a 1D array, allowing duplicates.
 
     The input array is assumed to contain integers from 0 to M <= N, in any
@@ -117,6 +438,8 @@ def swap_idcs_vals_duplicates(x: npt.NDArray) -> npt.NDArray:
     Args:
         x: The array to swap.
             Shape: [N]
+        stable: Whether to preserve the relative order of equal elements. If
+            False (default), an unstable sort is used, which is faster.
 
     Returns:
         The swapped array.
@@ -124,7 +447,7 @@ def swap_idcs_vals_duplicates(x: npt.NDArray) -> npt.NDArray:
 
     Examples:
     >>> x = np.array([1, 3, 0, 1, 3])
-    >>> swap_idcs_vals_duplicates(x)
+    >>> swap_idcs_vals_duplicates(x, stable=True)
     array([2, 0, 3, 1, 4])
     """
     if x.ndim != 1:
@@ -132,12 +455,14 @@ def swap_idcs_vals_duplicates(x: npt.NDArray) -> npt.NDArray:
 
     # Believe it or not, this O(n log n) algorithm is actually faster than a
     # native implementation that uses a Python for loop with complexity O(n).
-    return np.argsort(x)
+    return np.argsort(x, stable=stable).astype(x.dtype)
 
 
 def lexsort(
-    keys: npt.NDArray | tuple[npt.NDArray, ...], axis: int = -1
-) -> npt.NDArray:
+    keys: npt.NDArray | tuple[npt.NDArray, ...],
+    axis: int = -1,
+    stable: bool = False,
+) -> npt.NDArray[np.intp]:
     """Like np.lexsort(), but MUCH faster.
 
     Perform an indirect sort using a sequence of keys.
@@ -149,21 +474,18 @@ def lexsort(
     and so on. The first dimension is always interpreted as the dimension
     along which the tuples lie.
 
-    Warning: Unlike np.lexsort(), this function does not perform a stable sort.
-    This means that the order of equal elements is not preserved. If you need a
-    stable sort, you should use np.lexsort() instead.
-
     Args:
         keys: Array of shape [K, N_0, ..., N_axis, ..., N_{D-1}] or a tuple
             containing K [N_0, ..., N_axis, ..., N_{D-1}]-shaped sequences. K
             refers to the amount of elements in the tuples. The last element
             is the primary sort key.
-        axis: Dimension to be indirectly sorted. By default, sort over the last
-            dimension.
+        axis: Dimension to be indirectly sorted.
+        stable: Whether to preserve the relative order of equal elements. If
+            False (default), an unstable sort is used, which is faster.
 
     Returns:
         Array of indices that sort the keys along the specified axis.
-            Shape: [N_0, ..., N_axis, ..., N_{D-1}]
+            Shape: [N_axis]
 
     Examples:
     >>> lexsort((np.array([ 1, 17, 18]),
@@ -202,9 +524,7 @@ def lexsort(
             )  # [N_0, ..., N_axis, ..., N_{D-1}]
 
             # Sort the integers.
-            return np.argsort(
-                idcs, axis=axis
-            )  # [N_0, ..., N_axis, ..., N_{D-1}]
+            return np.argsort(idcs, axis=axis, stable=stable)
         except ValueError:
             # Overflow would occur when converting to integers.
             pass
@@ -215,8 +535,8 @@ def lexsort(
 
 
 def lexsort_along(
-    x: npt.NDArray, axis: int = -1
-) -> tuple[npt.NDArray, npt.NDArray]:
+    x: npt.NDArray[NpGeneric], axis: int = -1, stable: bool = False
+) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp]]:
     """Sort an array along axis, taking all others as tuples.
 
     This is like np.sort(), but the other dimensions are treated as tuples.
@@ -230,13 +550,12 @@ def lexsort_along(
     ...     axis=axis,
     ... )
 
-    The sort is always stable, meaning that the order of equal elements is
-    preserved.
-
     Args:
         x: The array to sort.
             Shape: [N_0, ..., N_axis, ..., N_{D-1}]
         axis: The dimension to sort along.
+        stable: Whether to preserve the relative order of equal elements. If
+            False (default), an unstable sort is used, which is faster.
 
     Returns:
         Tuple containing:
@@ -317,7 +636,7 @@ def lexsort_along(
     y = np.flip(
         y, axis=(0,)
     )  # [N_0 * ... * N_{axis-1} * N_{axis+1} * ... * N_{D-1}, N_axis]
-    backmap = lexsort(y, axis=-1)  # [N_axis]
+    backmap = lexsort(y, axis=-1, stable=stable)  # [N_axis]
 
     # Sort the array along the given axis.
     x_sorted = x.take(backmap, axis)  # [N_0, ..., N_axis, ..., N_{D-1}]
@@ -328,53 +647,54 @@ def lexsort_along(
 
 @overload
 def unique_consecutive(  # type: ignore
-    x: npt.NDArray,
+    x: npt.NDArray[NpGeneric],
     return_inverse: Literal[False] = ...,
     return_counts: Literal[False] = ...,
     axis: int | None = None,
-) -> npt.NDArray:
+) -> npt.NDArray[NpGeneric]:
     pass
 
 
 @overload
 def unique_consecutive(
-    x: npt.NDArray,
+    x: npt.NDArray[NpGeneric],
     return_inverse: Literal[True] = ...,
     return_counts: Literal[False] = ...,
     axis: int | None = None,
-) -> tuple[npt.NDArray, npt.NDArray]:
+) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp]]:
     pass
 
 
 @overload
 def unique_consecutive(
-    x: npt.NDArray,
+    x: npt.NDArray[NpGeneric],
     return_inverse: Literal[False] = ...,
     return_counts: Literal[True] = ...,
     axis: int | None = None,
-) -> tuple[npt.NDArray, npt.NDArray]:
+) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[np.int64]]:
     pass
 
 
 @overload
 def unique_consecutive(
-    x: npt.NDArray,
+    x: npt.NDArray[NpGeneric],
     return_inverse: Literal[True] = ...,
     return_counts: Literal[True] = ...,
     axis: int | None = None,
-) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
+) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp], npt.NDArray[np.int64]]:
     pass
 
 
 def unique_consecutive(
-    x: npt.NDArray,
+    x: npt.NDArray[NpGeneric],
     return_inverse: bool = False,
     return_counts: bool = False,
     axis: int | None = None,
 ) -> (
-    npt.NDArray
-    | tuple[npt.NDArray, npt.NDArray]
-    | tuple[npt.NDArray, npt.NDArray, npt.NDArray]
+    npt.NDArray[NpGeneric]
+    | tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp]]
+    | tuple[npt.NDArray[NpGeneric], npt.NDArray[np.int64]]
+    | tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp], npt.NDArray[np.int64]]
 ):
     """A consecutive version of np.unique().
 
@@ -389,10 +709,10 @@ def unique_consecutive(
             array.
         return_counts: Whether to also return the number of times each unique
             element occurred in the original array.
-        axis: The dimension to operate upon. If None, the unique of the
+        axis: The dimension to operate on. If None, the unique of the
             flattened input is returned. Otherwise, each of the arrays indexed
             by the given dimension is treated as one of the elements to apply
-            the unique operation upon. See examples for more details.
+            the unique operation on. See examples for more details.
 
     Returns:
         Tuple containing:
@@ -513,16 +833,15 @@ def unique_consecutive(
             -1, N_axis
         )  # [N_0 * ... * N_{axis-1} * N_{axis+1} * ... * N_{D-1}, N_axis]
 
-    # Find the indices where the values change.
-    is_change = np.concat([
-        (
-            np.ones(1, dtype=bool) if N_axis > 0 else np.empty(0, dtype=bool)
-        ),  # [1] or [0]
-        np.any(y[:, :-1] != y[:, 1:], axis=0),  # [N_axis - 1] or [0]
-    ])  # [N_axis]
+    # Find the start indices and counts (optional) of each unique element.
+    if return_counts or return_inverse:
+        counts, idcs = get_lengths_segments(
+            y, axis=1, return_starts=True
+        )  # [U], [U]
+    else:
+        idcs = get_starts_segments(y, axis=1)  # [U]
 
     # Find the unique values.
-    idcs = is_change.nonzero()[0]  # [U]
     uniques = x.take(
         idcs, axis
     )  # [N_0, ..., N_{axis-1}, U, N_{axis+1}, ..., N_{D-1}]
@@ -530,23 +849,12 @@ def unique_consecutive(
     # Calculate auxiliary values.
     aux = []
     if return_inverse:
-        # Find the indices where the elements in the original input ended up
-        # in the returned unique values.
-        inverse = is_change.cumsum(axis=0) - 1  # [N_axis]
+        inverse = np.repeat(
+            np.arange(len(idcs), dtype=np.intp), counts  # type: ignore
+        )  # [N_axis]
         aux.append(inverse)
     if return_counts:
-        # Find the counts for each unique element.
-        counts = np.diff(
-            np.concat([
-                idcs,  # [U]
-                (
-                    np.full((1,), N_axis, dtype=np.int64)
-                    if N_axis > 0
-                    else np.empty(0, dtype=np.int64)
-                ),  # [1] or [0]
-            ])
-        )  # [U]
-        aux.append(counts)
+        aux.append(counts)  # type: ignore
 
     if aux:
         return uniques, *aux
@@ -556,103 +864,124 @@ def unique_consecutive(
 
 @overload
 def unique(  # type: ignore
-    x: npt.NDArray,
+    x: npt.NDArray[NpGeneric],
     return_backmap: Literal[False] = ...,
     return_inverse: Literal[False] = ...,
     return_counts: Literal[False] = ...,
     axis: int | None = None,
-) -> npt.NDArray:
+    stable: bool = False,
+) -> npt.NDArray[NpGeneric]:
     pass
 
 
 @overload
 def unique(
-    x: npt.NDArray,
+    x: npt.NDArray[NpGeneric],
     return_backmap: Literal[True] = ...,
     return_inverse: Literal[False] = ...,
     return_counts: Literal[False] = ...,
     axis: int | None = None,
-) -> tuple[npt.NDArray, npt.NDArray]:
+    stable: bool = False,
+) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp]]:
     pass
 
 
 @overload
 def unique(
-    x: npt.NDArray,
+    x: npt.NDArray[NpGeneric],
     return_backmap: Literal[False] = ...,
     return_inverse: Literal[True] = ...,
     return_counts: Literal[False] = ...,
     axis: int | None = None,
-) -> tuple[npt.NDArray, npt.NDArray]:
+    stable: bool = False,
+) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp]]:
     pass
 
 
 @overload
 def unique(
-    x: npt.NDArray,
+    x: npt.NDArray[NpGeneric],
     return_backmap: Literal[False] = ...,
     return_inverse: Literal[False] = ...,
     return_counts: Literal[True] = ...,
     axis: int | None = None,
-) -> tuple[npt.NDArray, npt.NDArray]:
+    stable: bool = False,
+) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[np.int64]]:
     pass
 
 
 @overload
 def unique(
-    x: npt.NDArray,
+    x: npt.NDArray[NpGeneric],
     return_backmap: Literal[True] = ...,
     return_inverse: Literal[True] = ...,
     return_counts: Literal[False] = ...,
     axis: int | None = None,
-) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
+    stable: bool = False,
+) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp], npt.NDArray[np.intp]]:
     pass
 
 
 @overload
 def unique(
-    x: npt.NDArray,
+    x: npt.NDArray[NpGeneric],
     return_backmap: Literal[True] = ...,
     return_inverse: Literal[False] = ...,
     return_counts: Literal[True] = ...,
     axis: int | None = None,
-) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
+    stable: bool = False,
+) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp], npt.NDArray[np.int64]]:
     pass
 
 
 @overload
 def unique(
-    x: npt.NDArray,
+    x: npt.NDArray[NpGeneric],
     return_backmap: Literal[False] = ...,
     return_inverse: Literal[True] = ...,
     return_counts: Literal[True] = ...,
     axis: int | None = None,
-) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
+    stable: bool = False,
+) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp], npt.NDArray[np.int64]]:
     pass
 
 
 @overload
 def unique(
-    x: npt.NDArray,
+    x: npt.NDArray[NpGeneric],
     return_backmap: Literal[True] = ...,
     return_inverse: Literal[True] = ...,
     return_counts: Literal[True] = ...,
     axis: int | None = None,
-) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray]:
+    stable: bool = False,
+) -> tuple[
+    npt.NDArray[NpGeneric],
+    npt.NDArray[np.intp],
+    npt.NDArray[np.intp],
+    npt.NDArray[np.int64],
+]:
     pass
 
 
 def unique(
-    x: npt.NDArray,
+    x: npt.NDArray[NpGeneric],
     return_backmap: bool = False,
     return_inverse: bool = False,
     return_counts: bool = False,
     axis: int | None = None,
+    stable: bool = False,
 ) -> (
-    npt.NDArray
-    | tuple[npt.NDArray, npt.NDArray]
-    | tuple[npt.NDArray, npt.NDArray, npt.NDArray]
-    | tuple[npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray]
+    npt.NDArray[NpGeneric]
+    | tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp]]
+    | tuple[npt.NDArray[NpGeneric], npt.NDArray[np.int64]]
+    | tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp], npt.NDArray[np.intp]]
+    | tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp], npt.NDArray[np.int64]]
+    | tuple[
+        npt.NDArray[NpGeneric],
+        npt.NDArray[np.intp],
+        npt.NDArray[np.intp],
+        npt.NDArray[np.int64],
+    ]
 ):
     """Like np.unique(), but can also return a backmap array.
 
@@ -674,10 +1003,16 @@ def unique(
             array.
         return_counts: Whether to also return the counts of each unique
             element.
-        axis: The dimension to operate upon. If None, the unique of the
+        axis: The dimension to operate on. If None, the unique of the
             flattened input is returned. Otherwise, each of the arrays
             indexed by the given dimension is treated as one of the elements
-            to apply the unique operation upon. See examples for more details.
+            to apply the unique operation on. See examples for more details.
+        stable: Whether to preserve the relative order of equal elements. If
+            False (default), an unstable sort is used, which is faster. Note
+            that this only has an effect on the backmap array, so setting
+            stable=True while return_backmap=False will have no effect. We will
+            throw an error in this case to avoid degrading performance
+            unnecessarily.
 
     Returns:
         Tuple containing:
@@ -709,6 +1044,7 @@ def unique(
     ...     return_inverse=True,
     ...     return_counts=True,
     ...     axis=axis,
+    ...     stable=True,
     ... )
     >>> uniques
     array([ 9, 10])
@@ -742,6 +1078,7 @@ def unique(
     ...     return_inverse=True,
     ...     return_counts=True,
     ...     axis=axis,
+    ...     stable=True,
     ... )
     >>> uniques
     array([[ 7,  9, 10],
@@ -790,6 +1127,7 @@ def unique(
     ...     return_inverse=True,
     ...     return_counts=True,
     ...     axis=axis,
+    ...     stable=True,
     ... )
     >>> uniques
     array([[[0, 1, 2],
@@ -829,11 +1167,18 @@ def unique(
             " explicitly."
         )
 
+    if stable and not return_backmap:
+        raise ValueError(
+            "stable=True has no effect when return_backmap=False, but it"
+            " degrades performance. Please use either stable=False or"
+            " return_backmap=True."
+        )
+
     # Sort along the given dimension, taking all the other dimensions as
     # constant tuples. NumPy's sort() doesn't work here since it will sort the
     # other dimensions as well.
     x_sorted, backmap = lexsort_along(
-        x, axis=axis
+        x, axis=axis, stable=stable
     )  # [N_0, ..., N_axis, ..., N_{D-1}], [N_axis]
 
     out = unique_consecutive(
@@ -860,7 +1205,9 @@ def unique(
 
 
 def groupby(
-    keys: npt.NDArray[NpGeneric1], vals: npt.NDArray[NpGeneric2]
+    keys: npt.NDArray[NpGeneric1],
+    vals: npt.NDArray[NpGeneric2],
+    stable: bool = False,
 ) -> Generator[tuple[NpGeneric1, npt.NDArray[NpGeneric2]]]:
     """Group values by keys.
 
@@ -868,20 +1215,22 @@ def groupby(
         keys: The keys to group by.
             Shape: [N]
         vals: The values to group.
-            Shape: [N]
+            Shape: [N, *]
+        stable: Whether to preserve the order of vals that have the same key. If
+            False (default), an unstable sort is used, which is faster.
 
     Yields:
         Tuples containing:
         - A unique key. Will be yielded in sorted order.
-        - The values that correspond to the key. Not guaranteed to be sorted.
-            Shape: [N_key]
+        - The values that correspond to the key.
+            Shape: [N_key, *]
     """
     # Create a mapping from keys to values.
     keys_unique, backmap, counts = unique(
-        keys, return_backmap=True, return_counts=True, axis=0
+        keys, return_backmap=True, return_counts=True, axis=0, stable=stable
     )  # [E_unique], [E], [E_unique]
-    vals = vals[backmap]  # sort values to match keys_unique
-    end_slices = np.cumsum(counts)  # [E_unique]
+    vals = vals[backmap]  # rearrange values to match keys_unique
+    end_slices = np.cumsum(counts, axis=0)  # [E_unique]
     start_slices = end_slices - counts  # [E_unique]
 
     # Map each key to its corresponding values.
@@ -889,75 +1238,3 @@ def groupby(
         keys_unique, start_slices, end_slices
     ):
         yield key, vals[start_slice:end_slice]
-
-
-def unequal_seqs_add(a: npt.NDArray, b: npt.NDArray) -> npt.NDArray:
-    """Add two arrays, and adjust the size of the result if necessary.
-
-    Args:
-        a: The first array.
-            Shape: [N]
-        b: The second array.
-            Shape: [M]
-
-    Returns:
-        The sum of the two arrays.
-            Shape: [max(N, M)]
-    """
-    if len(a) < len(b):
-        a = np.pad(a, (0, len(b) - len(a)))
-    elif len(a) > len(b):
-        b = np.pad(b, (0, len(a) - len(b)))
-    return a + b
-
-
-def init_normalized_histogram(
-    bin_edges: npt.ArrayLike,
-) -> tuple[float, npt.NDArray[np.float64]]:
-    return 0, np.zeros(len(bin_edges) - 1)  # type: ignore
-
-
-def update_normalized_histogram(
-    old_value_avg: float,
-    old_histogram: npt.NDArray[np.float64],
-    amount_old_values: int,
-    new_values: npt.ArrayLike,
-    bin_edges: npt.ArrayLike,
-) -> tuple[float, npt.NDArray[np.float64]]:
-    """Update a normalized histogram with new values.
-
-    Args:
-        old_value_avg: The average of the old values in the histogram.
-        old_histogram: The old normalized histogram. Will be updated in-place.
-            Shape: [bins]
-        amount_old_values: The amount of old values in the histogram.
-        new_values: The new values to add to the histogram.
-            Shape: [amount_new_values]
-        bin_edges: The bin edges of the histogram.
-            Length: [bins + 1]
-
-    Returns:
-        Tuple containing:
-        - The updated average of the histogram.
-        - The updated normalized histogram.
-            Shape: [bins]
-    """
-    new_values = np.array(new_values)
-
-    # Update the average of the histogram.
-    updated_value_avg = (
-        old_value_avg * amount_old_values + new_values.mean() * len(new_values)
-    ) / (amount_old_values + len(new_values))
-
-    # Create a normalized histogram of the new values.
-    new_histogram = np.histogram(new_values, bin_edges)[0] / len(new_values)
-
-    # Weigh both histograms by the amount of values they contain.
-    old_histogram *= amount_old_values
-    new_histogram *= len(new_values)
-    updated_histogram = (old_histogram + new_histogram) / (
-        amount_old_values + len(new_values)
-    )
-
-    # Add the histograms and renormalize them.
-    return updated_value_avg, updated_histogram

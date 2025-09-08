@@ -6,7 +6,11 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
+# ######################### NUMPY & TORCH SHARED UTILS #########################
 
+
+# Unlike with torch, in numpy we can't cache this function because numpy arrays
+# are not hashable.
 def mask_padding_batched(L_bs: npt.NDArray, max_L_bs: int) -> npt.NDArray:
     """Create a mask that indicates which values are valid in each sample.
 

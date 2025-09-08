@@ -95,6 +95,60 @@ class TestRavelMultiIndex(unittest.TestCase):
         )
 
 
+class TestSwapIdcsVals(unittest.TestCase):
+    def test_swap_idcs_vals_len5(self) -> None:
+        x = torch.tensor([2, 3, 0, 4, 1])
+        self.assertTrue(
+            torch.equal(swap_idcs_vals(x), torch.tensor([2, 4, 0, 1, 3]))
+        )
+
+    def test_swap_idcs_vals_len10(self) -> None:
+        x = torch.tensor([6, 3, 0, 1, 4, 7, 2, 8, 9, 5])
+        self.assertTrue(
+            torch.equal(
+                swap_idcs_vals(x), torch.tensor([2, 3, 6, 1, 4, 9, 0, 5, 7, 8])
+            )
+        )
+
+    def test_swap_idcs_vals_2D(self) -> None:
+        x = torch.tensor([[2, 3], [0, 4], [1, 5]])
+        with self.assertRaises(ValueError):
+            swap_idcs_vals(x)
+
+
+class TestSwapIdcsValsDuplicates(unittest.TestCase):
+    def test_swap_idcs_vals_duplicates_len5(self) -> None:
+        x = torch.tensor([1, 2, 0, 1, 2])
+        self.assertTrue(
+            torch.equal(
+                swap_idcs_vals_duplicates(x, stable=True),
+                torch.tensor([2, 0, 3, 1, 4]),
+            )
+        )
+
+    def test_swap_idcs_vals_duplicates_len10(self) -> None:
+        x = torch.tensor([3, 3, 0, 3, 4, 2, 1, 1, 2, 0])
+        self.assertTrue(
+            torch.equal(
+                swap_idcs_vals_duplicates(x, stable=True),
+                torch.tensor([2, 9, 6, 7, 5, 8, 0, 1, 3, 4]),
+            )
+        )
+
+    def test_swap_idcs_vals_duplicates_2D(self) -> None:
+        x = torch.tensor([[2, 3], [0, 4], [1, 5]])
+        with self.assertRaises(ValueError):
+            swap_idcs_vals_duplicates(x, stable=True)
+
+    def test_swap_idcs_vals_duplicates_no_duplicates(self) -> None:
+        x = torch.tensor([2, 3, 0, 4, 1])
+        self.assertTrue(
+            torch.equal(
+                swap_idcs_vals_duplicates(x), torch.tensor([2, 4, 0, 1, 3])
+            )
+        )
+
+
 class TestLexsortAlong(unittest.TestCase):
     def test_lexsort_along_1D_dim0(self) -> None:
         x = torch.tensor([4, 6, 2, 7, 0, 5, 1, 3])
@@ -157,59 +211,6 @@ class TestLexsortAlong(unittest.TestCase):
         self.assertTrue(torch.equal(backmap, torch.tensor([1, 0])))
 
 
-class TestSwapIdcsVals(unittest.TestCase):
-    def test_swap_idcs_vals_len5(self) -> None:
-        x = torch.tensor([2, 3, 0, 4, 1])
-        self.assertTrue(
-            torch.equal(swap_idcs_vals(x), torch.tensor([2, 4, 0, 1, 3]))
-        )
-
-    def test_swap_idcs_vals_len10(self) -> None:
-        x = torch.tensor([6, 3, 0, 1, 4, 7, 2, 8, 9, 5])
-        self.assertTrue(
-            torch.equal(
-                swap_idcs_vals(x), torch.tensor([2, 3, 6, 1, 4, 9, 0, 5, 7, 8])
-            )
-        )
-
-    def test_swap_idcs_vals_2D(self) -> None:
-        x = torch.tensor([[2, 3], [0, 4], [1, 5]])
-        with self.assertRaises(ValueError):
-            swap_idcs_vals(x)
-
-
-class TestSwapIdcsValsDuplicates(unittest.TestCase):
-    def test_swap_idcs_vals_duplicates_len5(self) -> None:
-        x = torch.tensor([1, 2, 0, 1, 2])
-        self.assertTrue(
-            torch.equal(
-                swap_idcs_vals_duplicates(x), torch.tensor([2, 0, 3, 1, 4])
-            )
-        )
-
-    def test_swap_idcs_vals_duplicates_len10(self) -> None:
-        x = torch.tensor([3, 3, 0, 3, 4, 2, 1, 1, 2, 0])
-        self.assertTrue(
-            torch.equal(
-                swap_idcs_vals_duplicates(x),
-                torch.tensor([2, 9, 6, 7, 5, 8, 0, 1, 3, 4]),
-            )
-        )
-
-    def test_swap_idcs_vals_duplicates_2D(self) -> None:
-        x = torch.tensor([[2, 3], [0, 4], [1, 5]])
-        with self.assertRaises(ValueError):
-            swap_idcs_vals_duplicates(x)
-
-    def test_swap_idcs_vals_duplicates_no_duplicates(self) -> None:
-        x = torch.tensor([2, 3, 0, 4, 1])
-        self.assertTrue(
-            torch.equal(
-                swap_idcs_vals_duplicates(x), torch.tensor([2, 4, 0, 1, 3])
-            )
-        )
-
-
 class TestUnique(unittest.TestCase):
     def test_unique_1D_dim0(self) -> None:
         # Should be the same as dim=None in the 1D case.
@@ -221,6 +222,7 @@ class TestUnique(unittest.TestCase):
             return_inverse=True,
             return_counts=True,
             dim=dim,
+            stable=True,
         )
         self.assertTrue(torch.equal(uniques, torch.tensor([9, 10])))
         self.assertTrue(torch.equal(backmap, torch.tensor([0, 2, 3, 5, 1, 4])))
@@ -256,6 +258,7 @@ class TestUnique(unittest.TestCase):
             return_inverse=True,
             return_counts=True,
             dim=dim,
+            stable=True,
         )
         self.assertTrue(
             torch.equal(
@@ -300,6 +303,7 @@ class TestUnique(unittest.TestCase):
             return_inverse=True,
             return_counts=True,
             dim=dim,
+            stable=True,
         )
         self.assertTrue(
             torch.equal(

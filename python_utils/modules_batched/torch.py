@@ -7,7 +7,198 @@ import torch
 
 from ..modules.torch import count_freqs_until, lexsort
 
+# ############################ TORCH-SPECIFIC UTILS ############################
 
+
+def sample_unique_batched(
+    L_bs: torch.Tensor, max_L_bs: int, num_samples: int
+) -> torch.Tensor:
+    """Sample unique indices i in [0, L_b-1] for each element in the batch.
+
+    Warning: If the number of valid values in an element is less than the
+    number of samples, then only the first L_b indices are unique. The
+    remaining indices are sampled with replacement.
+
+    Args:
+        L_bs: The number of valid values for each element in the batch.
+            Shape: [B]
+        max_L_bs: The maximum number of values of any element in the batch.
+        num_samples: The number of indices to sample for each element in the
+            batch.
+
+    Returns:
+        The sampled unique indices.
+            Shape: [B, num_samples]
+    """
+    # Select unique elements for each sample in the batch.
+    # If the number of elements is less than the number of samples, we
+    # uniformly# sample with replacement. To do this, the
+    # .clamp(min=num_samples) and % L_b operations are used.
+    weights = mask_padding_batched(
+        L_bs.clamp(min=num_samples), max_L_bs
+    ).double()  # [B, max(L_bs)]
+    return (
+        torch.multinomial(weights, num_samples)  # [B, num_samples]
+        % L_bs.unsqueeze(1)  # [B, num_samples]
+    )  # [B, num_samples]  # fmt: skip
+
+
+def sample_unique_pairs_batched(
+    L_bs: torch.Tensor, max_L_bs: int, num_samples: int
+) -> torch.Tensor:
+    """Sample unique pairs of indices (i, j), where i and j are in [0, L_b-1].
+
+    Warning: If the number of valid values in an element is less than the
+    number of samples, then only the first L_b * (L_b - 1) // 2 pairs are
+    unique. The remaining pairs are sampled with replacement.
+
+    Args:
+        L_bs: The number of valid values for each element in the batch.
+            Shape: [B]
+        max_L_bs: The maximum number of valid values.
+        num_samples: The number of pairs to sample.
+
+    Returns:
+        The sampled unique pairs of indices.
+            Shape: [B, num_samples, 2]
+    """
+    device = L_bs.device
+
+    # Compute the number of unique pairs of indices.
+    P_bs = L_bs * (L_bs - 1) // 2  # [B]
+    max_P_bs = max_L_bs * (max_L_bs - 1) // 2
+
+    # Select unique pairs of elements for each sample in the batch.
+    idcs_pairs = sample_unique_batched(
+        P_bs, max_P_bs, num_samples
+    )  # [B, num_samples]
+
+    # Convert the pair indices to element indices.
+    # torch.triu_indices() returns the indices in the wrong order, e.g.:
+    #    0 1 2 3 4
+    # 0  x x x x x
+    # 1  0 x x x x
+    # 2  1 4 x x x
+    # 3  2 5 7 x x
+    # 4  3 6 8 9 x
+    # This order is not suitable for all elements in the batch, as the number
+    # of valid values L_b can change between elements. We need to change the
+    # order to:
+    #    0 1 2 3 4
+    # 0  x x x x x
+    # 1  0 x x x x
+    # 2  1 2 x x x
+    # 3  3 4 5 x x
+    # 4  6 7 8 9 x
+    # This is done using the max_P_bs - 1 - triu_idcs trick. However, the
+    # order of the elements is still in reverse, so when indexing, we index at
+    # -idcs_pairs - 1 instead of at idcs_pairs.
+    triu_idcs = torch.triu_indices(
+        max_L_bs, max_L_bs, 1, device=device
+    )  # [2, max(P_bs)]
+    triu_idcs = max_L_bs - 1 - triu_idcs
+    idcs_elements = triu_idcs[:, -idcs_pairs - 1]  # [2, B, num_samples]
+    return idcs_elements.permute(1, 2, 0)  # [B, num_samples, 2]
+
+
+def interp_batched(
+    x: torch.Tensor,
+    xp: torch.Tensor,
+    fp: torch.Tensor,
+    left: torch.Tensor | None = None,
+    right: torch.Tensor | None = None,
+    period: torch.Tensor | None = None,
+) -> torch.Tensor:
+    """Like np.interp(), but for PyTorch tensors and batched.
+
+    This function is a direct translation of np.interp() to PyTorch tensors.
+    It performs linear interpolation on a batch of 1D tensors.
+
+    Args:
+        x: The x-coordinates at which to evaluate the interpolated values.
+            Shape: [B, N]
+        xp: The x-coordinates of the data points. Must be weakly monotonically
+            increasing along the last dimension.
+            Shape: [B, M]
+        fp: The y-coordinates of the data points, same shape as xp.
+            Shape: [B, M]
+        left: Value to return for x < xp[0], default is fp[:, 0].
+            Shape: [B]
+        right: Value to return for x > xp[-1], default is fp[:, -1].
+            Shape: [B]
+        period: A period for the x-coordinates. This parameter allows the
+            proper interpolation of angular x-coordinates. Parameters left and
+            right are ignored if period is specified.
+            Shape: [B]
+
+    Returns:
+        The interpolated values for each batch.
+            Shape: [B, N]
+    """
+    _, M = xp.shape
+
+    # Handle periodic interpolation.
+    if period is not None:
+        if period <= 0:
+            raise ValueError("period must be positive.")
+
+        xp, sorted_idcs = torch.sort(xp % period, dim=1)
+        fp = torch.gather(fp, 1, sorted_idcs)
+
+    # Check if xp is weakly monotonically increasing.
+    if not torch.all(torch.diff(xp, dim=1) >= 0):
+        raise ValueError(
+            "xp must be weakly monotonically increasing along the last"
+            " dimension."
+        )
+
+    # Find indices of neighbours in xp.
+    right_idx = torch.searchsorted(xp, x)  # [B, N]
+    left_idx = right_idx - 1  # [B, N]
+
+    # Clamp indices to valid range (we will handle the edges later).
+    left_idx = torch.clamp(left_idx, min=0, max=M - 1)  # [B, N]
+    right_idx = torch.clamp(right_idx, min=0, max=M - 1)  # [B, N]
+
+    # Gather neighbour values.
+    x_left = torch.gather(xp, 1, left_idx)  # [B, N]
+    x_right = torch.gather(xp, 1, right_idx)  # [B, N]
+    y_left = torch.gather(fp, 1, left_idx)  # [B, N]
+    y_right = torch.gather(fp, 1, right_idx)  # [B, N]
+
+    # Avoid division by zero for x_left == x_right.
+    denom = x_right - x_left  # [B, N]
+    denom[denom == 0] = 1
+    p = (x - x_left) / denom  # [B, N]
+
+    # Perform interpolation.
+    y = y_left + p * (y_right - y_left)  # [B, N]
+
+    # Handle left edge.
+    if left is None:
+        left = fp[:, 0]  # [B]
+    is_left = x < xp[:, [0]]  # [B, N]
+    y[is_left] = left.repeat_interleave(is_left.sum(dim=1)).to(y.dtype)
+
+    # Handle right edge.
+    if right is None:
+        right = fp[:, -1]  # [B]
+    is_right = x > xp[:, [-1]]  # [B, N]
+    y[is_right] = right.repeat_interleave(is_right.sum(dim=1)).to(y.dtype)
+
+    return y
+
+
+# ######################### NUMPY & TORCH SHARED UTILS #########################
+
+
+# Warning: The lru_cache caches inputs by memory address, so if you call this
+# function with different tensors that have the same values, it will not
+# recognize them as the same input. On the other hand, if you call this function
+# again with the same tensor after doing an in-place operation on it, it will
+# recognize it as the same input, even if the values have changed. This can
+# cause confusion, so be careful when using this function with tensors that
+# might change in-place.
 @lru_cache(maxsize=8)
 def mask_padding_batched(L_bs: torch.Tensor, max_L_bs: int) -> torch.Tensor:
     """Create a mask that indicates which values are valid in each sample.
@@ -134,6 +325,9 @@ def pad_sequence_batched(
     return pad_packed_batched(
         torch.concat(values), L_bs, max_L_bs, padding_value=padding_value
     )  # [B, max(L_bs), *]
+
+
+# ############################ TORCH-SPECIFIC UTILS ############################
 
 
 def replace_padding_batched(
@@ -528,190 +722,41 @@ def linspace_batched(
     return linspaces, L_bs
 
 
-def interp_batched(
-    x: torch.Tensor,
-    xp: torch.Tensor,
-    fp: torch.Tensor,
-    left: torch.Tensor | None = None,
-    right: torch.Tensor | None = None,
-    period: torch.Tensor | None = None,
+def index_select_batched(
+    values: torch.Tensor, dim: int, idcs: torch.Tensor
 ) -> torch.Tensor:
-    """Like np.interp(), but for PyTorch tensors and batched.
+    """Select values from a batch of tensors using the given indices.
 
-    This function is a direct translation of np.interp() to PyTorch tensors.
-    It performs linear interpolation on a batch of 1D tensors.
+    Note that dim refers to the index of the dimension to sort along AFTER the
+    batch dimension. So e.g. if x has shape [B, N_0, N_1, N_2], then dim=0
+    refers to N_0, dim=1 refers to N_1, etc.
 
     Args:
-        x: The x-coordinates at which to evaluate the interpolated values.
-            Shape: [B, N]
-        xp: The x-coordinates of the data points. Must be weakly monotonically
-            increasing along the last dimension.
-            Shape: [B, M]
-        fp: The y-coordinates of the data points, same shape as xp.
-            Shape: [B, M]
-        left: Value to return for x < xp[0], default is fp[:, 0].
-            Shape: [B]
-        right: Value to return for x > xp[-1], default is fp[:, -1].
-            Shape: [B]
-        period: A period for the x-coordinates. This parameter allows the
-            proper interpolation of angular x-coordinates. Parameters left and
-            right are ignored if period is specified.
-            Shape: [B]
+        values: The values to select from.
+            Shape: [B, N_0, ..., N_dim, ..., N_{D-1}]
+        dim: The dimension to select along.
+        idcs: The indices to select.
+            Shape: [B, N_select]
 
     Returns:
-        The interpolated values for each batch.
-            Shape: [B, N]
+        The selected values.
+            Shape: [B, N_0, ..., N_{dim-1}, N_select, N_{dim+1}, ..., N_{D-1}]
     """
-    _, M = xp.shape
-
-    # Handle periodic interpolation.
-    if period is not None:
-        if period <= 0:
-            raise ValueError("period must be positive.")
-
-        xp, sorted_idcs = torch.sort(xp % period, dim=1)
-        fp = torch.gather(fp, 1, sorted_idcs)
-
-    # Check if xp is weakly monotonically increasing.
-    if not torch.all(torch.diff(xp, dim=1) >= 0):
-        raise ValueError(
-            "xp must be weakly monotonically increasing along the last"
-            " dimension."
-        )
-
-    # Find indices of neighbours in xp.
-    right_idx = torch.searchsorted(xp, x)  # [B, N]
-    left_idx = right_idx - 1  # [B, N]
-
-    # Clamp indices to valid range (we will handle the edges later).
-    left_idx = torch.clamp(left_idx, min=0, max=M - 1)  # [B, N]
-    right_idx = torch.clamp(right_idx, min=0, max=M - 1)  # [B, N]
-
-    # Gather neighbour values.
-    x_left = torch.gather(xp, 1, left_idx)  # [B, N]
-    x_right = torch.gather(xp, 1, right_idx)  # [B, N]
-    y_left = torch.gather(fp, 1, left_idx)  # [B, N]
-    y_right = torch.gather(fp, 1, right_idx)  # [B, N]
-
-    # Avoid division by zero for x_left == x_right.
-    denom = x_right - x_left  # [B, N]
-    denom[denom == 0] = 1
-    p = (x - x_left) / denom  # [B, N]
-
-    # Perform interpolation.
-    y = y_left + p * (y_right - y_left)  # [B, N]
-
-    # Handle left edge.
-    if left is None:
-        left = fp[:, 0]  # [B]
-    is_left = x < xp[:, [0]]  # [B, N]
-    y[is_left] = left.repeat_interleave(is_left.sum(dim=1)).to(y.dtype)
-
-    # Handle right edge.
-    if right is None:
-        right = fp[:, -1]  # [B]
-    is_right = x > xp[:, [-1]]  # [B, N]
-    y[is_right] = right.repeat_interleave(is_right.sum(dim=1)).to(y.dtype)
-
-    return y
-
-
-def sample_unique_batched(
-    L_bs: torch.Tensor, max_L_bs: int, num_samples: int
-) -> torch.Tensor:
-    """Sample unique indices i in [0, L_b-1] for each element in the batch.
-
-    Warning: If the number of valid values in an element is less than the
-    number of samples, then only the first L_b indices are unique. The
-    remaining indices are sampled with replacement.
-
-    Args:
-        L_bs: The number of valid values for each element in the batch.
-            Shape: [B]
-        max_L_bs: The maximum number of values of any element in the batch.
-        num_samples: The number of indices to sample for each element in the
-            batch.
-
-    Returns:
-        The sampled unique indices.
-            Shape: [B, num_samples]
-    """
-    # Select unique elements for each sample in the batch.
-    # If the number of elements is less than the number of samples, we
-    # uniformly# sample with replacement. To do this, the
-    # .clamp(min=num_samples) and % L_b operations are used.
-    weights = mask_padding_batched(
-        L_bs.clamp(min=num_samples), max_L_bs
-    ).double()  # [B, max(L_bs)]
-    return (
-        torch.multinomial(weights, num_samples)  # [B, num_samples]
-        % L_bs.unsqueeze(1)  # [B, num_samples]
-    )  # [B, num_samples]  # fmt: skip
-
-
-def sample_unique_pairs_batched(
-    L_bs: torch.Tensor, max_L_bs: int, num_samples: int
-) -> torch.Tensor:
-    """Sample unique pairs of indices (i, j), where i and j are in [0, L_b-1].
-
-    Warning: If the number of valid values in an element is less than the
-    number of samples, then only the first L_b * (L_b - 1) // 2 pairs are
-    unique. The remaining pairs are sampled with replacement.
-
-    Args:
-        L_bs: The number of valid values for each element in the batch.
-            Shape: [B]
-        max_L_bs: The maximum number of valid values.
-        num_samples: The number of pairs to sample.
-
-    Returns:
-        The sampled unique pairs of indices.
-            Shape: [B, num_samples, 2]
-    """
-    device = L_bs.device
-
-    # Compute the number of unique pairs of indices.
-    P_bs = L_bs * (L_bs - 1) // 2  # [B]
-    max_P_bs = max_L_bs * (max_L_bs - 1) // 2
-
-    # Select unique pairs of elements for each sample in the batch.
-    idcs_pairs = sample_unique_batched(
-        P_bs, max_P_bs, num_samples
-    )  # [B, num_samples]
-
-    # Convert the pair indices to element indices.
-    # torch.triu_indices() returns the indices in the wrong order, e.g.:
-    #    0 1 2 3 4
-    # 0  x x x x x
-    # 1  0 x x x x
-    # 2  1 4 x x x
-    # 3  2 5 7 x x
-    # 4  3 6 8 9 x
-    # This order is not suitable for all elements in the batch, as the number
-    # of valid values L_b can change between elements. We need to change the
-    # order to:
-    #    0 1 2 3 4
-    # 0  x x x x x
-    # 1  0 x x x x
-    # 2  1 2 x x x
-    # 3  3 4 5 x x
-    # 4  6 7 8 9 x
-    # This is done using the max_P_bs - 1 - triu_idcs trick. However, the
-    # order of the elements is still in reverse, so when indexing, we index at
-    # -idcs_pairs - 1 instead of at idcs_pairs.
-    triu_idcs = torch.triu_indices(
-        max_L_bs, max_L_bs, 1, device=device
-    )  # [2, max(P_bs)]
-    triu_idcs = max_L_bs - 1 - triu_idcs
-    idcs_elements = triu_idcs[:, -idcs_pairs - 1]  # [2, B, num_samples]
-    return idcs_elements.permute(1, 2, 0)  # [B, num_samples, 2]
+    idcs_reshape = [1] * values.ndim
+    idcs_reshape[0] = idcs.shape[0]
+    idcs_reshape[dim + 1] = idcs.shape[1]
+    idcs_expand = list(values.shape)
+    idcs_expand[dim + 1] = idcs.shape[1]
+    return torch.gather(
+        values, dim + 1, idcs.reshape(idcs_reshape).expand(idcs_expand)
+    )
 
 
 def swap_idcs_vals_batched(x: torch.Tensor) -> torch.Tensor:
     """Swap the indices and values of a batched of 1D tensors.
 
-    Each row in the input tensor is assumed to contain exactly all integers
-    from 0 to x.shape[1] - 1, in any order.
+    Each row in the input tensor is assumed to contain exactly all integers from
+    0 to N - 1, in any order.
 
     Warning: This function does not explicitly check if the input tensor
     contains no duplicates. If x contains duplicates, no error will be raised
@@ -745,36 +790,6 @@ def swap_idcs_vals_batched(x: torch.Tensor) -> torch.Tensor:
     x_swapped = torch.empty_like(x)
     x_swapped.scatter_(1, x, torch.arange(N, device=device).repeat(B, 1))
     return x_swapped
-
-
-def index_select_batched(
-    values: torch.Tensor, dim: int, idcs: torch.Tensor
-) -> torch.Tensor:
-    """Select values from a batch of tensors using the given indices.
-
-    Note that dim refers to the index of the dimension to sort along AFTER the
-    batch dimension. So e.g. if x has shape [B, N_0, N_1, N_2], then dim=0
-    refers to N_0, dim=1 refers to N_1, etc.
-
-    Args:
-        values: The values to select from.
-            Shape: [B, N_0, ..., N_dim, ..., N_{D-1}]
-        dim: The dimension to select along.
-        idcs: The indices to select.
-            Shape: [B, N_select]
-
-    Returns:
-        The selected values.
-            Shape: [B, N_0, ..., N_{dim-1}, N_select, N_{dim+1}, ..., N_{D-1}]
-    """
-    idcs_reshape = [1] * values.ndim
-    idcs_reshape[0] = idcs.shape[0]
-    idcs_reshape[dim + 1] = idcs.shape[1]
-    idcs_expand = list(values.shape)
-    idcs_expand[dim + 1] = idcs.shape[1]
-    return torch.gather(
-        values, dim + 1, idcs.reshape(idcs_reshape).expand(idcs_expand)
-    )
 
 
 def lexsort_along_batched(
@@ -988,10 +1003,10 @@ def unique_consecutive_batched(
             unique tensor.
         return_counts: Whether to also return the counts for each unique
             element.
-        dim: The dimension to operate upon. If None, the unique of the
+        dim: The dimension to operate on. If None, the unique of the
             flattened input is returned. Otherwise, each of the tensors
             indexed by the given dimension is treated as one of the elements
-            to apply the unique operation upon. See examples for more details.
+            to apply the unique operation on. See examples for more details.
 
     Returns:
         Tuple containing:
@@ -1156,11 +1171,11 @@ def unique_consecutive_batched(
                     dim_idcs_padded,  # [B, max(U_bs)]
                     (
                         torch.full(
-                            (B, 1), N_dim, device=device, dtype=torch.int64
+                            (B, 1), N_dim, device=device, dtype=torch.int32
                         )
                         if N_dim > 0
                         else torch.empty(
-                            (B, 0), device=device, dtype=torch.int64
+                            (B, 0), device=device, dtype=torch.int32
                         )
                     ),  # [B, 1] or [B, 0]
                 ],
@@ -1298,10 +1313,10 @@ def unique_batched(
             unique tensor.
         return_counts: Whether to also return the counts of each unique
             element.
-        dim: The dimension to operate upon. If None, the unique of the
+        dim: The dimension to operate on. If None, the unique of the
             flattened input is returned. Otherwise, each of the tensors
             indexed by the given dimension is treated as one of the elements
-            to apply the unique operation upon. See examples for more details.
+            to apply the unique operation on. See examples for more details.
 
     Returns:
         Tuple containing:
