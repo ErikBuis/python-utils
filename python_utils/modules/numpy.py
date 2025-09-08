@@ -514,9 +514,6 @@ def unique_consecutive(
         )  # [N_0 * ... * N_{axis-1} * N_{axis+1} * ... * N_{D-1}, N_axis]
 
     # Find the indices where the values change.
-    is_change = np.concat(
-        [np.array([True]), np.any(y[:, :-1] != y[:, 1:], axis=0)], axis=0
-    )  # [N_axis]
     is_change = np.concat([
         (
             np.ones(1, dtype=bool) if N_axis > 0 else np.empty(0, dtype=bool)
