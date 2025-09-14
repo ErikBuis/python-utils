@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import random
-from collections.abc import Generator
+from collections.abc import Iterator
 from math import prod
 from typing import Any, Callable, Literal, overload
 
@@ -14,46 +14,11 @@ from torch.utils.data._utils.collate import (
 )
 from torch.utils.data.dataloader import default_collate
 
+# ################################## COLLATE ###################################
+
 # Allow the dataset to return None when a sample is corrupted. When it does,
 # make torch's default collate function replace it with another sample.
 default_collate_fn_map.update({type(None): collate_str_fn})
-
-# ############################ TORCH-SPECIFIC UTILS ############################
-
-
-def to_tensor(
-    object: object,
-    device: torch.device | str | int | None = None,
-    dtype: torch.dtype | None = None,
-) -> torch.Tensor:
-    """Convert an object to a tensor.
-
-    Warning: Does not copy the data if possible. Thus, the returned tensor
-    could share memory with the original object.
-
-    Args:
-        object: The object to convert to a tensor.
-        device: The desired device of the returned tensor. If None, the
-            device of the object will be used.
-        dtype: The desired data type of the returned tensor. If None, the
-            dtype of the object will be used.
-    """
-    # PyTorch supported types: bool, uint8, int8, int16, int32, int64, float16,
-    # float32, float64, complex64, and complex128.
-    if isinstance(object, torch.Tensor):
-        return object.to(device=device, dtype=dtype)
-
-    if isinstance(object, np.ndarray):
-        return torch.from_numpy(object).to(device=device, dtype=dtype)
-
-    # Last resort: because numpy recognizes more array-like types than torch,
-    # we try to convert to numpy first.
-    try:
-        return to_tensor(np.array(object), device=device, dtype=dtype)
-    except Exception as e:
-        raise TypeError(
-            f"Could not convert object of type {type(object)} to tensor."
-        ) from e
 
 
 def collate_replace_corrupted(
@@ -115,7 +80,58 @@ def collate_replace_corrupted(
     return default_collate_fn(batch_list)
 
 
-# ######################### LIKE-NUMPY-BUT-TORCH UTILS #########################
+# ################################### MATHS ####################################
+
+
+def cumsum_start_0(
+    t: torch.Tensor,
+    dim: int | None = None,
+    dtype: torch.dtype | None = None,
+    out: torch.Tensor | None = None,
+) -> torch.Tensor:
+    """Like torch.cumsum(), but adds a zero at the start of the tensor.
+
+    Args:
+        a: Input tensor.
+            Shape: [N_0, ..., N_dim, ..., N_{D-1}]
+        dim: Dimension along which the cumulative sum is computed. The default
+            (None) is to compute the cumsum over the flattened tensor.
+        dtype: Type of the returned tensor and of the accumulator in which the
+            elements are summed. If dtype is not specified, it defaults to the
+            dtype of a.
+        out: Alternative output tensor in which to place the result. It must
+            have the same shape and buffer length as the expected output but
+            the type will be cast if necessary.
+            Shape: [N_0, ..., N_dim + 1, ..., N_{D-1}]
+
+    Returns:
+        A new tensor holding the result returned unless out is specified, in
+        which case a reference to out is returned. The result has the same
+        size as a except along the requested dimension.
+            Shape: [N_0, ..., N_dim + 1, ..., N_{D-1}]
+    """
+    device = t.device
+
+    if dim is None:
+        t = t.flatten()
+        dim = 0
+
+    if dtype is None:
+        dtype = t.dtype
+
+    if out is not None:
+        idx = [slice(None)] * t.ndim
+        idx[dim] = 0  # type: ignore
+        out[tuple(idx)] = 0
+        idx[dim] = slice(1, None)
+        torch.cumsum(t, dim=dim, dtype=dtype, out=out[tuple(idx)])
+        return out
+
+    shape = list(t.shape)
+    shape[dim] = 1
+    zeros = torch.zeros(shape, device=device, dtype=dtype)
+    cumsum = torch.cumsum(t, dim=dim, dtype=dtype)
+    return torch.concat([zeros, cumsum], dim=dim)
 
 
 def interp(
@@ -199,6 +215,44 @@ def interp(
     return y
 
 
+# ########################## BASIC ARRAY MANIPULATION ##########################
+
+
+def to_tensor(
+    object: object,
+    device: torch.device | str | int | None = None,
+    dtype: torch.dtype | None = None,
+) -> torch.Tensor:
+    """Convert an object to a tensor.
+
+    Warning: Does not copy the data if possible. Thus, the returned tensor
+    could share memory with the original object.
+
+    Args:
+        object: The object to convert to a tensor.
+        device: The desired device of the returned tensor. If None, the
+            device of the object will be used.
+        dtype: The desired data type of the returned tensor. If None, the
+            dtype of the object will be used.
+    """
+    # PyTorch supported types: bool, uint8, int8, int16, int32, int64, float16,
+    # float32, float64, complex64, and complex128.
+    if isinstance(object, torch.Tensor):
+        return object.to(device=device, dtype=dtype)
+
+    if isinstance(object, np.ndarray):
+        return torch.from_numpy(object).to(device=device, dtype=dtype)
+
+    # Last resort: because numpy recognizes more array-like types than torch,
+    # we try to convert to numpy first.
+    try:
+        return to_tensor(np.array(object), device=device, dtype=dtype)
+    except Exception as e:
+        raise TypeError(
+            f"Could not convert object of type {type(object)} to tensor."
+        ) from e
+
+
 def ravel_multi_index(
     multi_index: torch.Tensor,
     dims: torch.Tensor,
@@ -233,6 +287,8 @@ def ravel_multi_index(
         Tensor of indices into the flattened version of a tensor of shape dims.
             Shape: [N_0, ..., N_{D-1}]
     """
+    device = dims.device
+
     # Check for integer overflow.
     if prod(dims.tolist()) > 2**63 - 1:
         raise ValueError(
@@ -249,11 +305,11 @@ def ravel_multi_index(
     if order == "C":
         factors = torch.concat([
             dims[1:].flip(0).cumprod(0, dtype=torch.int64).flip(0),
-            torch.ones(1, device=dims.device, dtype=torch.int64),
+            torch.ones(1, device=device, dtype=torch.int64),
         ])  # [K]
     elif order == "F":
         factors = torch.concat([
-            torch.ones(1, device=dims.device, dtype=torch.int64),
+            torch.ones(1, device=device, dtype=torch.int64),
             dims[:-1].cumprod(0, dtype=torch.int64),
         ])  # [K]
     else:
@@ -276,7 +332,9 @@ def ravel_multi_index(
         multi_index = multi_index % dims
     elif mode == "clip":
         # Clip the multi-index to the range.
-        multi_index = torch.clamp(multi_index, torch.tensor(0), dims - 1)
+        multi_index = torch.clamp(
+            multi_index, torch.tensor(0, device=device), dims - 1
+        )
     else:
         raise ValueError(
             f"clipmode must be one of 'clip', 'raise', or 'wrap' (got '{mode}')"
@@ -285,281 +343,7 @@ def ravel_multi_index(
     return torch.sum(multi_index * factors, dim=0)  # [N_0, ..., N_{D-1}]
 
 
-# ######################### NUMPY & TORCH SHARED UTILS #########################
-
-
-def cumsum_start_0(
-    t: torch.Tensor,
-    dim: int | None = None,
-    dtype: torch.dtype | None = None,
-    out: torch.Tensor | None = None,
-) -> torch.Tensor:
-    """Like torch.cumsum(), but adds a zero at the start of the tensor.
-
-    Args:
-        a: Input tensor.
-            Shape: [N_0, ..., N_dim, ..., N_{D-1}]
-        dim: Dimension along which the cumulative sum is computed. The default
-            (None) is to compute the cumsum over the flattened tensor.
-        dtype: Type of the returned tensor and of the accumulator in which the
-            elements are summed. If dtype is not specified, it defaults to the
-            dtype of a.
-        out: Alternative output tensor in which to place the result. It must
-            have the same shape and buffer length as the expected output but
-            the type will be cast if necessary.
-            Shape: [N_0, ..., N_dim + 1, ..., N_{D-1}]
-
-    Returns:
-        A new tensor holding the result returned unless out is specified, in
-        which case a reference to out is returned. The result has the same
-        size as a except along the requested dimension.
-            Shape: [N_0, ..., N_dim + 1, ..., N_{D-1}]
-    """
-    device = t.device
-
-    if dim is None:
-        t = t.flatten()
-        dim = 0
-
-    if dtype is None:
-        dtype = t.dtype
-
-    if out is not None:
-        idx = [slice(None)] * t.ndim
-        idx[dim] = 0  # type: ignore
-        out[tuple(idx)] = 0
-        idx[dim] = slice(1, None)
-        torch.cumsum(t, dim=dim, dtype=dtype, out=out[tuple(idx)])
-        return out
-
-    shape = list(t.shape)
-    shape[dim] = 1
-    zeros = torch.zeros(shape, device=device, dtype=dtype)
-    cumsum = torch.cumsum(t, dim=dim, dtype=dtype)
-    return torch.concat([zeros, cumsum], dim=dim)
-
-
-def get_starts_segments(x: torch.Tensor, dim: int = 0) -> torch.Tensor:
-    """Find the start index of each consecutive segment.
-
-    Args:
-        x: The input tensor. Consecutive equal values will be grouped.
-            Shape: [N_0, ..., N_dim, ..., N_{D-1}]
-        dim: The dimension along which the segments are lined up.
-
-    Returns:
-        The start indices for each consecutive segment in x.
-            Shape: [S]
-
-    Examples:
-    >>> get_starts_segments(torch.tensor([4, 4, 4, 2, 2, 8, 3, 3, 3, 3]))
-    tensor([0, 3, 5, 6])
-    """
-    N_dim = x.shape[dim]
-
-    # Find the indices where the values change.
-    is_change = (
-        torch.concat([
-            torch.ones(1, device=x.device, dtype=torch.bool),
-            torch.any(
-                x.index_select(dim, torch.arange(0, N_dim - 1, device=x.device))
-                != x.index_select(dim, torch.arange(1, N_dim, device=x.device)),
-                dim=tuple(i for i in range(x.ndim) if i != dim),
-            ),
-        ])
-        if N_dim > 0
-        else torch.empty(0, device=x.device, dtype=torch.bool)
-    )  # [N_dim]
-
-    # Find the start of each consecutive segment.
-    return is_change.nonzero(as_tuple=True)[0].to(torch.int32)  # [S]
-
-
-@overload
-def get_lengths_segments(  # type: ignore
-    x: torch.Tensor, dim: int = 0, return_starts: Literal[False] = ...
-) -> torch.Tensor:
-    pass
-
-
-@overload
-def get_lengths_segments(
-    x: torch.Tensor, dim: int = 0, return_starts: Literal[True] = ...
-) -> tuple[torch.Tensor, torch.Tensor]:
-    pass
-
-
-def get_lengths_segments(
-    x: torch.Tensor, dim: int = 0, return_starts: bool = False
-) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
-    """Count the length of each consecutive segment.
-
-    Args:
-        x: The input tensor. Consecutive equal values will be grouped.
-            Shape: [N_0, ..., N_dim, ..., N_{D-1}]
-        dim: The dimension along which the segments are lined up.
-        return_starts: Whether to also return the start indices of each
-            consecutive segment.
-
-    Returns:
-        Tuple containing:
-        - The lengths for each consecutive segment in x.
-            Shape: [S]
-        - (Optional) If return_starts is True, the start indices for each
-            consecutive segment in x.
-            Shape: [S]
-
-    Examples:
-    >>> get_lengths_segments(torch.tensor([4, 4, 4, 2, 2, 8, 3, 3, 3, 3]))
-    tensor([3, 2, 1, 4])
-    """
-    N_dim = x.shape[dim]
-
-    # Find the start of each consecutive segment.
-    starts = get_starts_segments(x, dim=dim)  # [S]
-
-    # Find the length of each consecutive segment.
-    lengths = (
-        torch.diff(
-            starts,
-            append=torch.full((1,), N_dim, device=x.device, dtype=torch.int32),
-        )
-        if N_dim > 0
-        else torch.empty(0, device=x.device, dtype=torch.int32)
-    )  # [S]
-
-    if return_starts:
-        return lengths, starts
-    return lengths
-
-
-@overload
-def inner_indices_segments(  # type: ignore
-    x: torch.Tensor,
-    dim: int = 0,
-    return_lengths: Literal[False] = ...,
-    return_starts: Literal[False] = ...,
-) -> torch.Tensor:
-    pass
-
-
-@overload
-def inner_indices_segments(
-    x: torch.Tensor,
-    dim: int = 0,
-    return_lengths: Literal[True] = ...,
-    return_starts: Literal[False] = ...,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    pass
-
-
-@overload
-def inner_indices_segments(
-    x: torch.Tensor,
-    dim: int = 0,
-    return_lengths: Literal[False] = ...,
-    return_starts: Literal[True] = ...,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    pass
-
-
-@overload
-def inner_indices_segments(
-    x: torch.Tensor,
-    dim: int = 0,
-    return_lengths: Literal[True] = ...,
-    return_starts: Literal[True] = ...,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    pass
-
-
-def inner_indices_segments(
-    x: torch.Tensor,
-    dim: int = 0,
-    return_lengths: bool = False,
-    return_starts: bool = False,
-) -> (
-    torch.Tensor
-    | tuple[torch.Tensor, torch.Tensor]
-    | tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-):
-    """Construct the inner indices for each consecutive segment.
-
-    Args:
-        x: The input tensor. Consecutive equal values will be grouped.
-            Shape: [N_0, ..., N_dim, ..., N_{D-1}]
-        dim: The dimension along which the segments are lined up.
-        return_lengths: Whether to also return the lengths of each
-            consecutive segment.
-        return_starts: Whether to also return the start indices of each
-            consecutive segment.
-
-    Returns:
-        Tuple containing:
-        - The indices for each consecutive segment in x.
-            Shape: [N_dim]
-        - (Optional) If return_lengths is True, the lengths for each
-            consecutive segment in x.
-            Shape: [S]
-        - (Optional) If return_starts is True, the start indices for each
-            consecutive segment in x.
-            Shape: [S]
-
-    Examples:
-    >>> inner_indices_segments(torch.tensor([4, 4, 4, 2, 2, 8, 3, 3, 3, 3]))
-    tensor([0, 1, 2, 0, 1, 0, 0, 1, 2, 3])
-    """
-    N_dim = x.shape[dim]
-
-    # Find the start and length of each consecutive segment.
-    lengths, starts = get_lengths_segments(
-        x, dim=dim, return_starts=True
-    )  # [S], [S]
-
-    # Create the index tensor.
-    inner_idcs = (
-        torch.arange(N_dim, dtype=torch.int32)
-        - torch.repeat_interleave(starts, lengths)
-    )  # [N_dim]  # fmt: skip
-
-    if return_lengths and return_starts:
-        return inner_idcs, lengths, starts
-    if return_lengths:
-        return inner_idcs, lengths
-    if return_starts:
-        return inner_idcs, starts
-    return inner_idcs
-
-
-def count_freqs_until(x: torch.Tensor, high: int) -> torch.Tensor:
-    """Count the frequency of each consecutive value, with values in [0, high).
-
-    Args:
-        x: The tensor for which to count the frequency of each integer value.
-            Consecutive values in x are grouped together. It is assumed that
-            every segment has a unique integer value that is not present in any
-            other segment. The values in x must be in the range [0, high).
-            Shape: [N]
-        high: The highest value to include in the count (exclusive). May be
-            higher than the maximum value in x, in which case the remaining
-            values will be set to 0.
-
-    Returns:
-        The frequency of each element in x in range [0, high).
-            Shape: [high]
-
-    Examples:
-    >>> count_freqs_until(torch.tensor([4, 4, 4, 2, 2, 8, 3, 3, 3, 3]), high=10)
-    tensor([0, 0, 2, 4, 3, 0, 0, 0, 1, 0])
-    """
-    if x.ndim != 1:
-        raise ValueError("x must be a 1D tensor.")
-
-    freqs = torch.zeros(high, device=x.device, dtype=torch.int32)  # [high]
-    lengths, starts = get_lengths_segments(x, return_starts=True)  # [S], [S]
-    unique = x[starts]  # [S]
-    freqs[unique] = lengths
-    return freqs
+# ######################## ADVANCED ARRAY MANIPULATION #########################
 
 
 def swap_idcs_vals(x: torch.Tensor) -> torch.Tensor:
@@ -569,8 +353,8 @@ def swap_idcs_vals(x: torch.Tensor) -> torch.Tensor:
     in any order.
 
     Warning: This function does not explicitly check if the input tensor
-    contains no duplicates. If x contains duplicates, no error will be raised
-    and undefined behaviour will occur!
+    contains no duplicates. If x contains duplicates, the behavior is
+    non-deterministic (one of the values from x will be picked arbitrarily).
 
     Args:
         x: The tensor to swap.
@@ -596,7 +380,7 @@ def swap_idcs_vals(x: torch.Tensor) -> torch.Tensor:
 def swap_idcs_vals_duplicates(
     x: torch.Tensor, stable: bool = False
 ) -> torch.Tensor:
-    """Swap the indices and values of a 1D tensor, allowing duplicates.
+    """Swap the indices and values of a 1D tensor allowing duplicates.
 
     The input tensor is assumed to contain integers from 0 to M <= N, in any
     order, and may contain duplicates.
@@ -628,6 +412,326 @@ def swap_idcs_vals_duplicates(
     # Believe it or not, this O(n log n) algorithm is actually faster than a
     # native implementation that uses a Python for loop with complexity O(n).
     return torch.argsort(x, stable=stable).to(x.dtype)
+
+
+# ############################ CONSECUTIVE SEGMENTS ############################
+
+
+def starts_segments(x: torch.Tensor, dim: int = 0) -> torch.Tensor:
+    """Find the start index of each consecutive segment.
+
+    Args:
+        x: The input tensor. Consecutive equal values will be grouped.
+            Shape: [N_0, ..., N_dim, ..., N_{D-1}]
+        dim: The dimension along which the segments are lined up.
+
+    Returns:
+        The start indices for each consecutive segment in x.
+            Shape: [S]
+
+    Examples:
+    >>> x = torch.tensor([4, 4, 4, 2, 2, 8, 3, 3, 3, 3])
+
+    >>> starts = starts_segments(x)
+    >>> starts
+    tensor([0, 3, 5, 6])
+    """
+    N_dim = x.shape[dim]
+
+    # Find the indices where the values change.
+    is_change = (
+        torch.concat(
+            [
+                torch.ones(1, device=x.device, dtype=torch.bool),
+                torch.any(
+                    x.index_select(
+                        dim, torch.arange(0, N_dim - 1, device=x.device)
+                    )  # [N_0, ..., N_dim - 1, ..., N_{D-1}]
+                    != x.index_select(
+                        dim, torch.arange(1, N_dim, device=x.device)
+                    ),  # [N_0, ..., N_dim - 1, ..., N_{D-1}]
+                    dim=tuple(i for i in range(x.ndim) if i != dim),
+                ),  # [N_dim - 1]
+            ],
+            dim=0,
+        )  # [N_dim]
+        if N_dim > 0
+        else torch.empty(0, device=x.device, dtype=torch.bool)
+    )  # [N_dim]
+
+    # Find the start of each consecutive segment.
+    return is_change.nonzero(as_tuple=True)[0].to(torch.int32)  # [S]
+
+
+@overload
+def counts_segments(  # type: ignore
+    x: torch.Tensor, dim: int = 0, return_starts: Literal[False] = ...
+) -> torch.Tensor:
+    pass
+
+
+@overload
+def counts_segments(
+    x: torch.Tensor, dim: int = 0, return_starts: Literal[True] = ...
+) -> tuple[torch.Tensor, torch.Tensor]:
+    pass
+
+
+def counts_segments(
+    x: torch.Tensor, dim: int = 0, return_starts: bool = False
+) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
+    """Count the length of each consecutive segment.
+
+    Args:
+        x: The input tensor. Consecutive equal values will be grouped.
+            Shape: [N_0, ..., N_dim, ..., N_{D-1}]
+        dim: The dimension along which the segments are lined up.
+        return_starts: Whether to also return the start indices of each
+            consecutive segment.
+
+    Returns:
+        Tuple containing:
+        - The counts for each consecutive segment in x.
+            Shape: [S]
+        - (Optional) If return_starts is True, the start indices for each
+            consecutive segment in x.
+            Shape: [S]
+
+    Examples:
+    >>> x = torch.tensor([4, 4, 4, 2, 2, 8, 3, 3, 3, 3])
+
+    >>> counts = counts_segments(x)
+    >>> counts
+    tensor([3, 2, 1, 4])
+    """
+    N_dim = x.shape[dim]
+
+    # Find the start of each consecutive segment.
+    starts = starts_segments(x, dim=dim)  # [S]
+
+    # Prepare starts for count calculation.
+    starts_with_N_dim = torch.concat(
+        [starts, torch.full((1,), N_dim, device=x.device, dtype=torch.int32)],
+        dim=0,
+    )  # [S + 1]
+
+    # Find the count of each consecutive segment.
+    counts = (
+        torch.diff(starts_with_N_dim, dim=0)  # [S]
+        if N_dim > 0
+        else torch.empty(0, device=x.device, dtype=torch.int32)
+    )  # [S]
+
+    if return_starts:
+        return counts, starts
+    return counts
+
+
+@overload
+def outer_indices_segments(  # type: ignore
+    x: torch.Tensor,
+    dim: int = 0,
+    return_counts: Literal[False] = ...,
+    return_starts: Literal[False] = ...,
+) -> torch.Tensor:
+    pass
+
+
+@overload
+def outer_indices_segments(
+    x: torch.Tensor,
+    dim: int = 0,
+    return_counts: Literal[True] = ...,
+    return_starts: Literal[False] = ...,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    pass
+
+
+@overload
+def outer_indices_segments(
+    x: torch.Tensor,
+    dim: int = 0,
+    return_counts: Literal[False] = ...,
+    return_starts: Literal[True] = ...,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    pass
+
+
+@overload
+def outer_indices_segments(
+    x: torch.Tensor,
+    dim: int = 0,
+    return_counts: Literal[True] = ...,
+    return_starts: Literal[True] = ...,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    pass
+
+
+def outer_indices_segments(
+    x: torch.Tensor,
+    dim: int = 0,
+    return_counts: bool = False,
+    return_starts: bool = False,
+) -> (
+    torch.Tensor
+    | tuple[torch.Tensor, torch.Tensor]
+    | tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+):
+    """Get the outer indices for each consecutive segment.
+
+    Args:
+        x: The input tensor. Consecutive equal values will be grouped.
+            Shape: [N_0, ..., N_dim, ..., N_{D-1}]
+        dim: The dimension along which the segments are lined up.
+        return_counts: Whether to also return the counts of each consecutive
+            segment.
+        return_starts: Whether to also return the start indices of each
+            consecutive segment.
+
+    Returns:
+        Tuple containing:
+        - The outer indices for each consecutive segment in x.
+            Shape: [N_dim]
+        - (Optional) If return_counts is True, the counts for each consecutive
+            segment in x.
+            Shape: [S]
+        - (Optional) If return_starts is True, the start indices for each
+            consecutive segment in x.
+            Shape: [S]
+
+    Examples:
+    >>> x = torch.tensor([4, 4, 4, 2, 2, 8, 3, 3, 3, 3])
+
+    >>> outer_idcs = outer_indices_segments(x)
+    >>> outer_idcs
+    tensor([0, 0, 0, 1, 1, 2, 3, 3, 3, 3])
+    """
+    # Find the start (optional) and count of each consecutive segment.
+    if return_starts:
+        counts, starts = counts_segments(
+            x, dim=dim, return_starts=True
+        )  # [S], [S]
+    else:
+        counts = counts_segments(x, dim=dim)  # [S]
+
+    # Calculate the outer indices.
+    outer_idcs = torch.repeat_interleave(
+        torch.arange(
+            counts.shape[0], device=x.device, dtype=torch.int32
+        ),  # [S]
+        counts,
+        dim=0,
+    )  # [N_dim]
+
+    if return_counts and return_starts:
+        return outer_idcs, counts, starts  # type: ignore
+    if return_counts:
+        return outer_idcs, counts
+    if return_starts:
+        return outer_idcs, starts  # type: ignore
+    return outer_idcs
+
+
+@overload
+def inner_indices_segments(  # type: ignore
+    x: torch.Tensor,
+    dim: int = 0,
+    return_counts: Literal[False] = ...,
+    return_starts: Literal[False] = ...,
+) -> torch.Tensor:
+    pass
+
+
+@overload
+def inner_indices_segments(
+    x: torch.Tensor,
+    dim: int = 0,
+    return_counts: Literal[True] = ...,
+    return_starts: Literal[False] = ...,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    pass
+
+
+@overload
+def inner_indices_segments(
+    x: torch.Tensor,
+    dim: int = 0,
+    return_counts: Literal[False] = ...,
+    return_starts: Literal[True] = ...,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    pass
+
+
+@overload
+def inner_indices_segments(
+    x: torch.Tensor,
+    dim: int = 0,
+    return_counts: Literal[True] = ...,
+    return_starts: Literal[True] = ...,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    pass
+
+
+def inner_indices_segments(
+    x: torch.Tensor,
+    dim: int = 0,
+    return_counts: bool = False,
+    return_starts: bool = False,
+) -> (
+    torch.Tensor
+    | tuple[torch.Tensor, torch.Tensor]
+    | tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+):
+    """Get the inner indices for each consecutive segment.
+
+    Args:
+        x: The input tensor. Consecutive equal values will be grouped.
+            Shape: [N_0, ..., N_dim, ..., N_{D-1}]
+        dim: The dimension along which the segments are lined up.
+        return_counts: Whether to also return the counts of each consecutive
+            segment.
+        return_starts: Whether to also return the start indices of each
+            consecutive segment.
+
+    Returns:
+        Tuple containing:
+        - The inner indices for each consecutive segment in x.
+            Shape: [N_dim]
+        - (Optional) If return_counts is True, the counts for each consecutive
+            segment in x.
+            Shape: [S]
+        - (Optional) If return_starts is True, the start indices for each
+            consecutive segment in x.
+            Shape: [S]
+
+    Examples:
+    >>> x = torch.tensor([4, 4, 4, 2, 2, 8, 3, 3, 3, 3])
+
+    >>> inner_idcs = inner_indices_segments(x)
+    >>> inner_idcs
+    tensor([0, 1, 2, 0, 1, 0, 0, 1, 2, 3])
+    """
+    N_dim = x.shape[dim]
+
+    # Find the start and count of each consecutive segment.
+    counts, starts = counts_segments(x, dim=dim, return_starts=True)  # [S], [S]
+
+    # Calculate the inner indices.
+    inner_idcs = (
+        torch.arange(N_dim, dtype=torch.int32)  # [N_dim]
+        - starts.repeat_interleave(counts, dim=0)  # [N_dim]
+    )  # [N_dim]  # fmt: skip
+
+    if return_counts and return_starts:
+        return inner_idcs, counts, starts
+    if return_counts:
+        return inner_idcs, counts
+    if return_starts:
+        return inner_idcs, starts
+    return inner_idcs
+
+
+# ################################## LEXSORT ###################################
 
 
 def lexsort(
@@ -833,6 +937,9 @@ def lexsort_along(
     return x_sorted, backmap
 
 
+# ################################### UNIQUE ###################################
+
+
 @overload
 def unique_consecutive(  # type: ignore
     x: torch.Tensor,
@@ -889,7 +996,8 @@ def unique_consecutive(
     taking all the other dimensions as constant tuples.
 
     Args:
-        x: The input tensor. Must be sorted along the given dimension.
+        x: The input tensor. If it contains equal values, they must be
+            consecutive along the given dimension.
             Shape: [N_0, ..., N_dim, ..., N_{D-1}]
         return_inverse: Whether to also return the inverse mapping tensor.
             This can be used to reconstruct the original tensor from the unique
@@ -935,10 +1043,10 @@ def unique_consecutive(
 
     >>> # 2D example: -----------------------------------------------------
     >>> x = torch.tensor([
-    ...     [7,  9,  9, 10],
-    ...     [8, 10, 10,  9],
-    ...     [9,  8,  8,  7],
-    ...     [9,  7,  7,  7],
+    ...     [7, 9, 9, 10],
+    ...     [8, 10, 10, 9],
+    ...     [9, 8, 8, 7],
+    ...     [9, 7, 7, 7],
     ... ])
     >>> dim = 1
 
@@ -999,7 +1107,7 @@ def unique_consecutive(
              [9, 8, 7, 7]],
             [[4, 2, 8, 8],
              [3, 3, 7, 7],
-             [0, 2, 1, 1]])
+             [0, 2, 1, 1]]])
     """
     if dim is None:
         raise NotImplementedError(
@@ -1007,47 +1115,35 @@ def unique_consecutive(
             " explicitly."
         )
 
-    N_dim = x.shape[dim]
-
-    # Flatten all dimensions except the one we want to operate on.
-    if x.ndim == 1:
-        y = x.unsqueeze(0)  # [1, N_dim]
-    else:
-        y = x.movedim(
-            dim, -1
-        )  # [N_0, ..., N_{dim-1}, N_{dim+1}, ..., N_{D-1}, N_dim]
-        y = y.reshape(
-            -1, N_dim
-        )  # [N_0 * ... * N_{dim-1} * N_{dim+1} * ... * N_{D-1}, N_dim]
-
-    # Find the start indices and counts (optional) of each unique element.
-    if return_counts or return_inverse:
-        counts, idcs = get_lengths_segments(
-            y, dim=1, return_starts=True
+    # Find each consecutive segment.
+    if return_inverse and return_counts:
+        outer_idcs, counts, starts = outer_indices_segments(
+            x, dim=dim, return_counts=True, return_starts=True
+        )  # [N_dim], [U], [U]
+    elif return_inverse:
+        outer_idcs, starts = outer_indices_segments(
+            x, dim=dim, return_starts=True
+        )  # [N_dim], [U]
+    elif return_counts:
+        counts, starts = counts_segments(
+            x, dim=dim, return_starts=True
         )  # [U], [U]
     else:
-        idcs = get_starts_segments(y, dim=1)  # [U]
+        starts = starts_segments(x, dim=dim)  # [U]
 
     # Find the unique values.
     uniques = x.index_select(
-        dim, idcs
+        dim, starts
     )  # [N_0, ..., N_{dim-1}, U, N_{dim+1}, ..., N_{D-1}]
 
-    # Calculate auxiliary values.
-    aux = []
+    # Return the requested values.
+    if return_inverse and return_counts:
+        return uniques, outer_idcs, counts  # type: ignore
     if return_inverse:
-        inverse = torch.repeat_interleave(
-            torch.arange(len(idcs), device=x.device, dtype=torch.int32),
-            counts,  # type: ignore
-        )  # [N_dim]
-        aux.append(inverse)
+        return uniques, outer_idcs  # type: ignore
     if return_counts:
-        aux.append(counts)  # type: ignore
-
-    if aux:
-        return uniques, *aux
-    else:
-        return uniques
+        return uniques, counts  # type: ignore
+    return uniques
 
 
 @overload
@@ -1330,7 +1426,7 @@ def unique(
              [9, 7, 8, 7]],
             [[4, 8, 2, 8],
              [3, 7, 3, 7],
-             [0, 1, 2, 1]])
+             [0, 1, 2, 1]]])
     """
     if dim is None:
         raise NotImplementedError(
@@ -1364,7 +1460,7 @@ def unique(
         aux.append(backmap)
     if return_inverse:
         # The backmap wasn't taken into account by unique_consecutive(), so we
-        # have to do it ourselves.
+        # have to apply it to the inverse mapping here.
         backmap_inv = swap_idcs_vals(backmap)  # [N_dim]
         aux.append(out[1][backmap_inv])
     if return_counts:
@@ -1375,9 +1471,50 @@ def unique(
     return out
 
 
+# ############################ CONSECUTIVE SEGMENTS ############################
+
+
+def counts_segments_ints(x: torch.Tensor, high: int) -> torch.Tensor:
+    """Count the frequency of each consecutive value, with values in [0, high).
+
+    Args:
+        x: The tensor for which to count the frequency of each integer value.
+            Consecutive values in x are grouped together. It is assumed that
+            every segment has a unique integer value that is not present in any
+            other segment. The values in x must be in the range [0, high).
+            Shape: [N]
+        high: The highest value to include in the count (exclusive). May be
+            higher than the maximum value in x, in which case the remaining
+            values will be set to 0.
+
+    Returns:
+        The frequency of each element in x in range [0, high).
+            Shape: [high]
+
+    Examples:
+    >>> x = torch.tensor([4, 4, 4, 2, 2, 8, 3, 3, 3, 3])
+
+    >>> freqs = counts_segments_ints(x, 10)
+    >>> freqs
+    tensor([0, 0, 2, 4, 3, 0, 0, 0, 1, 0])
+    """
+    if x.ndim != 1:
+        raise ValueError("x must be a 1D tensor.")
+
+    freqs = torch.zeros(high, device=x.device, dtype=torch.int32)
+    uniques, counts = unique_consecutive(
+        x, return_counts=True, dim=0
+    )  # [U], [U]
+    freqs[uniques] = counts
+    return freqs
+
+
+# ################################## GROUPBY ###################################
+
+
 def groupby(
     keys: torch.Tensor, vals: torch.Tensor, stable: bool = False
-) -> Generator[tuple[Any, torch.Tensor]]:
+) -> Iterator[tuple[Any, torch.Tensor]]:
     """Group values by keys.
 
     Args:

@@ -146,7 +146,7 @@ class TestUnique(unittest.TestCase):
         self.assertTrue(np.array_equal(get_idcs(1), np.array([0, 3])))
 
     def test_unique_2D_axisNone(self) -> None:
-        # Not implenmented, skip this test for now.
+        # Not implemented, skip this test for now.
         return
 
     def test_unique_3D_axis2(self) -> None:

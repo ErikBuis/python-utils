@@ -138,7 +138,7 @@ class TestSwapIdcsValsDuplicates(unittest.TestCase):
     def test_swap_idcs_vals_duplicates_2D(self) -> None:
         x = torch.tensor([[2, 3], [0, 4], [1, 5]])
         with self.assertRaises(ValueError):
-            swap_idcs_vals_duplicates(x, stable=True)
+            swap_idcs_vals_duplicates(x)
 
     def test_swap_idcs_vals_duplicates_no_duplicates(self) -> None:
         x = torch.tensor([2, 3, 0, 4, 1])
@@ -288,7 +288,7 @@ class TestUnique(unittest.TestCase):
         self.assertTrue(torch.equal(get_idcs(1), torch.tensor([0, 3])))
 
     def test_unique_2D_dimNone(self) -> None:
-        # Not implenmented, skip this test for now.
+        # Not implemented, skip this test for now.
         return
 
     def test_unique_3D_dim2(self) -> None:

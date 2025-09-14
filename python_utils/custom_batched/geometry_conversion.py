@@ -7,7 +7,7 @@ import pandas as pd
 import torch
 from shapely import LinearRing, MultiPolygon, Polygon
 
-from ..modules.torch import count_freqs_until
+from ..modules.torch import counts_segments_ints
 from ..modules_batched.random import (
     rand_float_decreasingly_likely,
     rand_int_decreasingly_likely,
@@ -356,7 +356,7 @@ def __count_freqs_until(
             Shape: [high]
     """
     index = torch.from_numpy(obj_with_index.index.to_numpy()).to(device)
-    return count_freqs_until(index, high)
+    return counts_segments_ints(index, high)
 
 
 def LinearRing2LinearRingVertices(
@@ -495,9 +495,7 @@ def Polygons2PolygonsInteriors(
         The interiors of the batch of Polygon objects as a PolygonsInteriors
         object.
     """
-    interiors_series = (
-        cast(pd.Series, polygons.interiors).explode().dropna()
-    )  # [I]
+    interiors_series = polygons.interiors.explode().dropna()  # [I]
     I_bs = __count_freqs_until(interiors_series, len(polygons), device)  # [B]
     interiors_packed, V_is_packed = LinearRings2LinearRingsVertices(
         gpd.GeoSeries(interiors_series.reset_index(drop=True)), device, dtype

@@ -14,6 +14,9 @@ NpGeneric2 = TypeVar("NpGeneric2", bound=np.generic)
 NpInteger = TypeVar("NpInteger", bound=np.integer)
 
 
+# ############################## GENERIC NDARRAY ###############################
+
+
 class NDArrayGeneric(np.ndarray, Generic[T]):
     """np.ndarray that allows for static type hinting of generics."""
 
@@ -22,7 +25,58 @@ class NDArrayGeneric(np.ndarray, Generic[T]):
         return super().__getitem__(key)  # type: ignore
 
 
-# ############################ NUMPY-SPECIFIC UTILS ############################
+# #################################### MATHS ###################################
+
+
+def cumsum_start_0(
+    a: npt.ArrayLike,
+    axis: int | None = None,
+    dtype: np.dtype | None = None,
+    out: npt.NDArray | None = None,
+) -> npt.NDArray:
+    """Like np.cumsum(), but adds a zero at the start of the array.
+
+    Args:
+        a: Input array.
+            Shape: [N_0, ..., N_axis, ..., N_{D-1}]
+        axis: Axis along which the cumulative sum is computed. The default
+            (None) is to compute the cumsum over the flattened array.
+        dtype: Type of the returned array and of the accumulator in which the
+            elements are summed. If dtype is not specified, it defaults to the
+            dtype of a.
+        out: Alternative output array in which to place the result. It must
+            have the same shape and buffer length as the expected output but
+            the type will be cast if necessary.
+            Shape: [N_0, ..., N_axis + 1, ..., N_{D-1}]
+
+    Returns:
+        A new array holding the result returned unless out is specified, in
+        which case a reference to out is returned. The result has the same
+        size as a except along the requested axis.
+            Shape: [N_0, ..., N_axis + 1, ..., N_{D-1}]
+    """
+    a = np.array(a)
+
+    if axis is None:
+        a = a.flatten()
+        axis = 0
+
+    if dtype is None:
+        dtype = a.dtype
+
+    if out is not None:
+        idx = [slice(None)] * a.ndim
+        idx[axis] = 0  # type: ignore
+        out[tuple(idx)] = 0
+        idx[axis] = slice(1, None)
+        np.cumsum(a, axis=axis, dtype=dtype, out=out[tuple(idx)])
+        return out
+
+    shape = list(a.shape)
+    shape[axis] = 1
+    zeros = np.zeros(shape, dtype=dtype)
+    cumsum = np.cumsum(a, axis=axis, dtype=dtype)
+    return np.concat([zeros, cumsum], axis=axis)
 
 
 def unequal_seqs_add(
@@ -111,283 +165,7 @@ def update_normalized_histogram(
     return updated_value_avg, updated_histogram
 
 
-# ######################### NUMPY & TORCH SHARED UTILS #########################
-
-
-def cumsum_start_0(
-    a: npt.ArrayLike,
-    axis: int | None = None,
-    dtype: np.dtype | None = None,
-    out: npt.NDArray | None = None,
-) -> npt.NDArray:
-    """Like np.cumsum(), but adds a zero at the start of the array.
-
-    Args:
-        a: Input array.
-            Shape: [N_0, ..., N_axis, ..., N_{D-1}]
-        axis: Axis along which the cumulative sum is computed. The default
-            (None) is to compute the cumsum over the flattened array.
-        dtype: Type of the returned array and of the accumulator in which the
-            elements are summed. If dtype is not specified, it defaults to the
-            dtype of a.
-        out: Alternative output array in which to place the result. It must
-            have the same shape and buffer length as the expected output but
-            the type will be cast if necessary.
-            Shape: [N_0, ..., N_axis + 1, ..., N_{D-1}]
-
-    Returns:
-        A new array holding the result returned unless out is specified, in
-        which case a reference to out is returned. The result has the same
-        size as a except along the requested axis.
-            Shape: [N_0, ..., N_axis + 1, ..., N_{D-1}]
-    """
-    a = np.array(a)
-
-    if axis is None:
-        a = a.flatten()
-        axis = 0
-
-    if dtype is None:
-        dtype = a.dtype
-
-    if out is not None:
-        idx = [slice(None)] * a.ndim
-        idx[axis] = 0  # type: ignore
-        out[tuple(idx)] = 0
-        idx[axis] = slice(1, None)
-        np.cumsum(a, axis=axis, dtype=dtype, out=out[tuple(idx)])
-        return out
-
-    shape = list(a.shape)
-    shape[axis] = 1
-    zeros = np.zeros(shape, dtype=dtype)
-    cumsum = np.cumsum(a, axis=axis, dtype=dtype)
-    return np.concat([zeros, cumsum], axis=axis)
-
-
-def get_starts_segments(x: npt.NDArray, axis: int = 0) -> npt.NDArray[np.intp]:
-    """Find the start index of each consecutive segment.
-
-    Args:
-        x: The input array. Consecutive equal values will be grouped.
-            Shape: [N_0, ..., N_axis, ..., N_{D-1}]
-        axis: The dimension along which the segments are lined up.
-
-    Returns:
-        The start indices for each consecutive segment in x.
-            Shape: [S]
-
-    Examples:
-    >>> get_starts_segments(np.array([4, 4, 4, 2, 2, 8, 3, 3, 3, 3]))
-    array([0, 3, 5, 6])
-    """
-    N_axis = x.shape[axis]
-
-    # Find the indices where the values change.
-    is_change = (
-        np.concat([
-            np.ones(1, dtype=np.bool_),
-            np.any(
-                x.take(np.arange(0, N_axis - 1), axis)
-                != x.take(np.arange(1, N_axis), axis),
-                axis=tuple(i for i in range(x.ndim) if i != axis),
-            ),
-        ])
-        if N_axis > 0
-        else np.empty(0, dtype=np.bool_)
-    )  # [N_axis]
-
-    # Find the start of each consecutive segment.
-    return is_change.nonzero()[0]  # [S]
-
-
-@overload
-def get_lengths_segments(  # type: ignore
-    x: npt.NDArray, axis: int = 0, return_starts: Literal[False] = ...
-) -> npt.NDArray[np.int64]:
-    pass
-
-
-@overload
-def get_lengths_segments(
-    x: npt.NDArray, axis: int = 0, return_starts: Literal[True] = ...
-) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.intp]]:
-    pass
-
-
-def get_lengths_segments(
-    x: npt.NDArray, axis: int = 0, return_starts: bool = False
-) -> (
-    npt.NDArray[np.int64] | tuple[npt.NDArray[np.int64], npt.NDArray[np.int64]]
-):
-    """Count the length of each consecutive segment.
-
-    Args:
-        x: The input array. Consecutive equal values will be grouped.
-            Shape: [N_0, ..., N_axis, ..., N_{D-1}]
-        axis: The dimension along which the segments are lined up.
-        return_starts: Whether to also return the start indices of each
-            consecutive segment.
-
-    Returns:
-        Tuple containing:
-        - The lengths for each consecutive segment in x.
-            Shape: [S]
-        - (Optional) If return_starts is True, the start indices for each
-            consecutive segment in x.
-            Shape: [S]
-
-    Examples:
-    >>> get_lengths_segments(np.array([4, 4, 4, 2, 2, 8, 3, 3, 3, 3]))
-    array([3, 2, 1, 4])
-    """
-    N_axis = x.shape[axis]
-
-    # Find the start of each consecutive segment.
-    starts = get_starts_segments(x, axis=axis)  # [S]
-
-    # Find the length of each consecutive segment.
-    lengths = (
-        np.diff(starts, append=np.full((1,), N_axis, dtype=np.int64))
-        if N_axis > 0
-        else np.empty(0, dtype=np.int64)
-    )  # [S]
-
-    if return_starts:
-        return lengths, starts
-    return lengths
-
-
-@overload
-def inner_indices_segments(  # type: ignore
-    x: npt.NDArray,
-    axis: int = 0,
-    return_lengths: Literal[False] = ...,
-    return_starts: Literal[False] = ...,
-) -> npt.NDArray[np.intp]:
-    pass
-
-
-@overload
-def inner_indices_segments(
-    x: npt.NDArray,
-    axis: int = 0,
-    return_lengths: Literal[True] = ...,
-    return_starts: Literal[False] = ...,
-) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.int64]]:
-    pass
-
-
-@overload
-def inner_indices_segments(
-    x: npt.NDArray,
-    axis: int = 0,
-    return_lengths: Literal[False] = ...,
-    return_starts: Literal[True] = ...,
-) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]:
-    pass
-
-
-@overload
-def inner_indices_segments(
-    x: npt.NDArray,
-    axis: int = 0,
-    return_lengths: Literal[True] = ...,
-    return_starts: Literal[True] = ...,
-) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.int64], npt.NDArray[np.intp]]:
-    pass
-
-
-def inner_indices_segments(
-    x: npt.NDArray,
-    axis: int = 0,
-    return_lengths: bool = False,
-    return_starts: bool = False,
-) -> (
-    npt.NDArray[np.intp]
-    | tuple[npt.NDArray[np.intp], npt.NDArray[np.int64]]
-    | tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]
-    | tuple[npt.NDArray[np.intp], npt.NDArray[np.int64], npt.NDArray[np.intp]]
-):
-    """Construct the inner indices for each consecutive segment.
-
-    Args:
-        x: The input array. Consecutive equal values will be grouped.
-            Shape: [N_0, ..., N_axis, ..., N_{D-1}]
-        axis: The dimension along which the segments are lined up.
-        return_lengths: Whether to also return the lengths of each
-            consecutive segment.
-        return_starts: Whether to also return the start indices of each
-            consecutive segment.
-
-    Returns:
-        Tuple containing:
-        - The inner indices for each consecutive segment in x.
-            Shape: [N_axis]
-        - (Optional) If return_lengths is True, the lengths for each
-            consecutive segment in x.
-            Shape: [S]
-        - (Optional) If return_starts is True, the start indices for each
-            consecutive segment in x.
-            Shape: [S]
-
-    Examples:
-    >>> inner_indices_segments(np.array([4, 4, 4, 2, 2, 8, 3, 3, 3, 3]))
-    array([0, 1, 2, 0, 1, 0, 0, 1, 2, 3])
-    """
-    N_axis = x.shape[axis]
-
-    # Find the start and length of each consecutive segment.
-    lengths, starts = get_lengths_segments(
-        x, axis=axis, return_starts=True
-    )  # [S], [S]
-
-    # Create the index array.
-    inner_idcs = (
-        np.arange(N_axis, dtype=np.intp)
-        - np.repeat(starts, lengths)
-    )  # [N_axis]  # fmt: skip
-
-    if return_lengths and return_starts:
-        return inner_idcs, lengths, starts
-    if return_lengths:
-        return inner_idcs, lengths
-    if return_starts:
-        return inner_idcs, starts
-    return inner_idcs
-
-
-def count_freqs_until(
-    x: npt.NDArray[np.integer], high: int
-) -> npt.NDArray[np.int64]:
-    """Count the frequency of each consecutive value, with values in [0, high).
-
-    Args:
-        x: The array for which to count the frequency of each integer value.
-            Consecutive values in x are grouped together. It is assumed that
-            every segment has a unique integer value that is not present in any
-            other segment. The values in x must be in the range [0, high).
-            Shape: [N]
-        high: The highest value to include in the count (exclusive). May be
-            higher than the maximum value in x, in which case the remaining
-            values will be set to 0.
-
-    Returns:
-        The frequency of each element in x in range [0, high).
-            Shape: [high]
-
-    Examples:
-    >>> count_freqs_until(np.array([4, 4, 4, 2, 2, 8, 3, 3, 3, 3]), high=10)
-    array([0, 0, 2, 4, 3, 0, 0, 0, 1, 0])
-    """
-    if x.ndim != 1:
-        raise ValueError("x must be a 1D array.")
-
-    freqs = np.zeros(high, dtype=np.int64)  # [high]
-    lengths, starts = get_lengths_segments(x, return_starts=True)  # [S], [S]
-    unique = x[starts]  # [S]
-    freqs[unique] = lengths
-    return freqs
+# ######################## ADVANCED ARRAY MANIPULATION #########################
 
 
 def swap_idcs_vals(x: npt.NDArray[NpInteger]) -> npt.NDArray[NpInteger]:
@@ -456,6 +234,323 @@ def swap_idcs_vals_duplicates(
     # Believe it or not, this O(n log n) algorithm is actually faster than a
     # native implementation that uses a Python for loop with complexity O(n).
     return np.argsort(x, stable=stable).astype(x.dtype)
+
+
+# ############################ CONSECUTIVE SEGMENTS ############################
+
+
+def starts_segments(x: npt.NDArray, axis: int = 0) -> npt.NDArray[np.intp]:
+    """Find the start index of each consecutive segment.
+
+    Args:
+        x: The input array. Consecutive equal values will be grouped.
+            Shape: [N_0, ..., N_axis, ..., N_{D-1}]
+        axis: The dimension along which the segments are lined up.
+
+    Returns:
+        The start indices for each consecutive segment in x.
+            Shape: [S]
+
+    Examples:
+    >>> x = np.array([4, 4, 4, 2, 2, 8, 3, 3, 3, 3])
+
+    >>> starts = starts_segments(x)
+    >>> starts
+    array([0, 3, 5, 6])
+    """
+    N_axis = x.shape[axis]
+
+    # Find the indices where the values change.
+    is_change = (
+        np.concat(
+            [
+                np.ones(1, dtype=np.bool_),
+                np.any(
+                    x.take(
+                        np.arange(0, N_axis - 1), axis
+                    )  # [N_0, ..., N_axis - 1, ..., N_{D-1}]
+                    != x.take(
+                        np.arange(1, N_axis), axis
+                    ),  # [N_0, ..., N_axis - 1, ..., N_{D-1}]
+                    axis=tuple(i for i in range(x.ndim) if i != axis),
+                ),  # [N_axis - 1]
+            ],
+            axis=0,
+        )  # [N_axis]
+        if N_axis > 0
+        else np.empty(0, dtype=np.bool_)
+    )  # [N_axis]
+
+    # Find the start of each consecutive segment.
+    return is_change.nonzero()[0].astype(np.intp)  # [S]
+
+
+@overload
+def counts_segments(  # type: ignore
+    x: npt.NDArray, axis: int = 0, return_starts: Literal[False] = ...
+) -> npt.NDArray[np.intp]:
+    pass
+
+
+@overload
+def counts_segments(
+    x: npt.NDArray, axis: int = 0, return_starts: Literal[True] = ...
+) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]:
+    pass
+
+
+def counts_segments(
+    x: npt.NDArray, axis: int = 0, return_starts: bool = False
+) -> npt.NDArray[np.intp] | tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]:
+    """Count the length of each consecutive segment.
+
+    Args:
+        x: The input array. Consecutive equal values will be grouped.
+            Shape: [N_0, ..., N_axis, ..., N_{D-1}]
+        axis: The dimension along which the segments are lined up.
+        return_starts: Whether to also return the start indices of each
+            consecutive segment.
+
+    Returns:
+        Tuple containing:
+        - The counts for each consecutive segment in x.
+            Shape: [S]
+        - (Optional) If return_starts is True, the start indices for each
+            consecutive segment in x.
+            Shape: [S]
+
+    Examples:
+    >>> x = np.array([4, 4, 4, 2, 2, 8, 3, 3, 3, 3])
+
+    >>> counts = counts_segments(x)
+    >>> counts
+    array([3, 2, 1, 4])
+    """
+    N_axis = x.shape[axis]
+
+    # Find the start of each consecutive segment.
+    starts = starts_segments(x, axis=axis)  # [S]
+
+    # Prepare starts for count calculation.
+    starts_with_N_axis = np.concat(
+        [starts, np.full((1,), N_axis, dtype=np.intp)], axis=0
+    )  # [S + 1]
+
+    # Find the count of each consecutive segment.
+    counts = (
+        np.diff(starts_with_N_axis, axis=0)  # [S]
+        if N_axis > 0
+        else np.empty(0, dtype=np.intp)
+    )  # [S]
+
+    if return_starts:
+        return counts, starts
+    return counts
+
+
+@overload
+def outer_indices_segments(  # type: ignore
+    x: npt.NDArray,
+    axis: int = 0,
+    return_counts: Literal[False] = ...,
+    return_starts: Literal[False] = ...,
+) -> npt.NDArray[np.intp]:
+    pass
+
+
+@overload
+def outer_indices_segments(
+    x: npt.NDArray,
+    axis: int = 0,
+    return_counts: Literal[True] = ...,
+    return_starts: Literal[False] = ...,
+) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]:
+    pass
+
+
+@overload
+def outer_indices_segments(
+    x: npt.NDArray,
+    axis: int = 0,
+    return_counts: Literal[False] = ...,
+    return_starts: Literal[True] = ...,
+) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]:
+    pass
+
+
+@overload
+def outer_indices_segments(
+    x: npt.NDArray,
+    axis: int = 0,
+    return_counts: Literal[True] = ...,
+    return_starts: Literal[True] = ...,
+) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.intp], npt.NDArray[np.intp]]:
+    pass
+
+
+def outer_indices_segments(
+    x: npt.NDArray,
+    axis: int = 0,
+    return_counts: bool = False,
+    return_starts: bool = False,
+) -> (
+    npt.NDArray[np.intp]
+    | tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]
+    | tuple[npt.NDArray[np.intp], npt.NDArray[np.intp], npt.NDArray[np.intp]]
+):
+    """Get the outer indices for each consecutive segment.
+
+    Args:
+        x: The input array. Consecutive equal values will be grouped.
+            Shape: [N_0, ..., N_axis, ..., N_{D-1}]
+        axis: The dimension along which the segments are lined up.
+        return_counts: Whether to also return the counts of each consecutive
+            segment.
+        return_starts: Whether to also return the start indices of each
+            consecutive segment.
+
+    Returns:
+        Tuple containing:
+        - The outer indices for each consecutive segment in x.
+            Shape: [N_axis]
+        - (Optional) If return_counts is True, the counts for each consecutive
+            segment in x.
+            Shape: [S]
+        - (Optional) If return_starts is True, the start indices for each
+            consecutive segment in x.
+            Shape: [S]
+
+    Examples:
+    >>> x = np.array([4, 4, 4, 2, 2, 8, 3, 3, 3, 3])
+
+    >>> outer_idcs = outer_indices_segments(x)
+    >>> outer_idcs
+    array([0, 0, 0, 1, 1, 2, 3, 3, 3, 3])
+    """
+    # Find the start (optional) and count of each consecutive segment.
+    if return_starts:
+        counts, starts = counts_segments(
+            x, axis=axis, return_starts=True
+        )  # [S], [S]
+    else:
+        counts = counts_segments(x, axis=axis)  # [S]
+
+    # Calculate the outer indices.
+    outer_idcs = np.repeat(
+        np.arange(counts.shape[0], dtype=np.intp), counts, axis=0  # [S]
+    )  # [N_axis]
+
+    if return_counts and return_starts:
+        return outer_idcs, counts, starts  # type: ignore
+    if return_counts:
+        return outer_idcs, counts
+    if return_starts:
+        return outer_idcs, starts  # type: ignore
+    return outer_idcs
+
+
+@overload
+def inner_indices_segments(  # type: ignore
+    x: npt.NDArray,
+    axis: int = 0,
+    return_counts: Literal[False] = ...,
+    return_starts: Literal[False] = ...,
+) -> npt.NDArray[np.intp]:
+    pass
+
+
+@overload
+def inner_indices_segments(
+    x: npt.NDArray,
+    axis: int = 0,
+    return_counts: Literal[True] = ...,
+    return_starts: Literal[False] = ...,
+) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]:
+    pass
+
+
+@overload
+def inner_indices_segments(
+    x: npt.NDArray,
+    axis: int = 0,
+    return_counts: Literal[False] = ...,
+    return_starts: Literal[True] = ...,
+) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]:
+    pass
+
+
+@overload
+def inner_indices_segments(
+    x: npt.NDArray,
+    axis: int = 0,
+    return_counts: Literal[True] = ...,
+    return_starts: Literal[True] = ...,
+) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.intp], npt.NDArray[np.intp]]:
+    pass
+
+
+def inner_indices_segments(
+    x: npt.NDArray,
+    axis: int = 0,
+    return_counts: bool = False,
+    return_starts: bool = False,
+) -> (
+    npt.NDArray[np.intp]
+    | tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]
+    | tuple[npt.NDArray[np.intp], npt.NDArray[np.intp], npt.NDArray[np.intp]]
+):
+    """Get the inner indices for each consecutive segment.
+
+    Args:
+        x: The input array. Consecutive equal values will be grouped.
+            Shape: [N_0, ..., N_axis, ..., N_{D-1}]
+        axis: The dimension along which the segments are lined up.
+        return_counts: Whether to also return the counts of each consecutive
+            segment.
+        return_starts: Whether to also return the start indices of each
+            consecutive segment.
+
+    Returns:
+        Tuple containing:
+        - The inner indices for each consecutive segment in x.
+            Shape: [N_axis]
+        - (Optional) If return_counts is True, the counts for each consecutive
+            segment in x.
+            Shape: [S]
+        - (Optional) If return_starts is True, the start indices for each
+            consecutive segment in x.
+            Shape: [S]
+
+    Examples:
+    >>> x = np.array([4, 4, 4, 2, 2, 8, 3, 3, 3, 3])
+
+    >>> inner_idcs = inner_indices_segments(x)
+    >>> inner_idcs
+    array([0, 1, 2, 0, 1, 0, 0, 1, 2, 3])
+    """
+    N_axis = x.shape[axis]
+
+    # Find the start and count of each consecutive segment.
+    counts, starts = counts_segments(
+        x, axis=axis, return_starts=True
+    )  # [S], [S]
+
+    # Calculate the inner indices.
+    inner_idcs = (
+        np.arange(N_axis, dtype=np.intp)  # [N_axis]
+        - starts.repeat(counts, axis=0)  # [N_axis]
+    )  # [N_axis]  # fmt: skip
+
+    if return_counts and return_starts:
+        return inner_idcs, counts, starts
+    if return_counts:
+        return inner_idcs, counts
+    if return_starts:
+        return inner_idcs, starts
+    return inner_idcs
+
+
+# ################################## LEXSORT ###################################
 
 
 def lexsort(
@@ -645,6 +740,9 @@ def lexsort_along(
     return x_sorted, backmap
 
 
+# ################################### UNIQUE ###################################
+
+
 @overload
 def unique_consecutive(  # type: ignore
     x: npt.NDArray[NpGeneric],
@@ -671,7 +769,7 @@ def unique_consecutive(
     return_inverse: Literal[False] = ...,
     return_counts: Literal[True] = ...,
     axis: int | None = None,
-) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[np.int64]]:
+) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp]]:
     pass
 
 
@@ -681,7 +779,7 @@ def unique_consecutive(
     return_inverse: Literal[True] = ...,
     return_counts: Literal[True] = ...,
     axis: int | None = None,
-) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp], npt.NDArray[np.int64]]:
+) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp], npt.NDArray[np.intp]]:
     pass
 
 
@@ -693,8 +791,7 @@ def unique_consecutive(
 ) -> (
     npt.NDArray[NpGeneric]
     | tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp]]
-    | tuple[npt.NDArray[NpGeneric], npt.NDArray[np.int64]]
-    | tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp], npt.NDArray[np.int64]]
+    | tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp], npt.NDArray[np.intp]]
 ):
     """A consecutive version of np.unique().
 
@@ -702,7 +799,8 @@ def unique_consecutive(
     taking all the other dimensions as constant tuples.
 
     Args:
-        x: The input array. Must be sorted along the given dimension.
+        x: The input array. If it contains equal values, they must be
+            consecutive along the given dimension.
             Shape: [N_0, ..., N_axis, ..., N_{D-1}]
         return_inverse: Whether to also return the inverse mapping array.
             This can be used to reconstruct the original array from the unique
@@ -748,10 +846,10 @@ def unique_consecutive(
 
     >>> # 2D example: -----------------------------------------------------
     >>> x = np.array([
-    ...     [7,  9,  9, 10],
-    ...     [8, 10, 10,  9],
-    ...     [9,  8,  8,  7],
-    ...     [9,  7,  7,  7],
+    ...     [7, 9, 9, 10],
+    ...     [8, 10, 10, 9],
+    ...     [9, 8, 8, 7],
+    ...     [9, 7, 7, 7],
     ... ])
     >>> axis = 1
 
@@ -820,46 +918,35 @@ def unique_consecutive(
             " explicitly."
         )
 
-    N_axis = x.shape[axis]
-
-    # Flatten all dimensions except the one we want to operate on.
-    if x.ndim == 1:
-        y = np.expand_dims(x, 0)  # [1, N_axis]
-    else:
-        y = np.moveaxis(
-            x, axis, -1
-        )  # [N_0, ..., N_{axis-1}, N_{axis+1}, ..., N_{D-1}, N_axis]
-        y = y.reshape(
-            -1, N_axis
-        )  # [N_0 * ... * N_{axis-1} * N_{axis+1} * ... * N_{D-1}, N_axis]
-
-    # Find the start indices and counts (optional) of each unique element.
-    if return_counts or return_inverse:
-        counts, idcs = get_lengths_segments(
-            y, axis=1, return_starts=True
+    # Find each consecutive segment.
+    if return_inverse and return_counts:
+        outer_idcs, counts, starts = outer_indices_segments(
+            x, axis=axis, return_counts=True, return_starts=True
+        )  # [N_dim], [U], [U]
+    elif return_inverse:
+        outer_idcs, starts = outer_indices_segments(
+            x, axis=axis, return_starts=True
+        )  # [N_dim], [U]
+    elif return_counts:
+        counts, starts = counts_segments(
+            x, axis=axis, return_starts=True
         )  # [U], [U]
     else:
-        idcs = get_starts_segments(y, axis=1)  # [U]
+        starts = starts_segments(x, axis=axis)  # [U]
 
     # Find the unique values.
     uniques = x.take(
-        idcs, axis
-    )  # [N_0, ..., N_{axis-1}, U, N_{axis+1}, ..., N_{D-1}]
+        starts, axis
+    )  # [N_0, ..., N_{dim-1}, U, N_{dim+1}, ..., N_{D-1}]
 
-    # Calculate auxiliary values.
-    aux = []
+    # Return the requested values.
+    if return_inverse and return_counts:
+        return uniques, outer_idcs, counts  # type: ignore
     if return_inverse:
-        inverse = np.repeat(
-            np.arange(len(idcs), dtype=np.intp), counts  # type: ignore
-        )  # [N_axis]
-        aux.append(inverse)
+        return uniques, outer_idcs  # type: ignore
     if return_counts:
-        aux.append(counts)  # type: ignore
-
-    if aux:
-        return uniques, *aux
-    else:
-        return uniques
+        return uniques, counts  # type: ignore
+    return uniques
 
 
 @overload
@@ -906,7 +993,7 @@ def unique(
     return_counts: Literal[True] = ...,
     axis: int | None = None,
     stable: bool = False,
-) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[np.int64]]:
+) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp]]:
     pass
 
 
@@ -930,7 +1017,7 @@ def unique(
     return_counts: Literal[True] = ...,
     axis: int | None = None,
     stable: bool = False,
-) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp], npt.NDArray[np.int64]]:
+) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp], npt.NDArray[np.intp]]:
     pass
 
 
@@ -942,7 +1029,7 @@ def unique(
     return_counts: Literal[True] = ...,
     axis: int | None = None,
     stable: bool = False,
-) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp], npt.NDArray[np.int64]]:
+) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp], npt.NDArray[np.intp]]:
     pass
 
 
@@ -958,7 +1045,7 @@ def unique(
     npt.NDArray[NpGeneric],
     npt.NDArray[np.intp],
     npt.NDArray[np.intp],
-    npt.NDArray[np.int64],
+    npt.NDArray[np.intp],
 ]:
     pass
 
@@ -973,14 +1060,12 @@ def unique(
 ) -> (
     npt.NDArray[NpGeneric]
     | tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp]]
-    | tuple[npt.NDArray[NpGeneric], npt.NDArray[np.int64]]
     | tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp], npt.NDArray[np.intp]]
-    | tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp], npt.NDArray[np.int64]]
     | tuple[
         npt.NDArray[NpGeneric],
         npt.NDArray[np.intp],
         npt.NDArray[np.intp],
-        npt.NDArray[np.int64],
+        npt.NDArray[np.intp],
     ]
 ):
     """Like np.unique(), but can also return a backmap array.
@@ -1193,7 +1278,7 @@ def unique(
         aux.append(backmap)
     if return_inverse:
         # The backmap wasn't taken into account by unique_consecutive(), so we
-        # have to do it ourselves.
+        # have to apply it to the inverse mapping here.
         backmap_inv = swap_idcs_vals(backmap)  # [N_axis]
         aux.append(out[1][backmap_inv])
     if return_counts:
@@ -1202,6 +1287,49 @@ def unique(
     if aux:
         return out[0], *aux
     return out
+
+
+# ############################ CONSECUTIVE SEGMENTS ############################
+
+
+def counts_segments_ints(
+    x: npt.NDArray[np.integer], high: int
+) -> npt.NDArray[np.intp]:
+    """Count the frequency of each consecutive value, with values in [0, high).
+
+    Args:
+        x: The array for which to count the frequency of each integer value.
+            Consecutive values in x are grouped together. It is assumed that
+            every segment has a unique integer value that is not present in any
+            other segment. The values in x must be in the range [0, high).
+            Shape: [N]
+        high: The highest value to include in the count (exclusive). May be
+            higher than the maximum value in x, in which case the remaining
+            values will be set to 0.
+
+    Returns:
+        The frequency of each element in x in range [0, high).
+            Shape: [high]
+
+    Examples:
+    >>> x = np.array([4, 4, 4, 2, 2, 8, 3, 3, 3, 3])
+
+    >>> freqs = counts_segments_ints(x, 10)
+    >>> freqs
+    array([0, 0, 2, 4, 3, 0, 0, 0, 1, 0])
+    """
+    if x.ndim != 1:
+        raise ValueError("x must be a 1D array.")
+
+    freqs = np.zeros(high, dtype=np.intp)
+    uniques, counts = unique_consecutive(
+        x, return_counts=True, axis=0
+    )  # [U], [U]
+    freqs[uniques] = counts
+    return freqs
+
+
+# ################################## GROUPBY ###################################
 
 
 def groupby(
