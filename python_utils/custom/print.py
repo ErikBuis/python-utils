@@ -1,8 +1,29 @@
 from __future__ import annotations
 
 import shutil
+import unicodedata
 from collections.abc import Iterable, Sequence
 from typing import Any, Literal, overload
+
+
+def to_ascii(text: str) -> str:
+    """Convert Unicode string to plain ASCII.
+
+    - Removes accents (e.g. "é" → "e").
+    - Simplifies compatibility chars (e.g. "ﬃ" → "ffi").
+    - Drops any non-ASCII characters (e.g. "ß" → "").
+
+    Args:
+        text: The input Unicode string.
+
+    Returns:
+        The converted ASCII string.
+    """
+    # Normalize with compatibility decomposition.
+    normalized = unicodedata.normalize("NFKD", text)
+
+    # Encode to ASCII, ignoring non-ASCII leftovers.
+    return normalized.encode("ascii", "ignore").decode("ascii")
 
 
 def stringify(
