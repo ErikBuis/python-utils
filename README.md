@@ -1,6 +1,11 @@
 > Author: [Erik Buis](https://github.com/ErikBuis) \
 > Email: [ebbuis@gmail.com](mailto:ebbuis@gmail.com) \
-> Date of creation of this file: 8 March, 2024
+> Date of creation of this file: 8 March, 2024 \
+> Licence: Apache Licence 2.0
+
+
+# Acknowledgments
+Special thanks to [NEO BV](https://www.neo.nl) for sponsoring the development of this repository by allowing work on this open-source project during company hours. Their support in the ongoing development efforts is greatly appreciated and has been valuable in maturing this project to its current state.
 
 
 # Utility functions
