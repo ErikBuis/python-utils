@@ -1336,7 +1336,7 @@ def groupby(
     keys: npt.NDArray[NpGeneric1],
     vals: npt.NDArray[NpGeneric2],
     stable: bool = False,
-) -> Generator[tuple[NpGeneric1, npt.NDArray[NpGeneric2]]]:
+) -> Generator[tuple[npt.NDArray[NpGeneric1], npt.NDArray[NpGeneric2]]]:
     """Group values by keys.
 
     Args:

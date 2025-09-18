@@ -1514,7 +1514,7 @@ def counts_segments_ints(x: torch.Tensor, high: int) -> torch.Tensor:
 
 def groupby(
     keys: torch.Tensor, vals: torch.Tensor, stable: bool = False
-) -> Iterator[tuple[Any, torch.Tensor]]:
+) -> Iterator[tuple[torch.Tensor, torch.Tensor]]:
     """Group values by keys.
 
     Args:
