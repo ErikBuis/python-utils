@@ -1341,25 +1341,26 @@ def groupby(
 
     Args:
         keys: The keys to group by.
-            Shape: [N]
-        vals: The values to group.
             Shape: [N, *]
+        vals: The values to group.
+            Shape: [N, **]
         stable: Whether to preserve the order of vals that have the same key. If
             False (default), an unstable sort is used, which is faster.
 
     Yields:
         Tuples containing:
         - A unique key. Will be yielded in sorted order.
+            Shape: [*]
         - The values that correspond to the key.
-            Shape: [N_key, *]
+            Shape: [N_key, **]
     """
     # Create a mapping from keys to values.
     keys_unique, backmap, counts = unique(
         keys, return_backmap=True, return_counts=True, axis=0, stable=stable
-    )  # [E_unique], [E], [E_unique]
+    )  # [U, *], [N], [U]
     vals = vals[backmap]  # rearrange values to match keys_unique
-    end_slices = np.cumsum(counts, axis=0)  # [E_unique]
-    start_slices = end_slices - counts  # [E_unique]
+    end_slices = np.cumsum(counts, axis=0)  # [U]
+    start_slices = end_slices - counts  # [U]
 
     # Map each key to its corresponding values.
     for key, start_slice, end_slice in zip(
