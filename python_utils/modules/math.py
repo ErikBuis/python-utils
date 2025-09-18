@@ -316,15 +316,15 @@ def gaussian(x: float, mu: float, sigma: float) -> float:
     return exp(-(((x - mu) / sigma) ** 2) / 2) / (sigma * sqrt(2 * pi))
 
 
-def monotonic_hyperbolic_rescaling(x: float, r: float) -> float:
-    """Monotonically rescale a number using a hyperbolic function.
+def monotonic_linear_fractional_rescaling(x: float, r: float) -> float:
+    """Monotonically rescale a number using a linear fractional function.
 
-    The function is made to be useful for rescaling numbers between 0 and 1,
-    and it will always return a number between 0 and 1.
+    The function is made to be useful for rescaling numbers between 0 and 1, and
+    it will always return a number between 0 and 1.
 
     The inverse of the function is:
-    >>> y = monotonic_hyperbolic_rescaling(x, r)
-    >>> y_inv = monotonic_hyperbolic_rescaling(y, -r)
+    >>> y = monotonic_linear_fractional_rescaling(x, r)
+    >>> y_inv = monotonic_linear_fractional_rescaling(y, -r)
     >>> assert x - y_inv < 1e-6
     True
 
