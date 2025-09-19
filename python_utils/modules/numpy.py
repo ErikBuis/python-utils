@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Generator
+from collections.abc import Iterator
 from typing import Any, Generic, Literal, TypeVar, overload
 
 import numpy as np
@@ -1336,7 +1336,7 @@ def groupby(
     keys: npt.NDArray[NpGeneric1],
     vals: npt.NDArray[NpGeneric2],
     stable: bool = False,
-) -> Generator[tuple[npt.NDArray[NpGeneric1], npt.NDArray[NpGeneric2]]]:
+) -> Iterator[tuple[npt.NDArray[NpGeneric1], npt.NDArray[NpGeneric2]]]:
     """Group values by keys.
 
     Args:
