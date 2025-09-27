@@ -1766,6 +1766,7 @@ def unique_consecutive_batched(
         )  # [B, max(U_bs)], [B]
 
     # Find the unique values.
+    replace_padding_batched(starts, U_bs, in_place=True)
     uniques = index_select_batched(
         x, dim, starts
     )  # [B, N_0, ..., N_{dim-1}, max(U_bs), N_{dim+1}..., N_{D-1}]
