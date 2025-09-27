@@ -11,6 +11,7 @@ T = TypeVar("T")
 NpGeneric = TypeVar("NpGeneric", bound=np.generic)
 NpGeneric1 = TypeVar("NpGeneric1", bound=np.generic)
 NpGeneric2 = TypeVar("NpGeneric2", bound=np.generic)
+NpNumber = TypeVar("NpNumber", bound=np.number)
 NpInteger = TypeVar("NpInteger", bound=np.integer)
 
 
@@ -32,8 +33,8 @@ def cumsum_start_0(
     a: npt.ArrayLike,
     axis: int | None = None,
     dtype: np.dtype | None = None,
-    out: npt.NDArray | None = None,
-) -> npt.NDArray:
+    out: npt.NDArray[NpNumber] | None = None,
+) -> npt.NDArray[NpNumber]:
     """Like np.cumsum(), but adds a zero at the start of the array.
 
     Args:
@@ -69,19 +70,19 @@ def cumsum_start_0(
         idx[axis] = 0  # type: ignore
         out[tuple(idx)] = 0
         idx[axis] = slice(1, None)
-        np.cumsum(a, axis=axis, dtype=dtype, out=out[tuple(idx)])
+        a.cumsum(axis=axis, dtype=dtype, out=out[tuple(idx)])
         return out
 
     shape = list(a.shape)
     shape[axis] = 1
     zeros = np.zeros(shape, dtype=dtype)
-    cumsum = np.cumsum(a, axis=axis, dtype=dtype)
+    cumsum = a.cumsum(axis=axis, dtype=dtype)
     return np.concat([zeros, cumsum], axis=axis)
 
 
 def unequal_seqs_add(
-    a: npt.NDArray[NpGeneric], b: npt.NDArray[NpGeneric]
-) -> npt.NDArray[NpGeneric]:
+    a: npt.NDArray[np.number], b: npt.NDArray[np.number]
+) -> npt.NDArray[np.number]:
     """Add two arrays, and adjust the size of the result if necessary.
 
     Args:
@@ -98,7 +99,7 @@ def unequal_seqs_add(
         a = np.pad(a, (0, len(b) - len(a)))
     elif len(a) > len(b):
         b = np.pad(b, (0, len(a) - len(b)))
-    return a + b  # type: ignore
+    return a + b
 
 
 def init_normalized_histogram(
@@ -233,13 +234,15 @@ def swap_idcs_vals_duplicates(
 
     # Believe it or not, this O(n log n) algorithm is actually faster than a
     # native implementation that uses a Python for loop with complexity O(n).
-    return np.argsort(x, stable=stable).astype(x.dtype)
+    return x.argsort(stable=stable).astype(x.dtype)  # type: ignore
 
 
 # ############################ CONSECUTIVE SEGMENTS ############################
 
 
-def starts_segments(x: npt.NDArray, axis: int = 0) -> npt.NDArray[np.intp]:
+def starts_segments(
+    x: npt.NDArray[np.generic], axis: int = 0
+) -> npt.NDArray[np.intp]:
     """Find the start index of each consecutive segment.
 
     Args:
@@ -265,14 +268,15 @@ def starts_segments(x: npt.NDArray, axis: int = 0) -> npt.NDArray[np.intp]:
         np.concat(
             [
                 np.ones(1, dtype=np.bool_),
-                np.any(
+                (
                     x.take(
                         np.arange(0, N_axis - 1), axis
                     )  # [N_0, ..., N_axis - 1, ..., N_{D-1}]
                     != x.take(
                         np.arange(1, N_axis), axis
-                    ),  # [N_0, ..., N_axis - 1, ..., N_{D-1}]
-                    axis=tuple(i for i in range(x.ndim) if i != axis),
+                    )  # [N_0, ..., N_axis - 1, ..., N_{D-1}]
+                ).any(
+                    axis=tuple(i for i in range(x.ndim) if i != axis)
                 ),  # [N_axis - 1]
             ],
             axis=0,
@@ -287,20 +291,24 @@ def starts_segments(x: npt.NDArray, axis: int = 0) -> npt.NDArray[np.intp]:
 
 @overload
 def counts_segments(  # type: ignore
-    x: npt.NDArray, axis: int = 0, return_starts: Literal[False] = ...
+    x: npt.NDArray[np.generic],
+    axis: int = 0,
+    return_starts: Literal[False] = ...,
 ) -> npt.NDArray[np.intp]:
     pass
 
 
 @overload
 def counts_segments(
-    x: npt.NDArray, axis: int = 0, return_starts: Literal[True] = ...
+    x: npt.NDArray[np.generic],
+    axis: int = 0,
+    return_starts: Literal[True] = ...,
 ) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]:
     pass
 
 
 def counts_segments(
-    x: npt.NDArray, axis: int = 0, return_starts: bool = False
+    x: npt.NDArray[np.generic], axis: int = 0, return_starts: bool = False
 ) -> npt.NDArray[np.intp] | tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]:
     """Count the length of each consecutive segment.
 
@@ -350,7 +358,7 @@ def counts_segments(
 
 @overload
 def outer_indices_segments(  # type: ignore
-    x: npt.NDArray,
+    x: npt.NDArray[np.generic],
     axis: int = 0,
     return_counts: Literal[False] = ...,
     return_starts: Literal[False] = ...,
@@ -360,7 +368,7 @@ def outer_indices_segments(  # type: ignore
 
 @overload
 def outer_indices_segments(
-    x: npt.NDArray,
+    x: npt.NDArray[np.generic],
     axis: int = 0,
     return_counts: Literal[True] = ...,
     return_starts: Literal[False] = ...,
@@ -370,7 +378,7 @@ def outer_indices_segments(
 
 @overload
 def outer_indices_segments(
-    x: npt.NDArray,
+    x: npt.NDArray[np.generic],
     axis: int = 0,
     return_counts: Literal[False] = ...,
     return_starts: Literal[True] = ...,
@@ -380,7 +388,7 @@ def outer_indices_segments(
 
 @overload
 def outer_indices_segments(
-    x: npt.NDArray,
+    x: npt.NDArray[np.generic],
     axis: int = 0,
     return_counts: Literal[True] = ...,
     return_starts: Literal[True] = ...,
@@ -389,7 +397,7 @@ def outer_indices_segments(
 
 
 def outer_indices_segments(
-    x: npt.NDArray,
+    x: npt.NDArray[np.generic],
     axis: int = 0,
     return_counts: bool = False,
     return_starts: bool = False,
@@ -436,8 +444,8 @@ def outer_indices_segments(
         counts = counts_segments(x, axis=axis)  # [S]
 
     # Calculate the outer indices.
-    outer_idcs = np.repeat(
-        np.arange(counts.shape[0], dtype=np.intp), counts, axis=0  # [S]
+    outer_idcs = np.arange(counts.shape[0], dtype=np.intp).repeat(
+        counts, axis=0
     )  # [N_axis]
 
     if return_counts and return_starts:
@@ -451,7 +459,7 @@ def outer_indices_segments(
 
 @overload
 def inner_indices_segments(  # type: ignore
-    x: npt.NDArray,
+    x: npt.NDArray[np.generic],
     axis: int = 0,
     return_counts: Literal[False] = ...,
     return_starts: Literal[False] = ...,
@@ -461,7 +469,7 @@ def inner_indices_segments(  # type: ignore
 
 @overload
 def inner_indices_segments(
-    x: npt.NDArray,
+    x: npt.NDArray[np.generic],
     axis: int = 0,
     return_counts: Literal[True] = ...,
     return_starts: Literal[False] = ...,
@@ -471,7 +479,7 @@ def inner_indices_segments(
 
 @overload
 def inner_indices_segments(
-    x: npt.NDArray,
+    x: npt.NDArray[np.generic],
     axis: int = 0,
     return_counts: Literal[False] = ...,
     return_starts: Literal[True] = ...,
@@ -481,7 +489,7 @@ def inner_indices_segments(
 
 @overload
 def inner_indices_segments(
-    x: npt.NDArray,
+    x: npt.NDArray[np.generic],
     axis: int = 0,
     return_counts: Literal[True] = ...,
     return_starts: Literal[True] = ...,
@@ -490,7 +498,7 @@ def inner_indices_segments(
 
 
 def inner_indices_segments(
-    x: npt.NDArray,
+    x: npt.NDArray[np.generic],
     axis: int = 0,
     return_counts: bool = False,
     return_starts: bool = False,
@@ -554,7 +562,7 @@ def inner_indices_segments(
 
 
 def lexsort(
-    keys: npt.NDArray | tuple[npt.NDArray, ...],
+    keys: npt.NDArray[np.generic] | tuple[npt.NDArray[np.generic], ...],
     axis: int = -1,
     stable: bool = False,
 ) -> npt.NDArray[np.intp]:
@@ -619,7 +627,7 @@ def lexsort(
             )  # [N_0, ..., N_axis, ..., N_{D-1}]
 
             # Sort the integers.
-            return np.argsort(idcs, axis=axis, stable=stable)
+            return idcs.argsort(axis=axis, stable=stable)
         except ValueError:
             # Overflow would occur when converting to integers.
             pass
@@ -639,7 +647,7 @@ def lexsort_along(
     much faster.
     >>> np.stack(
     ...     sorted(
-    ...         [np.take(x, i, axis=axis) for i in range(x.shape[axis])],
+    ...         map(np.unsqueeze, np.split(x, x.shape[axis], axis=axis)),
     ...         key=tuple,
     ...     ),
     ...     axis=axis,
@@ -681,7 +689,7 @@ def lexsort_along(
     array([2, 3, 0, 1]))
 
     >>> # Get the lexicographically sorted version of x:
-    >>> x.take(backmap)
+    >>> x.take(backmap, axis)
     array([[1, 2],
            [1, 3],
            [2, 1],
@@ -1336,7 +1344,10 @@ def groupby(
     keys: npt.NDArray[NpGeneric1],
     vals: npt.NDArray[NpGeneric2],
     stable: bool = False,
-) -> Iterator[tuple[npt.NDArray[NpGeneric1], npt.NDArray[NpGeneric2]]]:
+) -> (
+    Iterator[tuple[npt.NDArray[NpGeneric1], npt.NDArray[NpGeneric2]]]
+    | Iterator[tuple[NpGeneric1, npt.NDArray[NpGeneric2]]]
+):
     """Group values by keys.
 
     Args:
@@ -1359,7 +1370,7 @@ def groupby(
         keys, return_backmap=True, return_counts=True, axis=0, stable=stable
     )  # [U, *], [N], [U]
     vals = vals[backmap]  # rearrange values to match keys_unique
-    end_slices = np.cumsum(counts, axis=0)  # [U]
+    end_slices = counts.cumsum(axis=0)  # [U]
     start_slices = end_slices - counts  # [U]
 
     # Map each key to its corresponding values.

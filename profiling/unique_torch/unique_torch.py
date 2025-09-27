@@ -18,7 +18,7 @@ def approach_1(
     x: torch.Tensor, dim: int
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Approach 1: Use PyTorch's built-in unique function."""
-    return torch.unique(x, return_inverse=True, return_counts=True, dim=dim)
+    return x.unique(return_inverse=True, return_counts=True, dim=dim)
 
 
 def approach_2(
@@ -66,8 +66,8 @@ def main(args: argparse.Namespace) -> None:
         approach_1,
         approach_2,
         "PyTorch unique comparison",
-        "PyTorch's torch.unique",
-        "Custom unique function",
+        "PyTorch's unique",
+        "Custom unique",
         "Amount of rows",
         "Amount of columns",
     )

@@ -130,7 +130,7 @@ def cumsum_start_0(
     shape = list(t.shape)
     shape[dim] = 1
     zeros = torch.zeros(shape, device=device, dtype=dtype)
-    cumsum = torch.cumsum(t, dim=dim, dtype=dtype)
+    cumsum = t.cumsum(dim=dim, dtype=dtype)
     return torch.concat([zeros, cumsum], dim=dim)
 
 
@@ -171,11 +171,13 @@ def interp(
         if period <= 0:
             raise ValueError("period must be positive.")
 
-        xp, sorted_idcs = torch.sort(xp % period)
-        fp = fp[sorted_idcs]
+        xp_mod = xp % period
+        sorted_idcs = xp_mod.argsort()  # [M]
+        xp = xp_mod[sorted_idcs]  # [M]
+        fp = fp[sorted_idcs]  # [M]
 
     # Check if xp is strictly increasing.
-    if not torch.all(torch.diff(xp) > 0):
+    if not (xp.diff() > 0).all():
         raise ValueError(
             "xp must be strictly increasing along the last dimension."
         )
@@ -185,8 +187,8 @@ def interp(
     left_idx = right_idx - 1  # [N]
 
     # Clamp indices to valid range (we will handle the edges later).
-    left_idx = torch.clamp(left_idx, min=0, max=M - 1)  # [N]
-    right_idx = torch.clamp(right_idx, min=0, max=M - 1)  # [N]
+    left_idx = left_idx.clamp(min=0, max=M - 1)  # [N]
+    right_idx = right_idx.clamp(min=0, max=M - 1)  # [N]
 
     # Gather neighbour values.
     x_left = xp[left_idx]  # [N]
@@ -325,22 +327,22 @@ def ravel_multi_index(
 
     if mode == "raise":
         # Raise an error if the multi-index is out of bounds.
-        if not torch.all((multi_index >= 0) & (multi_index < dims)):
+        if not ((multi_index >= 0) & (multi_index < dims)).all():
             raise ValueError("invalid entry in coordinates tensor")
     elif mode == "wrap":
         # Wrap around the multi-index.
         multi_index = multi_index % dims
     elif mode == "clip":
         # Clip the multi-index to the range.
-        multi_index = torch.clamp(
-            multi_index, torch.tensor(0, device=device), dims - 1
+        multi_index = multi_index.clamp(
+            torch.tensor(0, device=device), dims - 1
         )
     else:
         raise ValueError(
             f"clipmode must be one of 'clip', 'raise', or 'wrap' (got '{mode}')"
         )
 
-    return torch.sum(multi_index * factors, dim=0)  # [N_0, ..., N_{D-1}]
+    return (multi_index * factors).sum(dim=0)  # [N_0, ..., N_{D-1}]
 
 
 # ######################## ADVANCED ARRAY MANIPULATION #########################
@@ -411,7 +413,7 @@ def swap_idcs_vals_duplicates(
 
     # Believe it or not, this O(n log n) algorithm is actually faster than a
     # native implementation that uses a Python for loop with complexity O(n).
-    return torch.argsort(x, stable=stable).to(x.dtype)
+    return x.argsort(stable=stable).to(x.dtype)
 
 
 # ############################ CONSECUTIVE SEGMENTS ############################
@@ -443,14 +445,15 @@ def starts_segments(x: torch.Tensor, dim: int = 0) -> torch.Tensor:
         torch.concat(
             [
                 torch.ones(1, device=x.device, dtype=torch.bool),
-                torch.any(
+                (
                     x.index_select(
                         dim, torch.arange(0, N_dim - 1, device=x.device)
                     )  # [N_0, ..., N_dim - 1, ..., N_{D-1}]
                     != x.index_select(
                         dim, torch.arange(1, N_dim, device=x.device)
-                    ),  # [N_0, ..., N_dim - 1, ..., N_{D-1}]
-                    dim=tuple(i for i in range(x.ndim) if i != dim),
+                    )  # [N_0, ..., N_dim - 1, ..., N_{D-1}]
+                ).any(
+                    dim=tuple(i for i in range(x.ndim) if i != dim)
                 ),  # [N_dim - 1]
             ],
             dim=0,
@@ -460,7 +463,7 @@ def starts_segments(x: torch.Tensor, dim: int = 0) -> torch.Tensor:
     )  # [N_dim]
 
     # Find the start of each consecutive segment.
-    return is_change.nonzero(as_tuple=True)[0].to(torch.int32)  # [S]
+    return is_change.nonzero(as_tuple=True)[0].int()  # [S]
 
 
 @overload
@@ -517,7 +520,7 @@ def counts_segments(
 
     # Find the count of each consecutive segment.
     counts = (
-        torch.diff(starts_with_N_dim, dim=0)  # [S]
+        starts_with_N_dim.diff(dim=0)  # [S]
         if N_dim > 0
         else torch.empty(0, device=x.device, dtype=torch.int32)
     )  # [S]
@@ -615,12 +618,10 @@ def outer_indices_segments(
         counts = counts_segments(x, dim=dim)  # [S]
 
     # Calculate the outer indices.
-    outer_idcs = torch.repeat_interleave(
-        torch.arange(
-            counts.shape[0], device=x.device, dtype=torch.int32
-        ),  # [S]
-        counts,
-        dim=0,
+    outer_idcs = torch.arange(
+        counts.shape[0], device=x.device, dtype=torch.int32
+    ).repeat_interleave(  # [S]
+        counts, dim=0
     )  # [N_dim]
 
     if return_counts and return_starts:
@@ -801,19 +802,19 @@ def lexsort(
     ):
         # Compute the minimum and maximum values for each key.
         dims_flat = tuple(range(1, keys.ndim))
-        maxs = torch.amax(keys, dim=dims_flat, keepdim=True)  # [K, 1, ..., 1]
-        mins = torch.amin(keys, dim=dims_flat, keepdim=True)  # [K, 1, ..., 1]
+        maxs = keys.amax(dim=dims_flat, keepdim=True)  # [K, 1, ..., 1]
+        mins = keys.amin(dim=dims_flat, keepdim=True)  # [K, 1, ..., 1]
         extents = (maxs - mins + 1).squeeze(dim=dims_flat)  # [K]
         keys_dense = keys - mins  # [K, N_0, ..., N_dim, ..., N_{D-1}]
 
         try:
             # Convert the tuples to single integers.
             idcs = ravel_multi_index(
-                keys_dense.to(torch.int64), extents, mode="raise", order="F"
+                keys_dense.long(), extents, mode="raise", order="F"
             )  # [N_0, ..., N_dim, ..., N_{D-1}]
 
             # Sort the integers.
-            return torch.argsort(idcs, dim=dim, stable=stable)
+            return idcs.argsort(dim=dim, stable=stable)
         except ValueError:
             # Overflow would occur when converting to integers.
             pass
@@ -837,7 +838,7 @@ def lexsort_along(
     >>> torch.stack(
     ...     sorted(
     ...         x.unbind(dim),
-    ...         key=lambda t: tuple(t),
+    ...         key=tuple,
     ...     ),
     ...     dim=dim,
     ... )
@@ -1537,7 +1538,7 @@ def groupby(
         keys, return_backmap=True, return_counts=True, dim=0, stable=stable
     )  # [U, *], [N], [U]
     vals = vals[backmap]  # rearrange values to match keys_unique
-    end_slices = torch.cumsum(counts, dim=0)  # [U]
+    end_slices = counts.cumsum(dim=0)  # [U]
     start_slices = end_slices - counts  # [U]
 
     # Map each key to its corresponding values.

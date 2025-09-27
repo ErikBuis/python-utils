@@ -195,7 +195,7 @@ def voronoi_constrain_to_rect(
     # If a ridge contains one of the points with index 0 <= i < P', then it
     # should be kept. Otherwise, it should be discarded.
     is_ridge_point_selected = vor.ridge_points < len(points)
-    is_ridge_selected = np.any(is_ridge_point_selected, axis=1)
+    is_ridge_selected = is_ridge_point_selected.any(axis=1)
 
     # If a ridge contains one of the points that won't be kept, then it should
     # be set to -1.

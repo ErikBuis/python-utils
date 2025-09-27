@@ -136,8 +136,8 @@ class _ModelWrapper(BaseEstimator):
             The R-squared score.
         """
         y_preds = self.predict(x)
-        residual_sum_of_squares = np.sum((y - y_preds) ** 2)
-        total_sum_of_squares = np.sum((y - np.mean(y)) ** 2)
+        residual_sum_of_squares = ((y - y_preds) ** 2).sum()
+        total_sum_of_squares = ((y - y.mean()) ** 2).sum()
         return 1 - residual_sum_of_squares / total_sum_of_squares
 
 
@@ -272,12 +272,12 @@ def bootstrap_confidence_intervals(
     # Calculate weights for each neighbor based on distance.
     weights = np.exp(-20 * dists**2)  # [M, K]
     weights = np.where(weights >= 1e-10, weights, 1e-10)  # avoid zero weights
-    weights /= np.sum(weights, axis=1, keepdims=True)  # normalize weights
+    weights /= weights.sum(axis=1, keepdims=True)  # normalize weights
 
     # Perform local residual resampling for each x_query point.
     # This is done in advance to avoid repeated work in the bootstrapping step.
     residuals_rearranged = np.take_along_axis(
-        np.expand_dims(residuals, 0), nbr_idcs, axis=1
+        np.expand_dims(residuals, 0), nbr_idcs, 1
     )  # [M, K]
     local_residuals = np.stack([
         rng.choice(
@@ -361,15 +361,15 @@ def bootstrap_confidence_intervals_abs(
     # probability density for the distance being 0 is highest. We have to add a
     # parameter to the function to make it compatible with the `curve_fit`
     # function, but it will not be used in the fitting process.
-    model_func = lambda x, a: np.zeros_like(x)  # noqa: E731
+    model_func = lambda x, _: np.zeros_like(x)  # noqa: E731
 
     # Duplicate the data on the negative side of the x-axis, since we want to
     # calculate the confidence intervals around the x-axis. Another way to look
     # at this is that we artificially generate samples that are a negative
     # distance away from the ground truth, which is not possible in reality,
     # but does allow us to calculate confidence intervals around the x-axis.
-    x_data = np.concatenate([x_data, x_data])  # [2 * N]
-    y_data = np.concatenate([y_data, -y_data])  # [2 * N]
+    x_data = np.concat([x_data, x_data])  # [2 * N]
+    y_data = np.concat([y_data, -y_data])  # [2 * N]
 
     # Since we are not fitting a model, we should set the `maxfev` and
     # `max_trials` parameters to 1. We will warn the user if they tried to set
@@ -410,7 +410,7 @@ def bootstrap_confidence_intervals_abs(
 
     # Take the mean of the lower and upper bounds of the confidence intervals.
     # This is done to get a single bound for each confidence level.
-    return list(np.mean(np.abs(y_intervals), axis=1))  # C x [M]
+    return list(np.abs(y_intervals).mean(axis=1))  # C x [M]
 
 
 def remap_unseen_x_to_y_intervals(
@@ -539,7 +539,7 @@ def main(args: argparse.Namespace) -> None:
         return a * np.exp(b * x)
 
     # Set the random seed for reproducibility.
-    np.random.seed(69)
+    rng = np.random.default_rng(69)
 
     # Generate artificial datasets.
     N = 1000
@@ -550,28 +550,28 @@ def main(args: argparse.Namespace) -> None:
     # Dataset 1: Asymmetric residuals.
     true_y1 = linear(x, 1.0, 10.0)
     noise1 = np.where(
-        np.random.randn(N) > 0,
-        np.abs(np.random.normal(0, 0.5, N)),
-        -np.abs(np.random.normal(0, 3.0, N)),
+        rng.standard_normal(N) > 0,
+        np.abs(rng.normal(0, 0.5, N)),
+        -np.abs(rng.normal(0, 3.0, N)),
     )
     y1 = true_y1 + noise1
 
     # Dataset 2: Exponential model.
     true_y2 = exponential(x, 1.0, 0.3)
-    noise2 = np.random.normal(0, 5.0, size=N)
+    noise2 = rng.normal(0, 5.0, size=N)
     y2 = true_y2 + noise2
 
     # Dataset 3: Heteroscedastic noise.
     true_y3 = linear(x, -1.0, 20.0)
-    noise3 = np.random.normal(0, 0.2 + 0.4 * x, size=N)
+    noise3 = rng.normal(0, 0.2 + 0.4 * x, size=N)
     y3 = true_y3 + noise3
 
     # Dataset 4: Assymetric and heteroscedastic noise, exponential model.
     true_y4 = exponential(x, 1.0, 0.3)
     noise4 = np.where(
-        np.random.randn(N) > 0,
-        np.abs(np.random.normal(0, 3.0 + 1.0 * x, N)),
-        -np.abs(np.random.normal(0, 0.5 + 0.4 * x, N)),
+        rng.standard_normal(N) > 0,
+        np.abs(rng.normal(0, 3.0 + 1.0 * x, N)),
+        -np.abs(rng.normal(0, 0.5 + 0.4 * x, N)),
     )
     y4 = true_y4 + noise4
 

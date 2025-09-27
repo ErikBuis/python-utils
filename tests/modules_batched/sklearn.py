@@ -57,7 +57,7 @@ class TestRansacBatched(unittest.TestCase):
 
             # Normal vector of the line.
             n_lines = torch.stack(
-                [torch.cos(theta_sample), torch.sin(theta_sample)], dim=1
+                [theta_sample.cos(), theta_sample.sin()], dim=1
             )  # [L_b, 2]
             # Point on the line closest to the origin.
             v_lines = r_sample.unsqueeze(1) * n_lines  # [L_b, 2]

@@ -20,7 +20,7 @@ class TestGetMatrixRotateVecAToVecB(unittest.TestCase):
 
     def __generate_random_unit_vec(self) -> torch.Tensor:
         v = torch.randn(3, dtype=self.DTYPE)
-        return v / torch.norm(v)
+        return v / v.norm()
 
     def __transform_points(
         self, R: torch.Tensor, x: torch.Tensor

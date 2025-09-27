@@ -35,7 +35,7 @@ def rand_float_decreasingly_likely(*args: Any, **kwargs: Any) -> torch.Tensor:
     Returns:
         A tensor of random floats.
     """
-    # Note: R = -torch.log2(1 - torch.rand(1)) will generate a random float R
+    # Note: R = -(1 - torch.rand(1)).log2() will generate a random float R
     # with an exponentially decreasing probability of increasing. This is
     # because the probability of R is half that of R + 1, which is half that of
     # R + 2, and so on. The above formula is equivalent to:
@@ -51,7 +51,7 @@ def rand_float_decreasingly_likely(*args: Any, **kwargs: Any) -> torch.Tensor:
     # This implies that if you multiply R by a constant c, the expected value
     # will be c. This is useful for generating random numbers with a specific
     # expected value.
-    return -torch.log2(1 - torch.rand(*args, **kwargs))
+    return -(1 - torch.rand(*args, **kwargs)).log2()
 
 
 def rand_int_decreasingly_likely(*args: Any, **kwargs: Any) -> torch.Tensor:

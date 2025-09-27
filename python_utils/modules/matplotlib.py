@@ -160,7 +160,7 @@ def get_scalar_mappable_middle_white(
         color_values=(0,) if zero_is_white else None,
         use_log_scale=use_log_scale,
         linear_width=(
-            np.sort(np.abs(values))[int(len(values) * 0.1)]
+            np.sort(np.abs(values), axis=0)[int(len(values) * 0.1)]
             if use_log_scale and zero_is_white
             else None
         ),
@@ -199,7 +199,7 @@ class Arrow3D(FancyArrowPatch):
         )
         self.set_positions((xs[0], ys[0]), (xs[1], ys[1]))
 
-        return np.min(zs)
+        return zs.min()
 
 
 def arrow3D(

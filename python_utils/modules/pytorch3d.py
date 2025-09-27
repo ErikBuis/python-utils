@@ -188,7 +188,7 @@ class Transform3D:
         dtype = self._matrix.dtype
         device = self._matrix.device
         new = Transform3D(device=device, dtype=dtype)
-        new._matrix = torch.inverse(self._matrix)
+        new._matrix = self._matrix.inverse()
         return new
 
 
@@ -441,8 +441,8 @@ class RotateAxisAngle(Rotate):
         B = len(angle)
 
         # Create the rotation matrix.
-        c = torch.cos(angle)  # [B]
-        s = torch.sin(angle)  # [B]
+        c = angle.cos()  # [B]
+        s = angle.sin()  # [B]
         zeros = torch.zeros(B, device=device, dtype=dtype)
         ones = torch.ones(B, device=device, dtype=dtype)
         if axis == "X":
@@ -619,8 +619,8 @@ class SurfaceToSurface(Transform3D):
         to_n0, to_n1, to_n2, to_d = to_surface.unbind(-1)  # [B], ...
         from_n = torch.stack([from_n0, from_n1, from_n2], dim=1)  # [B, 3]
         to_n = torch.stack([to_n0, to_n1, to_n2], dim=1)  # [B, 3]
-        from_n = from_n / torch.norm(from_n, dim=1, keepdim=True)  # [B, 3]
-        to_n = to_n / torch.norm(to_n, dim=1, keepdim=True)  # [B, 3]
+        from_n = from_n / from_n.norm(dim=1, keepdim=True)  # [B, 3]
+        to_n = to_n / to_n.norm(dim=1, keepdim=True)  # [B, 3]
 
         # First translate the points from from_surface to the origin.
         # from_v is the point on from_surface closest to the origin.
@@ -681,10 +681,8 @@ class SurfaceToSurface(Transform3D):
         device = device if device is not None else from_n.device
         B = len(from_n)
         zeros = torch.zeros(B, device=device, dtype=dtype)
-        u = torch.cross(from_n, to_n, dim=1)  # [B, 3]
-        c = torch.sum(from_n * to_n, dim=1, keepdim=True).unsqueeze(
-            2
-        )  # [B, 1, 1]
+        u = from_n.cross(to_n, dim=1)  # [B, 3]
+        c = (from_n * to_n).sum(dim=1, keepdim=True).unsqueeze(2)  # [B, 1, 1]
         v_x = torch.stack([
             torch.stack([zeros, -u[:, 2], u[:, 1]]),
             torch.stack([u[:, 2], zeros, -u[:, 0]]),

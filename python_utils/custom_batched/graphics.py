@@ -34,7 +34,7 @@ def xiaolin_wu_anti_aliasing_batched(
     device = x0.device
 
     # Determine if the line is steep.
-    steep = torch.abs(y1 - y0) > torch.abs(x1 - x0)  # [B]
+    steep = (y1 - y0).abs() > (x1 - x0).abs()  # [B]
 
     # Swap the x and y coordinates to ensure the line is not steep.
     x0, y0, x1, y1 = torch.where(

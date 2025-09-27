@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import random
 from typing import Any, cast
 
 import numpy as np
@@ -32,7 +31,7 @@ def approach_2(
     keys: npt.NDArray, values: npt.NDArray
 ) -> list[tuple[int, npt.NDArray]]:
     """Approach 2: Use custom groupby function."""
-    return list(groupby(keys, values))
+    return list(groupby(keys, values))  # type: ignore
 
 
 def map_to_inputs(
@@ -48,11 +47,11 @@ def map_to_inputs(
         Tuple containing positional args and keyword args for the algorithms.
     """
     # Set random seed for reproducibility.
-    random.seed(69)
+    rng = np.random.default_rng(69)
 
     # Generate a random keys and values array.
-    keys = np.random.randint(0, keys_range, size=(amount_elements,))
-    values = np.random.randint(0, 100, size=(amount_elements,))
+    keys = rng.integers(0, keys_range, size=(amount_elements,))
+    values = rng.integers(0, 100, size=(amount_elements,))
 
     # Return the inputs.
     return (keys, values), {}

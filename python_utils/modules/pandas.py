@@ -70,8 +70,8 @@ def create_func_values2idcs(
         # remapping. However, this will cost more memory if the values are not
         # densely packed. Therefore, we only use this method if the values are
         # not larger than 100M (which will cost 800MB of RAM).
-        min_value = np.min(values_unique_int)
-        max_value = np.max(values_unique_int)
+        min_value = values_unique_int.min()
+        max_value = values_unique_int.max()
         if max_value - min_value + 1 <= 100_000_000:
             value2idx = np.empty(max_value - min_value + 1, dtype=np.int64)
             value2idx[values_unique_int - min_value] = np.arange(

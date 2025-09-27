@@ -52,10 +52,10 @@ def line_intersection_batched(
     """
     r1, theta1 = lines1
     r2, theta2 = lines2
-    s1 = torch.sin(theta1)  # [B]
-    s2 = torch.sin(theta2)  # [B]
-    c1 = torch.cos(theta1)  # [B]
-    c2 = torch.cos(theta2)  # [B]
+    s1 = theta1.sin()  # [B]
+    s2 = theta2.sin()  # [B]
+    c1 = theta1.cos()  # [B]
+    c2 = theta2.cos()  # [B]
     csc = 1 / (c2 * s1 - c1 * s2)  # [B]
     return csc.unsqueeze(1) * torch.stack(
         [-r1 * s2 + r2 * s1, r1 * c2 - r2 * c1], dim=1
@@ -89,7 +89,7 @@ def distance_line_to_point_batched(
             Shape: [B]
     """
     r, theta = lines
-    n_line = torch.stack([torch.cos(theta), torch.sin(theta)], dim=1)  # [B, 2]
+    n_line = torch.stack([theta.cos(), theta.sin()], dim=1)  # [B, 2]
     v_line = r.unsqueeze(1) * n_line  # [B, 2]
     return (n_line * (points - v_line)).sum(dim=1).abs()  # [B]
 

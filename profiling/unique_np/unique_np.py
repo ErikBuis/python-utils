@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import random
 from typing import Any
 
 import numpy as np
@@ -49,10 +48,10 @@ def map_to_inputs(
         Tuple containing positional args and keyword args for the algorithms.
     """
     # Set random seed for reproducibility.
-    random.seed(69)
+    rng = np.random.default_rng(69)
 
     # Generate a random array with the specified dimensions.
-    x = np.random.randint(0, 10, size=(amount_rows, amount_cols))
+    x = rng.integers(0, 10, size=(amount_rows, amount_cols))
 
     # Return the inputs.
     return (x,), {"axis": 0}
