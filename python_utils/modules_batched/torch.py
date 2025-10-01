@@ -420,6 +420,56 @@ def max_padding_batched(
     return values.amax(dim=1)  # [B, *]
 
 
+def any_padding_batched(
+    values: torch.Tensor, L_bs: torch.Tensor, is_padding_false: bool = False
+) -> torch.Tensor:
+    """Determine whether any value is True for each sample in the batch.
+
+    Args:
+        values: The values to check. Padded with False values if
+            is_padding_false is True. Otherwise, padding could be arbitrary.
+            Shape: [B, max(L_bs), *]
+        L_bs: The number of valid values in each sample.
+            Shape: [B]
+        is_padding_false: Whether the values are padded with False values
+            already. Setting this to True when the values are already padded
+            with False values can speed up the calculation.
+
+    Returns:
+        Whether any value is True for each sample.
+            Shape: [B, *]
+    """
+    if not is_padding_false:
+        values = replace_padding_batched(values, L_bs, padding_value=False)
+
+    return values.any(dim=1)  # [B, *]
+
+
+def all_padding_batched(
+    values: torch.Tensor, L_bs: torch.Tensor, is_padding_true: bool = False
+) -> torch.Tensor:
+    """Determine whether all values are True for each sample in the batch.
+
+    Args:
+        values: The values to check. Padded with True values if
+            is_padding_true is True. Otherwise, padding could be arbitrary.
+            Shape: [B, max(L_bs), *]
+        L_bs: The number of valid values in each sample.
+            Shape: [B]
+        is_padding_true: Whether the values are padded with True values
+            already. Setting this to True when the values are already padded
+            with True values can speed up the calculation.
+
+    Returns:
+        Whether all values are True for each sample.
+            Shape: [B, *]
+    """
+    if not is_padding_true:
+        values = replace_padding_batched(values, L_bs, padding_value=True)
+
+    return values.all(dim=1)  # [B, *]
+
+
 def interp_batched(
     x: torch.Tensor,
     xp: torch.Tensor,
