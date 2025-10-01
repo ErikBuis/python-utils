@@ -256,7 +256,7 @@ def to_tensor(
 
 
 def ravel_multi_index(
-    multi_index: torch.Tensor,
+    multi_index: torch.Tensor | tuple[torch.Tensor, ...] | list[torch.Tensor],
     dims: torch.Tensor,
     mode: Literal["raise", "wrap", "clip"] = "raise",
     order: Literal["C", "F"] = "C",
@@ -266,8 +266,8 @@ def ravel_multi_index(
     Converts a tuple of index tensors into a tensor of "flat" indices, applying
     boundary modes to the multi-index.
 
-    Warning: Unlike np.ravel_multi_index(), this function does not support
-    the mode being a tuple of modes.
+    Warning: Unlike np.ravel_multi_index(), this function does not support the
+    mode being a tuple of modes.
 
     Args:
         multi_index: A tensor of shape [K, N_0, ..., N_{D-1}] or a tuple
@@ -291,15 +291,15 @@ def ravel_multi_index(
     """
     device = dims.device
 
-    # Check for integer overflow.
-    if prod(dims.tolist()) > 2**63 - 1:
+    # Check for integer overflow (an int64 contains one sign bit).
+    if prod(dims.tolist()) > 2**63:
         raise ValueError(
             "invalid dims: tensor size defined by dims is larger than the"
             " maximum possible size."
         )
 
     # Convert the multi-index to a tensor if it is a tuple.
-    if isinstance(multi_index, tuple):
+    if isinstance(multi_index, tuple) or isinstance(multi_index, list):
         multi_index = torch.stack(multi_index)  # [K, N_0, ..., N_{D-1}]
 
     # Calculate the factors with which the multi-index is multiplied to convert
@@ -343,6 +343,63 @@ def ravel_multi_index(
         )
 
     return (multi_index * factors).sum(dim=0)  # [N_0, ..., N_{D-1}]
+
+
+def unravel_index(
+    indices: torch.Tensor, shape: torch.Tensor, order: Literal["C", "F"] = "C"
+) -> tuple[torch.Tensor, ...]:
+    """Like np.unravel_index(), but for PyTorch tensors.
+
+    Converts a tensor of "flat" indices into a tuple of coordinate tensors.
+
+    Note: I am aware that torch.unravel_index() exists, but that function does
+    not support the 'order' argument.
+
+    Args:
+        indices: A tensor of flat indices, each of which is an index into the
+            flattened version of an array of dimensions shape.
+            Shape: [N_0, ..., N_{D-1}]
+        shape: The shape of the array into which the indices point.
+            Shape: [K]
+        order: Determines whether the multi-index should be viewed as indexing
+            in row-major (C-style) or column-major (Fortran-style) order.
+
+    Returns:
+        Tuple of K coordinate tensors, each with the same shape as indices.
+            Length: K
+            Shape of inner tensors: [N_0, ..., N_{D-1}]
+    """
+    # Check for integer overflow (an int64 contains one sign bit).
+    flat_size = prod(shape.tolist())
+    if flat_size > 2**63:
+        raise ValueError(
+            "invalid shape: tensor size defined by shape is larger than the"
+            " maximum possible size."
+        )
+
+    # Check that the indices are within bounds.
+    if not ((0 <= indices) & (indices < flat_size)).all():
+        raise ValueError(
+            f"index is out of bounds for tensor with size {flat_size}"
+        )
+
+    # Convert flat indices to multi-indices.
+    multi_index = []
+    if order == "C":
+        # For C-style ordering, process dimensions from last to first.
+        for dim in reversed(shape):
+            multi_index.append(indices % dim)
+            indices = indices // dim
+        multi_index.reverse()
+    elif order == "F":
+        # For Fortran-style ordering, process dimensions from first to last.
+        for dim in shape:
+            multi_index.append(indices % dim)
+            indices = indices // dim
+    else:
+        raise ValueError("only 'C' or 'F' order is permitted")
+
+    return tuple(multi_index)
 
 
 # ######################## ADVANCED ARRAY MANIPULATION #########################
