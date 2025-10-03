@@ -9,8 +9,11 @@ file, they should not stay in the function itself.
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import defaultdict, deque
 from collections.abc import Callable, Iterable, Iterator
+from heapq import heapify, heappop, heappush
+from math import inf, isinf
+from operator import itemgetter
 from typing import TypeVar
 
 VertexT = TypeVar("VertexT")
@@ -121,9 +124,6 @@ def bfs(adjlist: list[list[int]], start: int) -> tuple[list[float], list[int]]:
             If the vertex is unreachable, it will be set to -1.
             Length: V
     """
-    from collections import deque
-    from math import inf, isinf
-
     dist = [inf] * len(adjlist)
     dist[start] = 0
     parent = [-1] * len(adjlist)
@@ -173,9 +173,6 @@ def bfs_v_type(
             Warning: If the vertex is unreachable, it will not be present in
             the dict, but when indexing it, the value returned is None.
     """
-    from collections import defaultdict, deque
-    from math import inf
-
     dist: defaultdict[VertexT, float] = defaultdict(lambda: inf)
     dist[start] = 0
     parent: defaultdict[VertexT, VertexT | None] = defaultdict(lambda: None)
@@ -401,9 +398,6 @@ def dijkstra(
             If the vertex is unreachable, it will be set to -1.
             Length: V
     """
-    from heapq import heappop, heappush
-    from math import inf
-
     dist = [inf] * len(adjlist)
     dist[start] = 0
     parent = [-1] * len(adjlist)
@@ -459,10 +453,6 @@ def dijkstra_v_type(
             Warning: If the vertex is unreachable, it will not be present in
             the dict, but when indexing it, the value returned is None.
     """
-    from collections import defaultdict
-    from heapq import heappop, heappush
-    from math import inf
-
     dist: defaultdict[VertexT, float] = defaultdict(lambda: inf)
     dist[start] = 0
     parent: defaultdict[VertexT, VertexT | None] = defaultdict(lambda: None)
@@ -535,9 +525,6 @@ def a_star(
             the list will equal [goal].
             Length: Amount of vertices in the path
     """
-    from heapq import heappop, heappush
-    from math import inf
-
     dist = [inf] * len(adjlist)
     dist[start] = 0
     parent = [-1] * len(adjlist)
@@ -609,10 +596,6 @@ def a_star_v_type(
             the list will equal [goal].
             Length: Amount of vertices in the path
     """
-    from collections import defaultdict
-    from heapq import heappop, heappush
-    from math import inf
-
     dist: dict[VertexT, float] = defaultdict(lambda: inf)
     dist[start] = 0
     parent: dict[VertexT, VertexT | None] = defaultdict(lambda: None)
@@ -670,9 +653,6 @@ def prim(
             Length of inner lists: Amount of edges in the MST that have v as
                 an endpoint
     """
-    from heapq import heappop, heappush
-    from math import inf
-
     V = len(adjlist)
     # Keep track of the vertices currently connected to the MST.
     visited = [False] * V
@@ -784,8 +764,6 @@ def kruskal(
     Returns:
         The minimal spanning tree of the graph as a list of edges.
     """
-    from operator import itemgetter
-
     edge_list.sort(key=itemgetter(2))  # sort edges by weight
     UF = UnionFind(V)
     # Continuously add edges that don't result in a cycle.
@@ -832,9 +810,6 @@ def edmonds_karp(
             Length: V
             Length of inner lists: degree(v)
     """
-    from collections import deque
-    from math import inf
-
     if s == t:
         return inf, [[(v, 0) for v, _ in nbrs] for nbrs in adjlist]
     V = len(adjlist)
@@ -919,8 +894,6 @@ def hopcroft_karp(
             where a -1 indicates an unmatched vertex.
             Length: V
     """
-    from collections import deque
-
     V = len(adjlist)
     matching = [-1] * V
     while True:
@@ -1433,8 +1406,6 @@ def aho_corasick(
         2. Increasing character index in source.
         3. Decreasing target length.
     """
-    from collections import deque
-
     # First build the trie: O(M).
     # Each node is represented by a list containing:
     # [0] A dict pointing to the node's children.
@@ -1501,3 +1472,116 @@ def aho_corasick(
             while output_link is not None:
                 yield (i, output_link[3], j)
                 output_link = output_link[2]
+
+
+def greedy_set_cover(U: int, sets: list[set[int]]) -> list[int]:
+    """Find a minimal subset of the sets that covers all elements in U.
+
+    This is a greedy approximation algorithm for the NP-hard set cover problem.
+    It gives a solution that is at most O(log(U)) times larger than the optimal
+    solution. Interestingly, this is also the best approximation ratio that can
+    be achieved in polynomial time.
+
+    Warning: This algorithm assumes that the union of all sets covers U. If this
+    is not the case, the algorithm will run forever.
+
+    Warning: This algorithm assumes that no set contains values outside of U. If
+    this is not the case, the algorithm may return a set cover that does not
+    cover all elements in U.
+
+    Complexity: O(S^2 * k)
+    where S is the number of sets and k is the average set size.
+
+    Args:
+        U: Number of elements to cover (elements are 0, 1, ..., U-1).
+        sets: Collection of sets, each containing indices of elements it covers.
+
+    Returns:
+        Indices into the sets list representing the selected sets.
+    """
+    heap = [(-len(elems), s, elems) for s, elems in enumerate(sets)]
+    heapify(heap)
+
+    selected_sets = []
+    covered = set()
+    while len(covered) < U:
+        # Select an initial best set.
+        _, s_best, elems_best = heappop(heap)
+        elems_best = elems_best - covered
+        score_best = -len(elems_best)
+
+        unused: list[tuple[int, int, set[int]]] = []
+        # Because scores only get worse as we go through the heap, we know that
+        # if the best score is not beaten by the top of the heap, then the rest
+        # of the heap cannot beat the best score either.
+        while heap and heap[0][0] < score_best:
+            _, s, elems = heappop(heap)
+            elems = elems - covered
+            score = -len(elems)
+
+            # If this set is not better than the best, we set it aside.
+            if not score < score_best:
+                unused.append((score, s, elems))
+                continue
+
+            # This set is better than the best, so it becomes the new best.
+            # The old best gets put aside.
+            unused.append((score_best, s_best, elems_best))
+            score_best, s_best, elems_best = score, s, elems
+
+        selected_sets.append(s_best)
+        covered.update(elems_best)
+
+        # Sets that were not the best get put back on the heap for next time.
+        for tup in unused:
+            heappush(heap, tup)
+
+    return selected_sets
+
+
+def greedy_associations(A_options: list[set[int]], B: int) -> list[int]:
+    """Assign each element in A to an element in B minimally.
+
+    More specifically, we want to find an assignment of elements in A such that:
+    1. Each element in A is assigned to exactly one element in B.
+    2. The total number of different elements in B that are assigned to at least
+       one element in A is minimized.
+
+    Complexity: O(B^2 * k)
+    where k is the average number of options per element in A.
+
+    Args:
+        A_options: For each element in A, which elements of B it could be
+            associated with. Note: every element in A must have at least one
+            option, but not every element in B needs to be an option for any
+            element in A.
+            Length: A
+        B: Total number of elements in B.
+
+    Returns:
+        For each element in A, the index of the element in B it should be
+        associated with.
+            Length: A
+    """
+    A = len(A_options)
+
+    # We can convert this problem to a set cover problem by realizing that each
+    # element in B is a set containing indices of elements in A it can cover.
+    # First, create these sets.
+    sets = [set() for _ in range(B)]
+    for a, a_associations in enumerate(A_options):
+        for b in a_associations:
+            sets[b].add(a)
+
+    # Solve the set cover problem.
+    B_selected = greedy_set_cover(A, sets)
+
+    # Create assignment: for each element in A, find which selected B element
+    # covers it.
+    A_assignments = [-1] * A
+    for b in B_selected:
+        for a in sets[b]:
+            if A_assignments[a] == -1:  # not yet assigned
+                A_assignments[a] = b
+
+    return A_assignments

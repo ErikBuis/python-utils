@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import random
 import unittest
 from collections.abc import Callable
 from math import inf
@@ -875,6 +876,86 @@ class TestAhoCorasick(unittest.TestCase):
                 (0, 0, 4),
             ],
         )
+
+
+class TestGreedyAssociations(unittest.TestCase):
+    def test_all_different_b(self) -> None:
+        """Each element in A has only one option, all different."""
+        A_options = [{0}, {1}, {2}]
+        B = 3
+        result = cheatsheet.greedy_associations(A_options, B)
+        self.assertListEqual(result, [0, 1, 2])
+
+    def test_same_b(self) -> None:
+        """One B element connects to all A elements."""
+        A_options = [{2, 0}, {2, 1}, {2, 3}, {2, 4}]
+        B = 5
+        result = cheatsheet.greedy_associations(A_options, B)
+        self.assertListEqual(result, [2, 2, 2, 2])
+
+    def test_b_not_mentioned(self) -> None:
+        """B has elements not mentioned in any A options."""
+        A_options = [{10}, {20}, {30}]
+        B = 100
+        result = cheatsheet.greedy_associations(A_options, B)
+        self.assertEqual(result, [10, 20, 30])
+
+    def test_chain_pattern(self) -> None:
+        """Chain where each A element shares options with neighbors."""
+        A_options = [{0, 1}, {1, 2}, {2, 3}, {3, 4}]
+        B = 5
+        result = cheatsheet.greedy_associations(A_options, B)
+        self.assertTrue(
+            # choose 1 or 3, then the other one
+            result == [1, 1, 3, 3]
+            # choose 2 then 0 and 3
+            or result == [0, 2, 2, 3]
+            or result == [0, 2, 3, 3]
+            # choose 2 then 0 and 4
+            or result == [0, 2, 2, 4]
+            # choose 2 then 1 and 3
+            or result == [1, 2, 2, 3]
+            or result == [1, 1, 2, 3]
+            or result == [1, 2, 3, 3]
+            or result == [1, 1, 3, 3]
+            or result == [1, 2, 3, 4]
+            # choose 2 then 1 and 4
+            or result == [1, 2, 2, 4]
+            or result == [1, 1, 2, 4]
+        )
+
+    def test_most_common(self) -> None:
+        """Verify that greedy actually picks the most common option."""
+        A_options = [{0, 1}, {4}, {0}, {2, 3}, {3}, {0, 3}, {0, 1}]
+        B = 5
+        result = cheatsheet.greedy_associations(A_options, B)
+
+        # The algorithm will pick 0 first (most common), then 3 (next most
+        # common). Then it is forced to pick 4.
+        self.assertSetEqual(set(result), {0, 3, 4})
+        for a, assigned_b in enumerate(result):
+            self.assertIn(assigned_b, A_options[a])
+
+    def test_all_assignments_valid(self) -> None:
+        """Verify all assignments are within valid options."""
+        A_options = [{0, 3, 5}, {1, 2}, {0, 1, 2, 3, 4, 5}, {5}, {2, 4}, {3, 4}]
+        B = 6
+        result = cheatsheet.greedy_associations(A_options, B)
+        self.assertEqual(len(result), len(A_options))
+        for a, assigned_b in enumerate(result):
+            self.assertIn(assigned_b, A_options[a])
+
+    def test_all_assignments_valid_large(self) -> None:
+        """Larger test to verify all assignments are within valid options."""
+        B = 100
+        A_options = [
+            set(random.sample(range(B), k=random.randint(2, 10)))
+            for _ in range(50)
+        ]
+        result = cheatsheet.greedy_associations(A_options, B)
+        self.assertEqual(len(result), len(A_options))
+        for a, assigned_b in enumerate(result):
+            self.assertIn(assigned_b, A_options[a])
 
 
 if __name__ == "__main__":
