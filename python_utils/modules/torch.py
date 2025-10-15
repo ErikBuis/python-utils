@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import random
-from collections.abc import Iterator
+from functools import lru_cache
 from math import prod
 from typing import Any, Callable, Literal, overload
 
@@ -80,58 +80,361 @@ def collate_replace_corrupted(
     return default_collate_fn(batch_list)
 
 
-# ################################### MATHS ####################################
+# ################################## PADDING ###################################
 
 
-def cumsum_start_0(
-    t: torch.Tensor,
-    dim: int | None = None,
-    dtype: torch.dtype | None = None,
-    out: torch.Tensor | None = None,
-) -> torch.Tensor:
-    """Like torch.cumsum(), but adds a zero at the start of the tensor.
+# Warning: The lru_cache caches inputs by memory address, so if you call this
+# function with different tensors that have the same values, it will not
+# recognize them as the same input. On the other hand, if you call this function
+# again with the same tensor after doing an in-place operation on it, it will
+# recognize it as the same input, even if the values have changed. This can
+# cause confusion, so be careful when using this function with tensors that
+# might change in-place.
+@lru_cache(maxsize=8)
+def mask_padding(L_bs: torch.Tensor, max_L_bs: int) -> torch.Tensor:
+    """Create a mask that indicates which values are valid in each sample.
 
     Args:
-        a: Input tensor.
-            Shape: [N_0, ..., N_dim, ..., N_{D-1}]
-        dim: Dimension along which the cumulative sum is computed. The default
-            (None) is to compute the cumsum over the flattened tensor.
-        dtype: Type of the returned tensor and of the accumulator in which the
-            elements are summed. If dtype is not specified, it defaults to the
-            dtype of a.
-        out: Alternative output tensor in which to place the result. It must
-            have the same shape and buffer length as the expected output but
-            the type will be cast if necessary.
-            Shape: [N_0, ..., N_dim + 1, ..., N_{D-1}]
+        L_bs: The number of valid values in each sample.
+            Shape: [B]
+        max_L_bs: The maximum number of values of any element in the batch.
+            Must be equal to max(L_bs).
 
     Returns:
-        A new tensor holding the result returned unless out is specified, in
-        which case a reference to out is returned. The result has the same
-        size as a except along the requested dimension.
-            Shape: [N_0, ..., N_dim + 1, ..., N_{D-1}]
+        A mask that indicates which values are valid in each sample.
+        mask[b, i] is True if i < L_bs[b] and False otherwise.
+            Shape: [B, max(L_bs)]
     """
-    device = t.device
+    device = L_bs.device
+    dtype = L_bs.dtype
 
-    if dim is None:
-        t = t.flatten()
-        dim = 0
+    return (
+        torch.arange(max_L_bs, device=device, dtype=dtype)  # [max(L_bs)]
+        < L_bs.unsqueeze(1)  # [B, 1]
+    )  # [B, max(L_bs)]  # fmt: skip
 
-    if dtype is None:
-        dtype = t.dtype
 
-    if out is not None:
-        idx = [slice(None)] * t.ndim
-        idx[dim] = 0  # type: ignore
-        out[tuple(idx)] = 0
-        idx[dim] = slice(1, None)
-        torch.cumsum(t, dim=dim, dtype=dtype, out=out[tuple(idx)])
-        return out
+def pack_padded(values: torch.Tensor, L_bs: torch.Tensor) -> torch.Tensor:
+    """Pack a batch of padded values into a single tensor.
 
-    shape = list(t.shape)
-    shape[dim] = 1
-    zeros = torch.zeros(shape, device=device, dtype=dtype)
-    cumsum = t.cumsum(dim=dim, dtype=dtype)
-    return torch.concat([zeros, cumsum], dim=dim)
+    Args:
+        values: The values to pack. Padding could be arbitrary.
+            Shape: [B, max(L_bs), *]
+        L_bs: The number of valid values in each sample.
+            Shape: [B]
+
+    Returns:
+        The packed values.
+            Shape: [L, *]
+    """
+    max_L_bs = values.shape[1]
+    mask = mask_padding(L_bs, max_L_bs)  # [B, max(L_bs)]
+    return values[mask]
+
+
+def pad_packed(
+    values: torch.Tensor,
+    L_bs: torch.Tensor,
+    max_L_bs: int,
+    padding_value: Any = None,
+) -> torch.Tensor:
+    """Pad a batch of packed values to create a tensor with a fixed size.
+
+    Args:
+        values: The values to pad.
+            Shape: [L, *]
+        L_bs: The number of valid values in each sample.
+            Shape: [B]
+        max_L_bs: The maximum number of values of any element in the batch.
+            Must be equal to max(L_bs).
+        padding_value: The value to pad the values with. If None, the values
+            are padded with random values. This is faster than padding with
+            a specific value.
+
+    Returns:
+        The padded values. Padded with padding_value.
+            Shape: [B, max(L_bs), *]
+    """
+    B = len(L_bs)
+    device = values.device
+    dtype = values.dtype
+
+    padded_shape = (B, max_L_bs, *values.shape[1:])
+    if padding_value is None:
+        values_padded = torch.empty(padded_shape, device=device, dtype=dtype)
+    elif padding_value == 0:
+        values_padded = torch.zeros(padded_shape, device=device, dtype=dtype)
+    elif padding_value == 1:
+        values_padded = torch.ones(padded_shape, device=device, dtype=dtype)
+    else:
+        values_padded = torch.full(
+            padded_shape, padding_value, device=device, dtype=dtype
+        )
+
+    mask = mask_padding(L_bs, max_L_bs)  # [B, max(L_bs)]
+    values_padded[mask] = values
+
+    return values_padded
+
+
+def pack_sequence(
+    values: tuple[torch.Tensor] | list[torch.Tensor],
+) -> torch.Tensor:
+    """Pack a batch of sequences into a single tensor.
+
+    This function is provided for symmetry with sequentialize_packed(),
+    but is not really needed since using torch.concat() directly is often
+    clearer for the reader.
+
+    Args:
+        values: The sequence of values to pack.
+            Length: B
+            Shape of inner tensors: [L_b, *]
+
+    Returns:
+        The packed values.
+            Shape: [L, *]
+    """
+    return torch.concat(values)  # [L, *]
+
+
+def pad_sequence(
+    values: tuple[torch.Tensor] | list[torch.Tensor],
+    L_bs: torch.Tensor,
+    max_L_bs: int,
+    padding_value: Any = None,
+) -> torch.Tensor:
+    """Pad a batch of sequences to create a tensor with a fixed size.
+
+    This function is equivalent to torch.nn.utils.rnn.pad_sequence(), but
+    surprisingly it is a bit faster, even if the padding value is not set to
+    None! And if the padding value is set to None, the function will be even
+    faster, since it will not need to overwrite the allocated memory. The former
+    is because torch.nn.utils.rnn.pad_sequence() performs some extra checks that
+    we skip here. It is also a bit more flexible, since it allows for the batch
+    dimension to be at dim=1 instead of dim=0.
+
+    In conclusion, you should almost always use this function instead.
+
+    Args:
+        values: The sequence of values to pad.
+            Length: B
+            Shape of inner tensors: [L_b, *]
+        L_bs: The number of valid values in each sample.
+            Shape: [B]
+        max_L_bs: The maximum number of values of any element in the batch.
+            Must be equal to max(L_bs).
+        padding_value: The value to pad the values with. If None, the values are
+            padded with random values. This is faster than padding with a
+            specific value.
+
+    Returns:
+        The padded values. Padded with padding_value.
+            Shape: [B, max(L_bs), *]
+    """
+    return pad_packed(
+        pack_sequence(values), L_bs, max_L_bs, padding_value=padding_value
+    )  # [B, max(L_bs), *]
+
+
+def sequentialize_packed(
+    values: torch.Tensor, L_bs: torch.Tensor
+) -> list[torch.Tensor]:
+    """Convert a batch of packed values to a sequence of values.
+
+    Args:
+        values: The packed values to convert.
+            Shape: [L, *]
+        L_bs: The number of valid values in each sample.
+            Shape: [B]
+
+    Returns:
+        The values as a sequence.
+            Length: B
+            Shape of inner arrays: [L_b, *]
+    """
+    return list(torch.split(values, L_bs.tolist()))
+
+
+def sequentialize_padded(
+    values: torch.Tensor, L_bs: torch.Tensor
+) -> list[torch.Tensor]:
+    """Convert a batch of padded values to a sequence of values.
+
+    Args:
+        values: The padded values to convert. Padding could be arbitrary.
+            Shape: [B, max(L_bs), *]
+        L_bs: The number of valid values in each sample.
+            Shape: [B]
+
+    Returns:
+        The values as a sequence.
+            Length: B
+            Shape of inner arrays: [L_b, *]
+    """
+    return sequentialize_packed(pack_padded(values, L_bs), L_bs)
+
+
+def replace_padding(
+    values: torch.Tensor,
+    L_bs: torch.Tensor,
+    padding_value: Any = 0,
+    in_place: bool = False,
+) -> torch.Tensor:
+    """Pad the values with padding_value to create a tensor with a fixed size.
+
+    Args:
+        values: The values to pad. Padding could be arbitrary.
+            Shape: [B, max(L_bs), *]
+        L_bs: The number of valid values in each sample.
+            Shape: [B]
+        padding_value: The value to pad the values with. Can be one of:
+            - A scalar value, or a tensor of shape [] or [*], containing the
+              value to pad all elements with.
+            - A tensor of shape [B, max(L_bs)] or [B, max(L_bs), *], containing
+              the value to pad each element with.
+            - A tensor of shape [B, 1] or [B, 1, *], containing the value to
+              pad each row with.
+            - A tensor of shape [1, max(L_bs)] or [1, max(L_bs), *], containing
+              the value to pad each column with.
+            - A tensor of shape [B * max(L_bs) - L] or [B * max(L_bs) - L, *],
+              containing the value to pad each element in the padding mask with.
+        in_place: Whether to perform the operation in-place.
+
+    Returns:
+        The padded values. Padded with padding_value.
+            Shape: [B, max(L_bs), *]
+    """
+    B, max_L_bs, *star = values.shape
+    mask = mask_padding(L_bs, max_L_bs)  # [B, max(L_bs)]
+    values_padded = values if in_place else values.clone()
+
+    # Handle the case where padding_value is a scalar.
+    if not isinstance(padding_value, torch.Tensor):
+        values_padded[~mask] = padding_value
+        return values_padded
+
+    # Handle shapes that are missing the star dimensions.
+    if (
+        padding_value.shape == ()
+        or padding_value.shape == (B, max_L_bs)
+        or padding_value.shape == (B, 1)
+        or padding_value.shape == (1, max_L_bs)
+        or padding_value.shape == (B * max_L_bs - L_bs.sum(),)
+    ):
+        padding_value = padding_value.reshape(B, max_L_bs, *[1] * len(star))
+
+    # Now handle all expected shapes.
+    # Note that the shape of the value to be set (values_padded[~mask]) is
+    # always [B * max_L_bs - L_bs.sum(), *].
+    if padding_value.shape == tuple(star):
+        values_padded[~mask] = padding_value
+    elif padding_value.shape == (B, max_L_bs, *star):
+        values_padded[~mask] = padding_value[~mask]
+    elif padding_value.shape == (B, 1, *star):
+        values_padded[~mask] = padding_value.squeeze(1).repeat_interleave(
+            max_L_bs - L_bs, dim=0
+        )
+    elif padding_value.shape == (1, max_L_bs, *star):
+        values_padded[~mask] = padding_value.expand(B, max_L_bs, *star)[~mask]
+    elif padding_value.shape == (B * max_L_bs - L_bs.sum(), *star):
+        values_padded[~mask] = padding_value
+    else:
+        raise ValueError(
+            "Shape of padding_value did not match any of the expected shapes."
+            f" Got {list(padding_value.shape)}, but expected one of: [],"
+            f" {star}, {[B, max_L_bs]}, {[B, max_L_bs, *star]}, {[B, 1]},"
+            f" {[B, 1, *star]}, {[1, max_L_bs]},  {[1, max_L_bs, *star]},"
+            f" {[B * max_L_bs - L_bs.sum()]}, or"
+            f" {[B * max_L_bs - L_bs.sum(), *star]}"
+        )
+
+    return values_padded
+
+
+def last_valid_value_padding(
+    values: torch.Tensor,
+    L_bs: torch.Tensor,
+    padding_value_empty_rows: Any = None,
+    in_place: bool = False,
+) -> torch.Tensor:
+    """Pad the values with the last valid value for each sample.
+
+    Args:
+        values: The values to pad. Padding could be arbitrary.
+            Shape: [B, max(L_bs), *]
+        L_bs: The number of valid values in each sample.
+            Shape: [B]
+        padding_value_empty_rows: The value to pad empty rows with (i.e. when
+            L_b == 0 for some b). If None, empty rows are padded with random
+            values. This is faster than padding with a specific value.
+        in_place: Whether to perform the operation in-place.
+
+    Returns:
+        The padded values. Padded with the last valid value.
+            Shape: [B, max(L_bs), *]
+    """
+    B = len(L_bs)
+    arange_B = torch.arange(B, device=values.device)
+    padding_value = values[arange_B, L_bs - 1]  # [B, *]
+    if padding_value_empty_rows is not None:
+        padding_value = padding_value.clone()
+        padding_value[L_bs == 0] = padding_value_empty_rows
+    padding_value = padding_value.unsqueeze(1)  # [B, 1, *]
+    values = replace_padding(
+        values, L_bs, padding_value=padding_value, in_place=in_place
+    )  # [B, max(L_bs), *]
+    return values
+
+
+def apply_mask(
+    values: torch.Tensor,
+    mask: torch.Tensor,
+    L_bs: torch.Tensor,
+    padding_value: Any = None,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Apply an additional mask to a batch of values.
+
+    All values that are not marked for removal by the mask will be kept, while
+    the remaining values will be moved to the front of the tensor. Since the
+    number of kept values in each sample can change, the function will also
+    return the number of kept values in each sample.
+
+    Args:
+        values: The values to apply the mask to. Padding could be arbitrary.
+            Shape: [B, max(L_bs), *]
+        mask: The mask to apply. Padding could be arbitrary, since the function
+            will apply the original mask internally in addition to the given
+            mask.
+            Shape: [B, max(L_bs)]
+        L_bs: The number of valid values in each sample.
+            Shape: [B]
+        padding_value: The value to pad the values with. If None, the values
+            are padded with random values. This is faster than padding with
+            a specific value.
+
+    Returns:
+        Tuple containing:
+        - The values with the given mask applied. Padded with padding_value.
+            Shape: [B, max(L_bs_kept), *]
+        - The number of kept values in each sample.
+            Shape: [B]
+    """
+    # Create a mask that indicates which values should be kept in each sample.
+    max_L_bs = values.shape[1]
+    mask = mask & mask_padding(L_bs, max_L_bs)  # [B, max(L_bs)]
+    L_bs_kept = mask.sum(dim=1)  # [B]
+    max_L_bs_kept = int(L_bs_kept.max())
+
+    # Move the masked values to the front of the tensor.
+    values = pad_packed(
+        values[mask], L_bs_kept, max_L_bs_kept, padding_value=padding_value
+    )  # [B, max(L_bs_kept), *]
+
+    return values, L_bs_kept
+
+
+# ################################### MATHS ####################################
 
 
 def interp(
@@ -217,7 +520,7 @@ def interp(
     return y
 
 
-# ########################## BASIC ARRAY MANIPULATION ##########################
+# ######################### BASIC TENSOR MANIPULATION ##########################
 
 
 def to_tensor(
@@ -357,9 +660,9 @@ def unravel_index(
 
     Args:
         indices: A tensor of flat indices, each of which is an index into the
-            flattened version of an array of dimensions shape.
+            flattened version of a tensor of dimensions shape.
             Shape: [N_0, ..., N_{D-1}]
-        shape: The shape of the array into which the indices point.
+        shape: The shape of the tensor into which the indices point.
             Shape: [K]
         order: Determines whether the multi-index should be viewed as indexing
             in row-major (C-style) or column-major (Fortran-style) order.
@@ -402,7 +705,7 @@ def unravel_index(
     return tuple(multi_index)
 
 
-# ######################## ADVANCED ARRAY MANIPULATION #########################
+# ######################## ADVANCED TENSOR MANIPULATION ########################
 
 
 def swap_idcs_vals(x: torch.Tensor) -> torch.Tensor:
@@ -1570,36 +1873,136 @@ def counts_segments_ints(x: torch.Tensor, high: int) -> torch.Tensor:
 # ################################## GROUPBY ###################################
 
 
+@overload
+def groupby(  # type: ignore
+    keys: torch.Tensor,
+    vals: torch.Tensor | None = None,
+    stable: bool = False,
+    as_sequence: Literal[True] = ...,
+) -> list[tuple[torch.Tensor, torch.Tensor]]:
+    pass
+
+
+@overload
 def groupby(
-    keys: torch.Tensor, vals: torch.Tensor, stable: bool = False
-) -> Iterator[tuple[torch.Tensor, torch.Tensor]]:
+    keys: torch.Tensor,
+    vals: torch.Tensor | None = None,
+    stable: bool = False,
+    as_sequence: Literal[False] = ...,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    pass
+
+
+def groupby(
+    keys: torch.Tensor,
+    vals: torch.Tensor | None = None,
+    stable: bool = False,
+    as_sequence: bool = True,
+) -> (
+    list[tuple[torch.Tensor, torch.Tensor]]
+    | tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+):
     """Group values by keys.
 
     Args:
         keys: The keys to group by.
             Shape: [N, *]
-        vals: The values to group.
+        vals: The values to group. If None, the values are set to the indices of
+            the keys (i.e. vals = torch.arange(N)).
             Shape: [N, **]
         stable: Whether to preserve the order of vals that have the same key. If
             False (default), an unstable sort is used, which is faster.
+        as_sequence: Whether to return the result as a sequence of (key, vals)
+            tuples (True) or as packed tensors (False).
 
-    Yields:
-        Tuples containing:
-        - A unique key. Will be yielded in sorted order.
-            Shape: [*]
-        - The values that correspond to the key.
-            Shape: [N_key, **]
+    Returns:
+        - If as_sequence is True (default), a list of tuples containing:
+            - A unique key. Will be yielded in sorted order.
+                Shape: [*]
+            - The values that correspond to the key. Sorted if stable is True.
+                Shape: [N_key, **]
+        - If as_sequence is False, a tuple containing:
+            - Tensor of unique keys, sorted.
+                Shape: [U, *]
+            - Tensor of values stored a packed manner, grouped by key. The first
+                N_key1 values correspond to the first key, the next N_key2
+                values correspond to the second key, etc. Each group of values
+                is sorted if stable is True.
+                Shape: [N, **]
+            - Tensor containing the number of values for each unique key.
+                Shape: [U]
+
+    Examples:
+    >>> keys = torch.tensor([4, 2, 4, 3, 2, 8, 4])
+    >>> vals = torch.tensor([
+    ...     [0, 1],
+    ...     [2, 3],
+    ...     [4, 5],
+    ...     [6, 7],
+    ...     [8, 9],
+    ...     [10, 11],
+    ...     [12, 13],
+    ... ])
+
+    >>> # Return as sequence of (key, vals) tuples:
+    >>> grouped = groupby(keys, vals, stable=True, as_sequence=True)
+    >>> for key, vals_group in grouped:
+    ...     print(f"Key:\n{key}")
+    ...     print(f"Grouped vals:\n{vals_group}")
+    ...     print()
+    Key:
+    2
+    Grouped vals:
+    tensor([[2, 3],
+            [8, 9]])
+
+    Key:
+    3
+    Grouped vals:
+    tensor([[6, 7]])
+
+    Key:
+    4
+    Grouped vals:
+    tensor([[ 0,  1],
+            [ 4,  5],
+            [12, 13]])
+
+    Key:
+    8
+    Grouped vals:
+    tensor([[10, 11]])
+
+    >>> # Return as packed tensors:
+    >>> keys_unique, vals_grouped, counts = groupby(
+    ...     keys, vals, stable=True, as_sequence=False
+    ... )
+    >>> keys_unique
+    tensor([2, 3, 4, 8])
+    >>> vals_grouped
+    tensor([[ 2,  3],
+            [ 8,  9],
+            [ 6,  7],
+            [ 0,  1],
+            [ 4,  5],
+            [12, 13],
+            [10, 11]])
+    >>> counts
+    tensor([2, 1, 3, 1], dtype=torch.int32)
     """
     # Create a mapping from keys to values.
     keys_unique, backmap, counts = unique(
         keys, return_backmap=True, return_counts=True, dim=0, stable=stable
     )  # [U, *], [N], [U]
-    vals = vals[backmap]  # rearrange values to match keys_unique
-    end_slices = counts.cumsum(dim=0)  # [U]
-    start_slices = end_slices - counts  # [U]
 
-    # Map each key to its corresponding values.
-    for key, start_slice, end_slice in zip(
-        keys_unique, start_slices, end_slices
-    ):
-        yield key, vals[start_slice:end_slice]
+    # Rearrange values to match keys_unique.
+    if vals is None:
+        vals = backmap  # [N]
+    else:
+        vals = vals.index_select(0, backmap)  # [N, **]
+
+    # Return the results.
+    if not as_sequence:
+        return keys_unique, vals, counts
+
+    return list(zip(keys_unique, sequentialize_packed(vals, counts)))

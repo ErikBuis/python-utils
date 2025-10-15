@@ -7,12 +7,15 @@ import pandas as pd
 import torch
 from shapely import LinearRing, MultiPolygon, Polygon
 
-from ..modules.torch import counts_segments_ints
+from ..modules.torch import (
+    counts_segments_ints,
+    pad_packed,
+    sequentialize_padded,
+)
 from ..modules_batched.random import (
     rand_float_decreasingly_likely,
     rand_int_decreasingly_likely,
 )
-from ..modules_batched.torch import pad_packed_batched
 
 # ############################### TENSOR TYPES ################################
 
@@ -406,7 +409,7 @@ def LinearRings2LinearRingsVertices(
     vertices_packed = torch.from_numpy(vertices_df.to_numpy()).to(
         device=device, dtype=dtype
     )  # [V, 2]
-    vertices = pad_packed_batched(
+    vertices = pad_packed(
         vertices_packed,
         V_bs,
         int(V_bs.max()) if len(V_bs) > 0 else 0,
@@ -501,10 +504,10 @@ def Polygons2PolygonsInteriors(
         gpd.GeoSeries(interiors_series.reset_index(drop=True)), device, dtype
     )  # [I, max(V_is), 2], [I]
     max_I_bs = int(I_bs.max())
-    interiors = pad_packed_batched(
+    interiors = pad_packed(
         interiors_packed, I_bs, max_I_bs, padding_value=0
     )  # [B, max(I_bs), max(V_is), 2]
-    V_is = pad_packed_batched(
+    V_is = pad_packed(
         V_is_packed, I_bs, max_I_bs, padding_value=0
     )  # [B, max(I_bs)]
     return PolygonsInteriors(interiors, I_bs, V_is)
@@ -601,10 +604,10 @@ def MultiPolygons2MultiPolygonsExterior(
         dtype,
     )  # [P, max(V_ps), 2], [P]
     max_P_bs = int(P_bs.max())
-    exteriors = pad_packed_batched(
+    exteriors = pad_packed(
         exterior_packed, P_bs, max_P_bs, padding_value=0
     )  # [B, max(P_bs), max(V_ps), 2]
-    V_ps = pad_packed_batched(
+    V_ps = pad_packed(
         V_ps_packed, P_bs, max_P_bs, padding_value=0
     )  # [B, max(P_bs)]
     return MultiPolygonsExterior(exteriors, P_bs, V_ps)
@@ -662,13 +665,13 @@ def MultiPolygons2MultiPolygonsInteriors(
         dtype,
     )
     max_P_bs = int(P_bs.max())
-    interiors = pad_packed_batched(
+    interiors = pad_packed(
         interiors_packed, P_bs, max_P_bs, padding_value=0
     )  # [B, max(P_bs), max(I_ps), max(V_is), 2]
-    I_ps = pad_packed_batched(
+    I_ps = pad_packed(
         I_ps_packed, P_bs, max_P_bs, padding_value=0
     )  # [B, max(P_bs)]
-    V_is = pad_packed_batched(
+    V_is = pad_packed(
         V_is_packed, P_bs, max_P_bs, padding_value=0
     )  # [B, max(P_bs), max(I_ps)]
     return MultiPolygonsInteriors(interiors, P_bs, I_ps, V_is)
@@ -882,10 +885,9 @@ def PolygonVertices2Polygon(polygon_vertices: PolygonVertices) -> Polygon:
     exterior = polygon_vertices.exterior
     exterior_vertices = exterior.vertices  # [V, 2]
     interiors = polygon_vertices.interiors
-    interiors_vertices = [
-        interiors.vertices[i, : interiors.V_is[i]]
-        for i in range(len(interiors.vertices))
-    ]  # I x [V_i, 2]
+    interiors_vertices = sequentialize_padded(
+        interiors.vertices, interiors.V_is
+    )  # I x [V_i, 2]
     return Polygon(exterior_vertices, interiors_vertices)
 
 
@@ -901,17 +903,20 @@ def PolygonsVertices2Polygons(
         The GeoSeries of Polygon objects.
     """
     exterior = polygons_vertices.exterior
-    exterior_vertices = [
-        exterior.vertices[b, : exterior.V_bs[b]]
-        for b in range(len(exterior.vertices))
-    ]  # B x [V_b, 2]
+    exterior_vertices = sequentialize_padded(
+        exterior.vertices, exterior.V_bs
+    )  # B x [V_b, 2]
     interiors = polygons_vertices.interiors
     interiors_vertices = [
-        [
-            interiors.vertices[b, i, : interiors.V_is[b, i]]
-            for i in range(interiors.I_bs[b])
-        ]  # I_b x [V_i, 2]
-        for b in range(len(interiors.vertices))
+        sequentialize_padded(
+            interiors_vertices_b, interiors_V_is_b
+        )  # I_b x [V_i, 2]
+        for interiors_vertices_b, interiors_V_is_b in zip(
+            sequentialize_padded(
+                interiors.vertices, interiors.I_bs
+            ),  # B x [I_b, max(V_is), 2]
+            sequentialize_padded(interiors.V_is, interiors.I_bs),  # B x [I_b]
+        )
     ]  # B x I_b x [V_i, 2]
     return gpd.GeoSeries([
         Polygon(exterior_vertices[b], interiors_vertices[b])
@@ -931,18 +936,21 @@ def MultiPolygonVertices2MultiPolygon(
         The MultiPolygon object.
     """
     exteriors = multipolygon_vertices.exteriors
-    exterior_vertices = [
-        exteriors.vertices[p, : exteriors.V_ps[p]]
-        for p in range(len(exteriors.vertices))
-    ]
+    exterior_vertices = sequentialize_padded(
+        exteriors.vertices, exteriors.V_ps
+    )  # P x [V_p, 2]
     interiors = multipolygon_vertices.interiors
     interior_vertices = [
-        [
-            interiors.vertices[p, i, : interiors.V_is[p, i]]
-            for i in range(interiors.I_ps[p])
-        ]
-        for p in range(len(interiors.vertices))
-    ]
+        sequentialize_padded(
+            interiors_vertices_p, interiors_V_is_p
+        )  # I_p x [V_i, 2]
+        for interiors_vertices_p, interiors_V_is_p in zip(
+            sequentialize_padded(
+                interiors.vertices, interiors.I_ps
+            ),  # P x [I_p, max(V_is), 2]
+            sequentialize_padded(interiors.V_is, interiors.I_ps),  # P x [I_p]
+        )
+    ]  # P x I_p x [V_i, 2]
     return MultiPolygon(tuple(zip(exterior_vertices, interior_vertices)))
 
 
@@ -960,22 +968,40 @@ def MultiPolygonsVertices2MultiPolygons(
     """
     exteriors = multipolygons_vertices.exteriors
     exterior_vertices = [
-        [
-            exteriors.vertices[b, p, : exteriors.V_ps[b, p]]
-            for p in range(exteriors.P_bs[b])
-        ]  # P_b x [V_p, 2]
-        for b in range(len(exteriors.vertices))
+        sequentialize_padded(
+            exteriors_vertices_b, exteriors_V_ps_b
+        )  # P_b x [V_p, 2]
+        for exteriors_vertices_b, exteriors_V_ps_b in zip(
+            sequentialize_padded(
+                exteriors.vertices, exteriors.P_bs
+            ),  # B x [P_b, max(V_ps), 2]
+            sequentialize_padded(exteriors.V_ps, exteriors.P_bs),  # B x [P_b]
+        )
     ]  # B x P_b x [V_p, 2]
     interiors = multipolygons_vertices.interiors
     interior_vertices = [
         [
-            [
-                interiors.vertices[b, p, i, : interiors.V_is[b, p, i]]
-                for i in range(interiors.I_ps[b, p])
-            ]  # I_p x [V_i, 2]
-            for p in range(interiors.P_bs[b])
+            sequentialize_padded(
+                interiors_vertices_bp, interiors_V_is_bp
+            )  # I_p x [V_i, 2]
+            for interiors_vertices_bp, interiors_V_is_bp in zip(
+                sequentialize_padded(
+                    interiors_vertices_b, interiors_I_ps_b
+                ),  # P_b x [I_p, max(V_is), 2]
+                sequentialize_padded(
+                    interiors_V_is_b, interiors_I_ps_b
+                ),  # P_b x [I_p]
+            )
         ]  # P_b x I_p x [V_i, 2]
-        for b in range(len(interiors.vertices))
+        for interiors_vertices_b, interiors_I_ps_b, interiors_V_is_b in zip(
+            sequentialize_padded(
+                interiors.vertices, interiors.P_bs
+            ),  # B x [P_b, max(I_ps), max(V_is), 2]
+            sequentialize_padded(interiors.I_ps, interiors.P_bs),  # B x [P_b]
+            sequentialize_padded(
+                interiors.V_is, interiors.P_bs
+            ),  # B x [P_b, max(I_ps)]
+        )
     ]  # B x P_b x I_p x [V_i, 2]
     return gpd.GeoSeries([
         MultiPolygon(tuple(zip(exterior_vertices[b], interior_vertices[b])))

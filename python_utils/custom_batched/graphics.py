@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import torch
 
-from ..modules_batched.torch import arange_batched, replace_padding_batched
+from ..modules_batched.torch import arange_batched, replace_padding
 
 
 def xiaolin_wu_anti_aliasing_batched(
@@ -92,8 +92,8 @@ def xiaolin_wu_anti_aliasing_batched(
     vals[arange_B, S_bs - 1] *= xgap_end
 
     # Pad the return values.
-    replace_padding_batched(pixels_x, S_bs, in_place=True)
-    replace_padding_batched(pixels_y, S_bs, in_place=True)
-    replace_padding_batched(vals, S_bs, in_place=True)
+    replace_padding(pixels_x, S_bs, in_place=True)
+    replace_padding(pixels_y, S_bs, in_place=True)
+    replace_padding(vals, S_bs, in_place=True)
 
     return pixels_x, pixels_y, vals, S_bs

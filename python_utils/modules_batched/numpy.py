@@ -1,303 +1,23 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Any, Literal, overload
+from typing import Any, Literal, cast, overload
 
 import numpy as np
 import numpy.typing as npt
 
-from ..modules.numpy import NpGeneric, NpInteger, counts_segments, lexsort
-
-# ################################## PADDING ###################################
-
-
-# Unlike with torch, in numpy we can't cache this function because numpy arrays
-# are not hashable.
-def mask_padding_batched(
-    L_bs: npt.NDArray[np.integer], max_L_bs: int
-) -> npt.NDArray[np.bool_]:
-    """Create a mask that indicates which values are valid in each sample.
-
-    Args:
-        L_bs: The number of valid values in each sample.
-            Shape: [B]
-        max_L_bs: The maximum number of values of any element in the batch.
-            Must be equal to max(L_bs).
-
-    Returns:
-        A mask that indicates which values are valid in each sample.
-        mask[b, i] is True if i < L_bs[b] and False otherwise.
-            Shape: [B, max(L_bs)]
-    """
-    dtype = L_bs.dtype
-
-    return (
-        np.arange(max_L_bs, dtype=dtype)  # [max(L_bs)]
-        < np.expand_dims(L_bs, 1)  # [B, 1]
-    )  # [B, max(L_bs)]  # fmt: skip
-
-
-def pack_padded_batched(
-    values: npt.NDArray[NpGeneric], L_bs: npt.NDArray[np.integer]
-) -> npt.NDArray[NpGeneric]:
-    """Pack a batch of padded values into a single array.
-
-    Args:
-        values: The values to pack. Padding could be arbitrary.
-            Shape: [B, max(L_bs), *]
-        L_bs: The number of valid values in each sample.
-            Shape: [B]
-
-    Returns:
-        The packed values.
-            Shape: [L, *]
-    """
-    max_L_bs = values.shape[1]
-    mask = mask_padding_batched(L_bs, max_L_bs)  # [B, max(L_bs)]
-    return values[mask]
-
-
-def pad_packed_batched(
-    values: npt.NDArray[NpGeneric],
-    L_bs: npt.NDArray[np.integer],
-    max_L_bs: int,
-    padding_value: Any = None,
-) -> npt.NDArray[NpGeneric]:
-    """Pad a batch of packed values to create an array with a fixed size.
-
-    Args:
-        values: The values to pad.
-            Shape: [L, *]
-        L_bs: The number of valid values in each sample.
-            Shape: [B]
-        max_L_bs: The maximum number of values of any element in the batch.
-            Must be equal to max(L_bs).
-        padding_value: The value to pad the values with. If None, the values
-            are padded with random values. This is faster than padding with
-            a specific value.
-
-    Returns:
-        The padded values. Padded with padding_value.
-            Shape: [B, max(L_bs), *]
-    """
-    B = len(L_bs)
-    dtype = values.dtype
-
-    padded_shape = (B, max_L_bs, *values.shape[1:])
-    if padding_value is None:
-        values_padded = np.empty(padded_shape, dtype=dtype)
-    elif padding_value == 0:
-        values_padded = np.zeros(padded_shape, dtype=dtype)
-    elif padding_value == 1:
-        values_padded = np.ones(padded_shape, dtype=dtype)
-    else:
-        values_padded = np.full(padded_shape, padding_value, dtype=dtype)
-
-    mask = mask_padding_batched(L_bs, max_L_bs)  # [B, max(L_bs)]
-    values_padded[mask] = values
-
-    return values_padded
-
-
-def pad_sequence_batched(
-    values: Sequence[npt.NDArray[NpGeneric]],
-    L_bs: npt.NDArray[np.integer],
-    max_L_bs: int,
-    padding_value: Any = None,
-) -> npt.NDArray[NpGeneric]:
-    """Pad a batch of sequences to create an array with a fixed size.
-
-    This function is equivalent to torch.nn.utils.rnn.pad_sequence(), but
-    surprisingly it is a bit faster, even if the padding value is not set to
-    None! And if the padding value is set to None, the function will be even
-    faster, since it will not need to overwrite the allocated memory. The former
-    is because torch.nn.utils.rnn.pad_sequence() performs some extra checks that
-    we skip here. It is also a bit more flexible, since it allows for the batch
-    dimension to be at axis=1 instead of axis=0.
-
-    In conclusion, you should almost always use this function instead.
-
-    Args:
-        values: The sequence values to pad. Padding could be arbitrary.
-            Length: B
-            Shape of inner arrays: [L_b, *]
-        L_bs: The number of valid values in each sample.
-            Shape: [B]
-        max_L_bs: The maximum number of values of any element in the batch.
-            Must be equal to max(L_bs).
-        padding_value: The value to pad the values with. If None, the values
-            are padded with random values. This is faster than padding with
-            a specific value.
-
-    Returns:
-        The padded values. Padded with padding_value.
-            Shape: [B, max(L_bs), *]
-    """
-    return pad_packed_batched(
-        np.concat(values), L_bs, max_L_bs, padding_value=padding_value
-    )  # [B, max(L_bs), *]
-
-
-def replace_padding_batched(
-    values: npt.NDArray[NpGeneric],
-    L_bs: npt.NDArray[np.integer],
-    padding_value: Any = 0,
-    in_place: bool = False,
-) -> npt.NDArray[NpGeneric]:
-    """Pad the values with padding_value to create an array with a fixed size.
-
-    Args:
-        values: The values to pad. Padding could be arbitrary.
-            Shape: [B, max(L_bs), *]
-        L_bs: The number of valid values in each sample.
-            Shape: [B]
-        padding_value: The value to pad the values with. Can be one of:
-            - A scalar value, or an array of shape [] or [*], containing the
-              value to pad all elements with.
-            - An array of shape [B, max(L_bs)] or [B, max(L_bs), *], containing
-              the value to pad each element with.
-            - An array of shape [B, 1] or [B, 1, *], containing the value to
-              pad each row with.
-            - An array of shape [1, max(L_bs)] or [1, max(L_bs), *], containing
-              the value to pad each column with.
-            - An array of shape [B * max(L_bs) - L] or [B * max(L_bs) - L, *],
-              containing the value to pad each element in the padding mask with.
-        in_place: Whether to perform the operation in-place.
-
-    Returns:
-        The padded values. Padded with padding_value.
-            Shape: [B, max(L_bs), *]
-    """
-    B, max_L_bs, *star = values.shape
-    mask = mask_padding_batched(L_bs, max_L_bs)  # [B, max(L_bs)]
-    values_padded = values if in_place else values.copy()
-
-    # Handle the case where padding_value is a scalar.
-    if not isinstance(padding_value, np.ndarray):
-        values_padded[~mask] = padding_value
-        return values_padded
-
-    # Handle shapes that are missing the star dimensions.
-    if (
-        padding_value.shape == ()
-        or padding_value.shape == (B, max_L_bs)
-        or padding_value.shape == (B, 1)
-        or padding_value.shape == (1, max_L_bs)
-        or padding_value.shape == (B * max_L_bs - L_bs.sum(),)
-    ):
-        padding_value = padding_value.reshape(B, max_L_bs, *[1] * len(star))
-
-    # Now handle all expected shapes.
-    # Note that the shape of the value to be set (values_padded[~mask]) is
-    # always [B * max_L_bs - L_bs.sum(), *].
-    if padding_value.shape == tuple(star):
-        values_padded[~mask] = padding_value
-    elif padding_value.shape == (B, max_L_bs, *star):
-        values_padded[~mask] = padding_value[~mask]
-    elif padding_value.shape == (B, 1, *star):
-        values_padded[~mask] = padding_value.squeeze(1).repeat(
-            max_L_bs - L_bs, axis=0
-        )
-    elif padding_value.shape == (1, max_L_bs, *star):
-        values_padded[~mask] = np.broadcast_to(
-            padding_value, (B, max_L_bs, *star)
-        )[~mask]
-    elif padding_value.shape == (B * max_L_bs - L_bs.sum(), *star):
-        values_padded[~mask] = padding_value
-    else:
-        raise ValueError(
-            "Shape of padding_value did not match any of the expected shapes."
-            f" Got {list(padding_value.shape)}, but expected one of: [],"
-            f" {star}, {[B, max_L_bs]}, {[B, max_L_bs, *star]}, {[B, 1]},"
-            f" {[B, 1, *star]}, {[1, max_L_bs]},  {[1, max_L_bs, *star]},"
-            f" {[B * max_L_bs - L_bs.sum()]}, or"
-            f" {[B * max_L_bs - L_bs.sum(), *star]}"
-        )
-
-    return values_padded
-
-
-def last_valid_value_padding_batched(
-    values: npt.NDArray[NpGeneric],
-    L_bs: npt.NDArray[np.integer],
-    padding_value_empty_rows: Any = None,
-    in_place: bool = False,
-) -> npt.NDArray[NpGeneric]:
-    """Pad the values with the last valid value for each sample.
-
-    Args:
-        values: The values to pad. Padding could be arbitrary.
-            Shape: [B, max(L_bs), *]
-        L_bs: The number of valid values in each sample.
-            Shape: [B]
-        padding_value_empty_rows: The value to pad empty rows with (i.e. when
-            L_b == 0 for some b). If None, empty rows are padded with random
-            values. This is faster than padding with a specific value.
-        in_place: Whether to perform the operation in-place.
-
-    Returns:
-        The padded values. Padded with the last valid value.
-            Shape: [B, max(L_bs), *]
-    """
-    B = len(L_bs)
-    arange_B = np.arange(B)
-    padding_value = values[arange_B, L_bs - 1]  # [B, *]
-    if padding_value_empty_rows is not None:
-        padding_value = padding_value.copy()
-        padding_value[L_bs == 0] = padding_value_empty_rows
-    padding_value_new = np.expand_dims(padding_value, 1)  # [B, 1, *]
-    values = replace_padding_batched(
-        values, L_bs, padding_value=padding_value_new, in_place=in_place
-    )  # [B, max(L_bs), *]
-    return values
-
-
-def apply_mask_batched(
-    values: npt.NDArray[NpGeneric],
-    mask: npt.NDArray[np.bool_],
-    L_bs: npt.NDArray[NpInteger],
-    padding_value: Any = None,
-) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[NpInteger]]:
-    """Apply an additional mask to a batch of values.
-
-    All values that are not marked for removal by the mask will be kept, while
-    the remaining values will be moved to the front of the array. Since the
-    number of kept values in each sample can change, the function will also
-    return the number of kept values in each sample.
-
-    Args:
-        values: The values to apply the mask to. Padding could be arbitrary.
-            Shape: [B, max(L_bs), *]
-        mask: The mask to apply. Padding could be arbitrary, since the function
-            will apply the original mask internally in addition to the given
-            mask.
-            Shape: [B, max(L_bs)]
-        L_bs: The number of valid values in each sample.
-            Shape: [B]
-        padding_value: The value to pad the values with. If None, the values
-            are padded with random values. This is faster than padding with
-            a specific value.
-
-    Returns:
-        Tuple containing:
-        - The values with the given mask applied. Padded with padding_value.
-            Shape: [B, max(L_bs_kept), *]
-        - The number of kept values in each sample.
-            Shape: [B]
-    """
-    # Create a mask that indicates which values should be kept in each sample.
-    max_L_bs = values.shape[1]
-    mask = mask & mask_padding_batched(L_bs, max_L_bs)  # [B, max(L_bs)]
-    L_bs_kept = mask.sum(axis=1)  # [B]
-    max_L_bs_kept = int(L_bs_kept.max())
-
-    # Move the masked values to the front of the array.
-    values = pad_packed_batched(
-        values[mask], L_bs_kept, max_L_bs_kept, padding_value=padding_value
-    )  # [B, max(L_bs_kept), *]
-
-    return values, L_bs_kept
-
+from ..modules.numpy import (
+    NpGeneric,
+    NpGeneric1,
+    NpGeneric2,
+    NpInteger,
+    apply_mask,
+    counts_segments,
+    lexsort,
+    mask_padding,
+    pack_padded,
+    pad_packed,
+    replace_padding,
+)
 
 # ################################### MATHS ####################################
 
@@ -324,7 +44,7 @@ def mean_padding_batched(
             Shape: [B, *]
     """
     if not is_padding_zero:
-        values = replace_padding_batched(values, L_bs)
+        values = replace_padding(values, L_bs)
 
     return (
         values.sum(axis=1)  # [B, *]
@@ -388,9 +108,7 @@ def min_padding_batched(
             Shape: [B, *]
     """
     if not is_padding_inf:
-        values = replace_padding_batched(
-            values, L_bs, padding_value=float("inf")
-        )
+        values = replace_padding(values, L_bs, padding_value=float("inf"))
 
     return np.amin(values, axis=1)  # [B, *]
 
@@ -418,9 +136,7 @@ def max_padding_batched(
             Shape: [B, *]
     """
     if not is_padding_minus_inf:
-        values = replace_padding_batched(
-            values, L_bs, padding_value=float("-inf")
-        )
+        values = replace_padding(values, L_bs, padding_value=float("-inf"))
 
     return np.amax(values, axis=1)  # [B, *]
 
@@ -447,7 +163,7 @@ def any_padding_batched(
             Shape: [B, *]
     """
     if not is_padding_false:
-        values = replace_padding_batched(values, L_bs, padding_value=False)
+        values = replace_padding(values, L_bs, padding_value=False)
 
     return values.any(axis=1)  # [B, *]
 
@@ -474,7 +190,7 @@ def all_padding_batched(
             Shape: [B, *]
     """
     if not is_padding_true:
-        values = replace_padding_batched(values, L_bs, padding_value=True)
+        values = replace_padding(values, L_bs, padding_value=True)
 
     return values.all(axis=1)  # [B, *]
 
@@ -595,7 +311,7 @@ def sample_unique_batched(
     # If the number of elements is less than the number of samples, we uniformly
     # sample with replacement. To do this, the np.clip(min=num_samples) and
     # % L_b operations are used.
-    weights = mask_padding_batched(
+    weights = mask_padding(
         L_bs.clip(amin=num_samples), max_L_bs
     ).astype(np.float64)  # [B, max(L_bs)]  # fmt: skip
     weights = weights / weights.sum(axis=1, keepdims=True)  # [B, max(L_bs)]
@@ -696,8 +412,9 @@ def arange_batched(
         - The number of values of any arange sequence in the batch.
             Shape: [B]
     """
-    # Prepare the input arrays.
     B = len(starts)
+
+    # Prepare the input arrays.
     if ends is None:
         ends = starts
         starts = np.zeros(B)
@@ -715,7 +432,7 @@ def arange_batched(
 
     # Replace values that are out of bounds with the padding value.
     if padding_value is not None:
-        replace_padding_batched(
+        replace_padding(
             aranges, L_bs, padding_value=padding_value, in_place=True
         )
 
@@ -754,7 +471,6 @@ def linspace_batched(
         - The number of values of any linspace sequence in the batch.
             Shape: [B]
     """
-    # Prepare the input arrays.
     B = len(starts)
 
     # Compute the linspace sequences in parallel.
@@ -773,7 +489,7 @@ def linspace_batched(
 
     # Replace values that are out of bounds with the padding value.
     if padding_value is not None:
-        replace_padding_batched(
+        replace_padding(
             linspaces, L_bs, padding_value=padding_value, in_place=True
         )
 
@@ -907,7 +623,7 @@ def repeat_batched(
 
     # Un-merge the batch and axis dimensions and move axis back to its original
     # position.
-    values = pad_packed_batched(
+    values = pad_packed(
         values, sum_repeats, max_sum_repeats, padding_value=padding_value
     )  # [B, max_sum_repeats, N_0, ..., N_{axis-1}, N_{axis+1}, ..., N_{D-1}]
     values = np.moveaxis(
@@ -1075,7 +791,7 @@ def starts_segments_batched(
     starts_idcs = starts_idcs.astype(np.intp)
     S_bs = counts_segments(batch_idcs)  # [B]
     max_S_bs = int(S_bs.max())
-    starts = pad_packed_batched(
+    starts = pad_packed(
         starts_idcs, S_bs, max_S_bs, padding_value=padding_value
     )  # [B, max(S_bs)]
 
@@ -1175,7 +891,7 @@ def counts_segments_batched(
 
     # Replace the padding values if requested.
     if padding_value is not None:
-        replace_padding_batched(
+        replace_padding(
             counts, S_bs, padding_value=padding_value, in_place=True
         )
 
@@ -1301,7 +1017,7 @@ def outer_indices_segments_batched(
         )  # [B, max(S_bs)], [B]
 
     # Prepare counts for outer index calculation.
-    counts_with_zeros = replace_padding_batched(counts, S_bs)
+    counts_with_zeros = replace_padding(counts, S_bs)
     sum_counts = np.full((B,), N_axis, dtype=np.intp)  # [B]
     max_sum_counts = N_axis
 
@@ -1315,7 +1031,7 @@ def outer_indices_segments_batched(
         sum_counts,
         max_sum_counts,
         axis=0,
-    )  # [N_axis]
+    )  # [B, N_axis]
 
     if return_counts and return_starts:
         return outer_idcs, S_bs, counts, starts  # type: ignore
@@ -1445,7 +1161,7 @@ def inner_indices_segments_batched(
     )  # [B, max(S_bs)], [B], [B, max(S_bs)]
 
     # Prepare counts for inner index calculation.
-    counts_with_zeros = replace_padding_batched(counts, S_bs)
+    counts_with_zeros = replace_padding(counts, S_bs)
     sum_counts = np.full((B,), N_axis, dtype=np.intp)  # [B]
     max_sum_counts = N_axis
 
@@ -1836,7 +1552,7 @@ def unique_consecutive_batched(
         )  # [B, max(U_bs)], [B]
 
     # Find the unique values.
-    replace_padding_batched(starts, U_bs, in_place=True)
+    replace_padding(starts, U_bs, in_place=True)
     uniques = take_batched(
         x, axis, starts
     )  # [B, N_0, ..., N_{axis-1}, max(U_bs), N_{axis+1}..., N_{D-1}]
@@ -1846,7 +1562,7 @@ def unique_consecutive_batched(
         uniques = np.moveaxis(
             uniques, axis + 1, 1
         )  # [B, max(U_bs), N_0, ..., N_{axis-1}, N_{axis+1}, ..., N_{D-1}]
-        replace_padding_batched(
+        replace_padding(
             uniques, U_bs, padding_value=padding_value, in_place=True
         )
         uniques = np.moveaxis(
@@ -2274,6 +1990,290 @@ def counts_segments_ints_batched(
     )  # [B, max(U_bs)], [B], [B, max(U_bs)]
     freqs[
         np.arange(B).repeat(U_bs),  # [U]
-        pack_padded_batched(uniques, U_bs),  # [U]
-    ] = pack_padded_batched(counts, U_bs)  # [U]  # fmt: skip
+        pack_padded(uniques, U_bs),  # [U]
+    ] = pack_padded(counts, U_bs)  # [U]  # fmt: skip
     return freqs, U_bs
+
+
+# ################################## GROUPBY ###################################
+
+
+@overload
+def groupby_batched(  # type: ignore
+    keys: npt.NDArray[NpGeneric1],
+    vals: npt.NDArray[NpGeneric2] | None = None,
+    stable: bool = False,
+    as_sequence: Literal[True] = ...,
+    padding_value: Any = None,
+) -> list[
+    tuple[
+        npt.NDArray[NpGeneric1],
+        npt.NDArray[np.bool_],
+        npt.NDArray[NpGeneric2],
+        npt.NDArray[np.intp],
+    ]
+]:
+    pass
+
+
+@overload
+def groupby_batched(
+    keys: npt.NDArray[NpGeneric1],
+    vals: npt.NDArray[NpGeneric2] | None = None,
+    stable: bool = False,
+    as_sequence: Literal[False] = ...,
+    padding_value: Any = None,
+) -> tuple[
+    npt.NDArray[NpGeneric1],
+    npt.NDArray[np.intp],
+    npt.NDArray[NpGeneric2],
+    npt.NDArray[np.intp],
+]:
+    pass
+
+
+def groupby_batched(
+    keys: npt.NDArray[NpGeneric1],
+    vals: npt.NDArray[NpGeneric2] | None = None,
+    stable: bool = False,
+    as_sequence: bool = True,
+    padding_value: Any = None,
+) -> (
+    list[
+        tuple[
+            npt.NDArray[NpGeneric1],
+            npt.NDArray[np.bool_],
+            npt.NDArray[NpGeneric2],
+            npt.NDArray[np.intp],
+        ]
+    ]
+    | tuple[
+        npt.NDArray[NpGeneric1],
+        npt.NDArray[np.intp],
+        npt.NDArray[NpGeneric2],
+        npt.NDArray[np.intp],
+    ]
+):
+    """Group values by keys.
+
+    Args:
+        keys: The keys to group by.
+            Shape: [B, N, *]
+        vals: The values to group. If None, the values are set to the indices of
+            the keys (i.e. vals = arange_batched(N)).
+            Shape: [B, N, **]
+        stable: Whether to preserve the order of vals that have the same key. If
+            False (default), an unstable sort is used, which is faster.
+        as_sequence: Whether to return the result as a sequence of (key, vals)
+            tuples (True) or as packed arrays (False).
+        padding_value: The value to pad the keys and vals with. If None, the
+            keys and vals are padded with random values. This is faster than
+            padding with a specific value.
+
+    Returns:
+        - If as_sequence is True (default), a list of tuples containing:
+            - A unique key for every sample in the batch. Will be yielded in
+                sorted order. If the unique keys for a specific sample are
+                exhausted but not for others, its return value will be padding
+                instead. Padded with padding_value.
+                Shape: [B, *]
+            - Whether the key is valid (True) or padding (False).
+                Shape: [B]
+            - The values that correspond to the keys for every sample in the
+                batch. Sorted if stable is True. Padded with padding_value.
+                Shape: [B, max(N_key_bs), **]
+            - The number of values for each key, for every sample in the batch.
+                If the unique keys for a specific sample are exhausted but not
+                for others, its return value will be padding instead. Padded
+                with padding_value.
+                Shape: [B]
+        - If as_sequence is False, a tuple containing:
+            - Array of unique keys, sorted. Padded with padding_value.
+                Shape: [B, max(U_bs), *]
+            - Array with the amount of unique keys per batch element.
+                Shape: [B]
+            - Array of values stored a packed manner, grouped by key. Along
+                every batch element, the first N_key1 values correspond to the
+                first key, the next N_key2 values correspond to the second key,
+                etc. Each group of values is sorted if stable is True. Padded
+                with padding_value.
+                Shape: [B, N, **]
+            - Array containing the number of values for each unique key. Padded
+                with padding_value.
+                Shape: [B, max(U_bs)]
+
+    Examples:
+    >>> keys = np.array([
+    ...     [4, 2, 4, 3, 2, 8, 4],
+    ...     [1, 0, 1, 2, 0, 1, 0],
+    ... ])
+    >>> vals = np.array([
+    ...     [
+    ...         [0, 1],
+    ...         [2, 3],
+    ...         [4, 5],
+    ...         [6, 7],
+    ...         [8, 9],
+    ...         [10, 11],
+    ...         [12, 13],
+    ...     ],
+    ...     [
+    ...         [14, 15],
+    ...         [16, 17],
+    ...         [18, 19],
+    ...         [20, 21],
+    ...         [22, 23],
+    ...         [24, 25],
+    ...         [26, 27],
+    ...     ],
+    ... ])
+
+    >>> # Return as sequence of (key, vals) tuples:
+    >>> grouped = groupby_batched(
+    ...     keys, vals, stable=True, as_sequence=True, padding_value=0
+    ... )
+    >>> for key, mask, vals_group, counts in grouped:
+    ...     print(f"Key:\n{key}")
+    ...     print(f"Mask:\n{mask}")
+    ...     print(f"Grouped Vals:\n{vals_group}")
+    ...     print(f"Counts:\n{counts}")
+    ...     print()
+    Key:
+    [2 0]
+    Mask:
+    [ True  True]
+    Grouped Vals:
+    [[[ 2  3]
+      [ 8  9]
+      [ 0  0]]
+     [[16 17]
+      [22 23]
+      [26 27]]]
+    Counts:
+    [2 3]
+
+    Key:
+    [3 1]
+    Mask:
+    [ True  True]
+    Grouped Vals:
+    [[[ 6  7]
+      [ 0  0]
+      [ 0  0]
+     [[14 15]
+      [18 19]
+      [24 25]]]
+    Counts:
+    [1 3]
+
+    Key:
+    [4 2]
+    Mask:
+    [ True  True]
+    Grouped Vals:
+    [[[ 0  1]
+      [ 4  5]
+      [12 13]]
+     [[20 21]
+      [ 0  0]
+      [ 0  0]]]
+    Counts:
+    [3 1]
+
+    Key:
+    [8 0]
+    Mask:
+    [ True False]
+    Grouped Vals:
+    [[[10 11]]
+     [[ 0  0]]]
+    Counts:
+    [1 0]
+
+    >>> # Return as packed arrays:
+    >>> keys_unique, U_bs, vals_grouped, counts = groupby_batched(
+    ...     keys, vals, stable=True, as_sequence=False, padding_value=0
+    ... )
+    >>> keys_unique
+    array([[2, 3, 4, 8],
+           [0, 1, 2, 0]])
+    >>> U_bs
+    array([4, 3])
+    >>> vals_grouped
+    array([[[ 2,  3],
+            [ 8,  9],
+            [ 6,  7],
+            [ 0,  1],
+            [ 4,  5],
+            [12, 13],
+            [10, 11]],
+           [[16, 17],
+            [22, 23],
+            [26, 27],
+            [14, 15],
+            [18, 19],
+            [24, 25],
+            [20, 21]]])
+    >>> counts
+    array([[2, 1, 3, 1],
+           [3, 3, 1, 0]])
+    """
+    # Create a mapping from keys to values.
+    keys_unique, U_bs, backmap, counts = unique_batched(
+        keys,
+        return_backmap=True,
+        return_counts=True,
+        axis=0,
+        stable=stable,
+        padding_value=padding_value,
+    )  # [B, max(U_bs), *], [B], [B, N], [B, max(U_bs)]
+
+    # Rearrange values to match keys_unique.
+    if vals is None:
+        vals = cast(npt.NDArray[NpGeneric2], backmap)  # [B, N]
+    else:
+        vals = take_batched(vals, 0, backmap)  # [B, N, **]
+
+    # Return the results.
+    if not as_sequence:
+        return keys_unique, U_bs, vals, counts
+
+    B, N = keys.shape[:2]
+
+    # Prepare counts for outer index calculation.
+    counts_with_zeros = replace_padding(counts, U_bs)
+    sum_counts = np.full((B,), N, dtype=np.intp)  # [B]
+    max_sum_counts = N
+
+    # Calculate outer indices.
+    outer_idcs = repeat_batched(
+        np.broadcast_to(
+            np.expand_dims(np.arange(counts.shape[1], dtype=np.intp), 0),
+            counts.shape,
+        ),  # [B, max(U_bs)]
+        counts_with_zeros,
+        sum_counts,
+        max_sum_counts,
+        axis=0,
+    )  # [B, N]
+
+    # Create masks for every batch of unique keys.
+    masks = (
+        np.expand_dims(outer_idcs, 1)  # [B, 1, N]
+        == np.expand_dims(
+            np.arange(counts.shape[1], dtype=np.intp), (0, 2)
+        )  # [1, max(U_bs), 1]
+    )  # [B, max(U_bs), N]  # fmt: skip
+
+    # Create the sequences of (key, vals) tuples.
+    return [
+        (
+            keys_unique[:, u],  # [B, *]
+            u < U_bs,  # [B]
+            apply_mask(
+                vals, masks[:, u], sum_counts, padding_value=padding_value
+            )[0],  # [B, max(N_key_bs), **]
+            counts[:, u],  # [B]
+        )
+        for u in range(keys_unique.shape[1])
+    ]  # fmt: skip

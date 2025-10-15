@@ -6,11 +6,8 @@ from ..custom_batched.geometry import (
     distance_line_to_point_batched,
     line_intersection_batched,
 )
-from .torch import (
-    pack_padded_batched,
-    pad_packed_batched,
-    sample_unique_pairs_batched,
-)
+from ..modules.torch import pack_padded, pad_packed
+from .torch import sample_unique_pairs_batched
 
 
 def ransac_batched(
@@ -130,8 +127,8 @@ def ransac_batched(
         )  # [R, 2]
 
         # Count the number of lines that pass close to the intersection point.
-        r_packed = pack_padded_batched(r_running, L_rs)  # [L]
-        theta_packed = pack_padded_batched(theta_running, L_rs)  # [L]
+        r_packed = pack_padded(r_running, L_rs)  # [L]
+        theta_packed = pack_padded(theta_running, L_rs)  # [L]
         intersections_packed = intersections.repeat_interleave(
             L_rs, dim=0
         )  # [L, 2]
@@ -142,7 +139,7 @@ def ransac_batched(
             L_rs, dim=0
         )  # [L]
         is_inlier = distances_packed <= inlier_threshold_packed  # [L]
-        num_inliers = pad_packed_batched(
+        num_inliers = pad_packed(
             is_inlier, L_rs, max_L_rs, padding_value=0
         ).sum(
             dim=1
