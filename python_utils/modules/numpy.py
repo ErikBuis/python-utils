@@ -1718,8 +1718,8 @@ def groupby(
     >>> # Return as sequence of (key, vals) tuples:
     >>> grouped = groupby(keys, vals, stable=True, as_sequence=True)
     >>> for key, vals_group in grouped:
-    ...     print(f"Key:\n{key}")
-    ...     print(f"Grouped vals:\n{vals_group}")
+    ...     print(f"Key:\\n{key}")
+    ...     print(f"Grouped vals:\\n{vals_group}")
     ...     print()
     Key:
     2

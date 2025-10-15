@@ -2040,10 +2040,10 @@ def groupby_batched(
     ...     keys, vals, stable=True, as_sequence=True, padding_value=0
     ... )
     >>> for key, mask, vals_group, counts in grouped:
-    ...     print(f"Key:\n{key}")
-    ...     print(f"Mask:\n{mask}")
-    ...     print(f"Grouped Vals:\n{vals_group}")
-    ...     print(f"Counts:\n{counts}")
+    ...     print(f"Key:\\n{key}")
+    ...     print(f"Mask:\\n{mask}")
+    ...     print(f"Grouped Vals:\\n{vals_group}")
+    ...     print(f"Counts:\\n{counts}")
     ...     print()
     Key:
     tensor([2, 0])
