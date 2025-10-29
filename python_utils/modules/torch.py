@@ -1997,12 +1997,12 @@ def groupby(
 
     # Rearrange values to match keys_unique.
     if vals is None:
-        vals = backmap  # [N]
+        vals_grouped = backmap  # [N]
     else:
-        vals = vals.index_select(0, backmap)  # [N, **]
+        vals_grouped = vals.index_select(0, backmap)  # [N, **]
 
     # Return the results.
     if not as_sequence:
-        return keys_unique, vals, counts
+        return keys_unique, vals_grouped, counts
 
-    return list(zip(keys_unique, sequentialize_packed(vals, counts)))
+    return list(zip(keys_unique, sequentialize_packed(vals_grouped, counts)))

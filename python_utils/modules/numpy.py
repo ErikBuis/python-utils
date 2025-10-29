@@ -1768,12 +1768,12 @@ def groupby(
 
     # Rearrange values to match keys_unique.
     if vals is None:
-        vals = cast(npt.NDArray[NpGeneric2], backmap)  # [N]
+        vals_grouped = cast(npt.NDArray[NpGeneric2], backmap)  # [N]
     else:
-        vals = vals.take(backmap, axis=0)  # [N, **]
+        vals_grouped = vals.take(backmap, axis=0)  # [N, **]
 
     # Return the results.
     if not as_sequence:
-        return keys_unique, vals, counts
+        return keys_unique, vals_grouped, counts
 
-    return list(zip(keys_unique, sequentialize_packed(vals, counts)))
+    return list(zip(keys_unique, sequentialize_packed(vals_grouped, counts)))

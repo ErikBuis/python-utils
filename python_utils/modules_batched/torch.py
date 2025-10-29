@@ -2137,13 +2137,13 @@ def groupby_batched(
 
     # Rearrange values to match keys_unique.
     if vals is None:
-        vals = backmap  # [B, N]
+        vals_grouped = backmap  # [B, N]
     else:
-        vals = index_select_batched(vals, 0, backmap)  # [B, N, **]
+        vals_grouped = index_select_batched(vals, 0, backmap)  # [B, N, **]
 
     # Return the results.
     if not as_sequence:
-        return keys_unique, U_bs, vals, counts
+        return keys_unique, U_bs, vals_grouped, counts
 
     B, N = keys.shape[:2]
 
@@ -2173,13 +2173,16 @@ def groupby_batched(
         ).unsqueeze(0).unsqueeze(2)  # [1, max(U_bs), 1]
     )  # [B, max(U_bs), N]  # fmt: skip
 
-    # Create the sequences of (key, vals) tuples.
+    # Create the sequences of (key, vals_group) tuples.
     return [
         (
             keys_unique[:, u],  # [B, *]
             u < U_bs,  # [B]
             apply_mask(
-                vals, masks[:, u], sum_counts, padding_value=padding_value
+                vals_grouped,
+                masks[:, u],
+                sum_counts,
+                padding_value=padding_value
             )[0],  # [B, max(N_key_bs), **]
             counts[:, u],  # [B]
         )

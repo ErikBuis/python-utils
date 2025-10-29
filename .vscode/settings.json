@@ -1,6 +1,9 @@
 {
-    "editor.wordWrapColumn": 80,
-    "editor.rulers": [80],
+    "[python]": {
+        "editor.wordWrapColumn": 80,
+        "editor.rulers": [80],
+        "editor.defaultFormatter": "ms-python.black-formatter",
+    },
 
     // isort formatter
     "isort.args": [
