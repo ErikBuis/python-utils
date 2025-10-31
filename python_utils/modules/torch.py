@@ -7,7 +7,7 @@ from typing import Any, Callable, Literal, overload
 
 import numpy as np
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, Subset
 from torch.utils.data._utils.collate import (
     collate_str_fn,
     default_collate_fn_map,
@@ -22,15 +22,16 @@ default_collate_fn_map.update({type(None): collate_str_fn})
 
 
 def collate_replace_corrupted(
-    batch_list: list[Any], dataset: Dataset, collate_fn: Callable | None = None
+    batch_list: list[Any],
+    dataset: Dataset | Subset,
+    collate_fn: Callable | None = None,
 ) -> Any:
     """Collate function that allows to replace corrupted samples in the batch.
 
     The given dataset should return None when a sample is corrupted. This
     function will then replace such a sample with another randomly selected
-    sample from the dataset. Additional functionalities (faster replacement,
-    preventing infinite loops) will be enabled if the dataset has an attribute
-    called `corrupted_samples`. See the warning below for more information.
+    sample from the dataset. A RuntimeError will be raised when all samples in
+    the dataset are corrupted.
 
     Warning: It is recommended to keep track of corrupted samples in your
     Dataset class, so that you can immediately skip them when __getitem__() is
@@ -49,11 +50,8 @@ def collate_replace_corrupted(
     >>>             return
     >>>         return sample
     Furthermore, if you do decide to provide the `corrupted_samples` attribute,
-    this function will use that information to:
-    1. Avoid resampling corrupted samples, which can significantly speed up the
-       replacement process.
-    2. Raise a RuntimeError when all samples in the dataset are corrupted, which
-       prevents an infinite loop.
+    this function will use that information to avoid resampling corrupted
+    samples, which can significantly speed up the replacement process.
 
     Warning: Since corrupted samples are replaced with random other samples from
     the dataset, a sample might be sampled multiple times in one pass through
@@ -73,7 +71,7 @@ def collate_replace_corrupted(
 
     Args:
         batch_list: List of samples from the DataLoader.
-        dataset: Dataset that the DataLoader is passing through.
+        dataset: Dataset or Subset that the DataLoader is passing through.
         collate_fn: The function to call once the batch has no corrupted samples
             any more. If None, torch.utils.data.dataloader.default_collate() is
             called.
@@ -90,34 +88,33 @@ def collate_replace_corrupted(
     batch_list = [sample for sample in batch_list if sample is not None]
 
     # Replace the corrupted samples with other randomly selected samples.
-    if len(batch_list) < B:
+    if len(batch_list) != B:
         D = len(dataset)  # type: ignore
+        potential_samples = set(range(D))
 
         # If the dataset has a `corrupted_samples` attribute, use it to avoid
-        # resampling corrupted samples and to prevent infinite loops.
+        # resampling corrupted samples.
         corrupted_samples: set[int] | None = getattr(
-            dataset, "corrupted_samples", None
+            dataset.dataset if isinstance(dataset, Subset) else dataset,
+            "corrupted_samples",
+            None,
         )
-        if corrupted_samples is None:
-            while len(batch_list) < B:
-                sample = dataset[random.randint(0, D - 1)]
-                if sample is not None:
-                    batch_list.append(sample)
+        if corrupted_samples is not None:
+            potential_samples -= corrupted_samples
 
-        else:
-            potential_samples = set(range(D)) - corrupted_samples
-            while len(batch_list) < B:
-                if len(corrupted_samples) == D:
-                    raise RuntimeError(
-                        "All samples in the dataset are corrupted."
-                    )
+        # Keep sampling until we have a full batch.
+        while len(batch_list) != B:
+            if len(potential_samples) == 0:
+                raise RuntimeError(
+                    f"All samples in the {type(dataset)} are corrupted."
+                )
 
-                idx = random.choice(list(potential_samples))
-                sample = dataset[idx]
-                if sample is not None:
-                    batch_list.append(sample)
-                else:
-                    potential_samples.remove(idx)
+            idx = random.choice(list(potential_samples))
+            sample = dataset[idx]
+            if sample is not None:
+                batch_list.append(sample)
+            else:
+                potential_samples.remove(idx)
 
     # When the whole batch is fine, apply the default collate function.
     return collate_fn(batch_list)
