@@ -32,17 +32,42 @@ def collate_replace_corrupted(
     function will then replace such a sample in the batch with another
     randomly-selected sample from the dataset.
 
-    Warning: Since corrupted samples are replaced with random other samples
-    from the dataset, a sample might be sampled multiple times in one pass
-    through the dataloader. This implies that a model might be trained on the
-    same sample multiple times in one epoch.
+    Warning: Since corrupted samples are replaced with random other samples from
+    the dataset, a sample might be sampled multiple times in one pass through
+    the dataloader (or even in one batch). This implies that a model might be
+    trained on the same sample multiple times in one epoch or batch.
 
-    Note: As a DataLoader only accepts collate functions with a single
-    argument, you should use functools.partial() to pass your dataset object
-    and your default collate function to this function. For example:
+    Warning: Since a DataLoader only accepts collate functions with a single
+    argument, you should use functools.partial() to pass your dataset object and
+    your default collate function to this function. For example:
     >>> from functools import partial
     >>> dataset = MyDataset()
     >>> collate_fn = partial(collate_replace_corrupted, dataset=dataset)
+    >>> dataloader = DataLoader(dataset, collate_fn=collate_fn)
+
+    Warning: It is recommended to keep track of corrupted samples in your
+    Dataset class, so that you can immediately skip them when __getitem__() is
+    called instead of having to perform computationally expensive loading/
+    preprocessing on these samples again. Additonally, if the dataset contains
+    only corrupted samples (e.g. because of a bug in your code), this function
+    might get stuck in an infinite loop. To solve these problems, your code
+    could look like this:
+    >>> class MyDataset(Dataset):
+    >>>     def __init__(self):
+    >>>         self.corrupted_samples = set()
+    >>>     def __getitem__(self, idx):
+    >>>         if idx in self.corrupted_samples:
+    >>>             return None
+    >>>         sample = ...  # load and preprocess sample
+    >>>         if is_corrupted(sample):
+    >>>             self.corrupted_samples.add(idx)
+    >>>             if len(self.corrupted_samples) == len(self):
+    >>>                 raise RuntimeError("All samples are corrupted!")
+    >>>             return None
+    >>>         return sample
+    >>> dataset = MyDataset()
+    >>> collate_fn = partial(collate_replace_corrupted, dataset=dataset,
+    >>>                      potential_samples=dataset.potential_samples)
     >>> dataloader = DataLoader(dataset, collate_fn=collate_fn)
 
     This function was based on:
@@ -61,9 +86,7 @@ def collate_replace_corrupted(
     # Use torch.utils.data.dataloader.default_collate() if no other default
     # collate function is specified.
     default_collate_fn = (
-        default_collate_fn
-        if default_collate_fn is not None
-        else default_collate
+        default_collate if default_collate_fn is None else default_collate_fn
     )
 
     # Filter out all corrupted samples.
