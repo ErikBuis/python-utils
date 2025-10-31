@@ -171,7 +171,6 @@ def gaussian_batched(
 def gaussian_batched(
     x: float | npt.NDArray, mu: float | npt.NDArray, sigma: npt.NDArray
 ) -> npt.NDArray:
-
     pass
 
 
@@ -193,7 +192,6 @@ def gaussian_batched(
 def gaussian_batched(
     x: float | torch.Tensor, mu: float | torch.Tensor, sigma: torch.Tensor
 ) -> torch.Tensor:
-
     pass
 
 
@@ -281,7 +279,7 @@ def monotonic_linear_fractional_rescaling_batched(
         The rescaled number(s). Will be between 0 and 1.
             Shape: Broadcasted shape of x and r.
     """
-    if isinstance(r, float):
+    if isinstance(r, (int, float)):
         sqrt_func = sqrt
     elif isinstance(r, np.ndarray):
         sqrt_func = np.sqrt
