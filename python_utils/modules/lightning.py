@@ -189,6 +189,33 @@ class OnlySaveDirectHyperparameters(pl.LightningModule):
         )
 
 
+class KeyboardInterruptCallback(pl_callbacks.Callback):
+    """Callback that reraises KeyboardInterrupt to show full stack trace.
+
+    By default, PyTorch Lightning catches a KeyboardInterrupt and performs a
+    graceful shutdown. This callback overrides that behavior to immediately
+    reraise the exception, allowing you to see the full stack trace when you
+    pressed Ctrl+C.
+    """
+
+    @override
+    def on_exception(
+        self,
+        trainer: pl.Trainer,
+        pl_module: pl.LightningModule,
+        exception: BaseException,
+    ) -> None:
+        """Called when an exception is raised during training.
+
+        Args:
+            trainer: The PyTorch Lightning trainer.
+            pl_module: The current LightningModule.
+            exception: The exception that was raised.
+        """
+        if isinstance(exception, KeyboardInterrupt):
+            raise exception
+
+
 def prepare_best_model_loading(
     trainer: pl.Trainer, model: pl.LightningModule, **kwargs: Any
 ) -> None:
