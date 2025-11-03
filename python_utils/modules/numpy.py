@@ -263,7 +263,9 @@ def replace_padding(
         or padding_value.shape == (1, max_L_bs)
         or padding_value.shape == (B * max_L_bs - L_bs.sum(),)
     ):
-        padding_value = padding_value.reshape(B, max_L_bs, *[1] * len(star))
+        padding_value = padding_value.reshape(
+            *padding_value.shape, *[1] * len(star)
+        )
 
     # Now handle all expected shapes.
     # Note that the shape of the value to be set (values_padded[~mask]) is
