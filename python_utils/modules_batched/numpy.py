@@ -413,20 +413,25 @@ def arange_batched(
             Shape: [B]
     """
     B = len(starts)
+    inferred_dtype = np.result_type(
+        starts.dtype,
+        ends.dtype if ends is not None else starts.dtype,
+        steps.dtype if steps is not None else starts.dtype,
+    )
 
     # Prepare the input arrays.
     if ends is None:
         ends = starts
-        starts = np.zeros(B)
+        starts = np.zeros(B, dtype=inferred_dtype)
     if steps is None:
-        steps = np.ones(B)
+        steps = np.ones(B, dtype=inferred_dtype)
 
     # Compute the arange sequences in parallel.
-    L_bs = ((ends - starts) // steps).astype(np.intp)  # [B]  # type: ignore
+    L_bs = np.ceil((ends - starts) / steps).astype(np.intp)  # [B]
     max_L_bs = int(L_bs.max())
     aranges = (
         np.expand_dims(starts, 1)  # [B, 1]
-        + np.arange(max_L_bs)  # [max(L_bs)]
+        + np.arange(max_L_bs, dtype=inferred_dtype)  # [max(L_bs)]
         * np.expand_dims(steps, 1)  # [B, 1]
     )  # [B, max(L_bs)]  # fmt: skip
 
@@ -436,8 +441,9 @@ def arange_batched(
             aranges, L_bs, padding_value=padding_value, in_place=True
         )
 
-    # Perform final adjustments.
-    aranges = aranges.astype(dtype if dtype is not None else aranges.dtype)
+    # Cast to the desired dtype.
+    if dtype is not None:
+        aranges = aranges.astype(dtype)
 
     return aranges, L_bs
 
@@ -472,6 +478,7 @@ def linspace_batched(
             Shape: [B]
     """
     B = len(starts)
+    inferred_dtype = np.result_type(starts.dtype, ends.dtype, steps.dtype)
 
     # Compute the linspace sequences in parallel.
     L_bs = steps.astype(np.intp)  # [B]
@@ -479,13 +486,15 @@ def linspace_batched(
     L_bs_minus_1 = L_bs - 1  # [B]
     linspaces = (
         np.expand_dims(starts, 1)  # [B, 1]
-        + np.arange(max_L_bs)  # [max(L_bs)]
+        + np.arange(max_L_bs, dtype=inferred_dtype)  # [max(L_bs)]
         / np.expand_dims(L_bs_minus_1, 1)  # [B, 1]
         * np.expand_dims(ends - starts, 1)  # [B, 1]
     )  # [B, max(L_bs)]  # fmt: skip
 
     # Prevent floating point errors.
-    linspaces[np.arange(B), L_bs_minus_1] = ends.astype(linspaces.dtype)
+    linspaces[np.arange(B, dtype=np.intp), L_bs_minus_1] = ends.astype(
+        linspaces.dtype
+    )
 
     # Replace values that are out of bounds with the padding value.
     if padding_value is not None:
@@ -493,10 +502,9 @@ def linspace_batched(
             linspaces, L_bs, padding_value=padding_value, in_place=True
         )
 
-    # Perform final adjustments.
-    linspaces = linspaces.astype(
-        dtype if dtype is not None else linspaces.dtype
-    )
+    # Cast to the desired dtype.
+    if dtype is not None:
+        linspaces = linspaces.astype(dtype)
 
     return linspaces, L_bs
 
