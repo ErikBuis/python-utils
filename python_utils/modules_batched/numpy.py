@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from typing import Any, Literal, cast, overload
 
 import numpy as np
@@ -383,7 +384,7 @@ def sample_unique_pairs_batched(
 
 def arange_batched(
     starts: npt.NDArray[np.number],
-    ends: npt.NDArray[np.number] | None = None,
+    stops: npt.NDArray[np.number] | None = None,
     steps: npt.NDArray[np.number] | None = None,
     padding_value: Any = None,
     dtype: np.dtype | None = None,
@@ -393,7 +394,7 @@ def arange_batched(
     Args:
         starts: The start value for each array in the batch.
             Shape: [B]
-        ends: The end value for each array in the batch. If None, the end
+        stops: The end value for each array in the batch. If None, the end
             value is set to the start value.
             Shape: [B]
         steps: The step value for each array in the batch. If None, the step
@@ -409,25 +410,27 @@ def arange_batched(
         - A batch of arrays with values in the range [start, end).
             Padded with padding_value.
             Shape: [B, max(L_bs)]
-        - The number of values of any arange sequence in the batch.
+        - The number of values of the arange sequences in the batch.
             Shape: [B]
     """
     B = len(starts)
-    inferred_dtype = np.result_type(
+    inferred_dtype = np.promote_types(
         starts.dtype,
-        ends.dtype if ends is not None else starts.dtype,
-        steps.dtype if steps is not None else starts.dtype,
+        np.promote_types(
+            stops.dtype if stops is not None else starts.dtype,
+            steps.dtype if steps is not None else starts.dtype,
+        ),
     )
 
     # Prepare the input arrays.
-    if ends is None:
-        ends = starts
+    if stops is None:
+        stops = starts
         starts = np.zeros(B, dtype=inferred_dtype)
     if steps is None:
         steps = np.ones(B, dtype=inferred_dtype)
 
     # Compute the arange sequences in parallel.
-    L_bs = np.ceil((ends - starts) / steps).astype(np.intp)  # [B]
+    L_bs = np.ceil((stops - starts) / steps).astype(np.intp)  # [B]
     max_L_bs = int(L_bs.max())
     aranges = (
         np.expand_dims(starts, 1)  # [B, 1]
@@ -448,10 +451,80 @@ def arange_batched(
     return aranges, L_bs
 
 
+def arange_batched_packed(
+    starts: npt.NDArray[np.number],
+    stops: npt.NDArray[np.number] | None = None,
+    steps: npt.NDArray[np.number] | None = None,
+    dtype: np.dtype | None = None,
+) -> tuple[npt.NDArray[np.number], npt.NDArray[np.intp], int]:
+    """Create a batch of arrays with values in the range [start, end).
+
+    Args:
+        starts: The start value for each array in the batch.
+            Shape: [B]
+        stops: The end value for each array in the batch. If None, the end
+            value is set to the start value.
+            Shape: [B]
+        steps: The step value for each array in the batch. If None, the step
+            value is set to 1.
+            Shape: [B]
+        dtype: The data type of the output array.
+
+    Returns:
+        Tuple containing:
+        - A batch of arrays with values in the range [start, end).
+            Shape: [L]
+        - The number of values of the arange sequences in the batch.
+            Shape: [B]
+        - The maximum length of the arange sequences in the batch.
+    """
+    B = len(starts)
+    inferred_dtype = np.promote_types(
+        starts.dtype,
+        np.promote_types(
+            stops.dtype if stops is not None else starts.dtype,
+            steps.dtype if steps is not None else starts.dtype,
+        ),
+    )
+
+    # Prepare the input arrays.
+    if stops is None:
+        stops = starts
+        starts = np.zeros(B, dtype=inferred_dtype)
+    if steps is None:
+        steps = np.ones(B, dtype=inferred_dtype)
+
+    # Compute the starts and offsets of the arange sequences in parallel.
+    L_bs = np.ceil((stops - starts) / steps).astype(np.intp)  # [B]
+    max_L_bs = int(L_bs.max())
+    starts_repeated = np.repeat(starts, L_bs)  # [L]
+    steps_repeated = np.repeat(steps, L_bs)  # [L]
+    offsets_packed = np.cumsum(steps_repeated)  # [L]
+
+    # Correct the offsets to start from zero for each sequence.
+    nonzero_idcs = np.nonzero(L_bs)[0]  # [B_nonzero]
+    L_bs_nonzero = L_bs[nonzero_idcs]  # [B_nonzero]
+    if len(nonzero_idcs) != 0:
+        start_idcs = np.cumsum(L_bs_nonzero) - L_bs_nonzero  # [B_nonzero]
+        corrections_packed = np.repeat(
+            offsets_packed[start_idcs], L_bs_nonzero
+        )  # [L]
+        offsets_packed -= corrections_packed
+
+    # Compute the arange sequences in parallel.
+    aranges = starts_repeated + offsets_packed  # [L]
+
+    # Cast to the desired dtype.
+    if dtype is not None:
+        aranges = aranges.astype(dtype)
+
+    return aranges, L_bs, max_L_bs
+
+
 def linspace_batched(
     starts: npt.NDArray[np.number],
-    ends: npt.NDArray[np.number],
-    steps: npt.NDArray[np.integer],
+    stops: npt.NDArray[np.number],
+    nums: npt.NDArray[np.integer],
     padding_value: Any = None,
     dtype: np.dtype | None = None,
 ) -> tuple[npt.NDArray[np.number], npt.NDArray[np.intp]]:
@@ -460,9 +533,10 @@ def linspace_batched(
     Args:
         starts: The start value for each array in the batch.
             Shape: [B]
-        ends: The end value for each array in the batch.
+        stops: The end value for each array in the batch.
             Shape: [B]
-        steps: The number of steps for each array in the batch.
+        nums: The number of samples to generate for each array in the batch. If
+            the number of samples is 1, only the start value is returned.
             Shape: [B]
         padding_value: The value to pad the values with. If None, the values
             are padded with random values. This is faster than padding with
@@ -474,27 +548,43 @@ def linspace_batched(
         - A batch of arrays with values in the range [start, end].
             Padded with padding_value.
             Shape: [B, max(L_bs)]
-        - The number of values of any linspace sequence in the batch.
+        - The number of values of the linspace sequences in the batch.
             Shape: [B]
     """
-    B = len(starts)
-    inferred_dtype = np.result_type(starts.dtype, ends.dtype, steps.dtype)
+    inferred_dtype = np.promote_types(
+        starts.dtype, np.promote_types(stops.dtype, nums.dtype)
+    )
+
+    # Compute the steps of the linspace sequences in parallel.
+    L_bs = nums.astype(np.intp)  # [B]
+    max_L_bs = int(L_bs.max())
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", category=RuntimeWarning
+        )  # ignore division by zero since we already handle it in np.where
+        steps = np.where(L_bs != 1, (stops - starts) / (L_bs - 1), 0)  # [B]
 
     # Compute the linspace sequences in parallel.
-    L_bs = steps.astype(np.intp)  # [B]
-    max_L_bs = int(L_bs.max())
-    L_bs_minus_1 = L_bs - 1  # [B]
     linspaces = (
         np.expand_dims(starts, 1)  # [B, 1]
         + np.arange(max_L_bs, dtype=inferred_dtype)  # [max(L_bs)]
-        / np.expand_dims(L_bs_minus_1, 1)  # [B, 1]
-        * np.expand_dims(ends - starts, 1)  # [B, 1]
+        * np.expand_dims(steps, 1)  # [B, 1]
     )  # [B, max(L_bs)]  # fmt: skip
 
-    # Prevent floating point errors.
-    linspaces[np.arange(B, dtype=np.intp), L_bs_minus_1] = ends.astype(
-        linspaces.dtype
-    )
+    # Set the last element of each linspace to the stop value manually to avoid
+    # numerical issues.
+    nonzero_idcs = np.nonzero(L_bs)[0]  # [B_nonzero]
+    L_bs_nonzero = L_bs[nonzero_idcs]  # [B_nonzero]
+    if len(nonzero_idcs) != 0:
+        stop_idcs = L_bs_nonzero - 1  # [B_nonzero]
+
+        # Only set the stop values for sequences with at least two elements.
+        atleasttwo_idcs = nonzero_idcs[L_bs_nonzero != 1]  # [B_atleasttwo]
+        stop_idcs = stop_idcs[L_bs_nonzero != 1]  # [B_atleasttwo]
+
+        linspaces[atleasttwo_idcs, stop_idcs] = stops[atleasttwo_idcs].astype(
+            linspaces.dtype
+        )
 
     # Replace values that are out of bounds with the padding value.
     if padding_value is not None:
@@ -507,6 +597,78 @@ def linspace_batched(
         linspaces = linspaces.astype(dtype)
 
     return linspaces, L_bs
+
+
+def linspace_batched_packed(
+    starts: npt.NDArray[np.number],
+    stops: npt.NDArray[np.number],
+    nums: npt.NDArray[np.integer],
+    dtype: np.dtype | None = None,
+) -> tuple[npt.NDArray[np.number], npt.NDArray[np.intp], int]:
+    """Create a batch of arrays with values in the range [start, end].
+
+    Args:
+        starts: The start value for each array in the batch.
+            Shape: [B]
+        stops: The end value for each array in the batch.
+            Shape: [B]
+        nums: The number of samples to generate for each array in the batch. If
+            the number of samples is 1, only the start value is returned.
+            Shape: [B]
+        dtype: The data type of the output array.
+
+    Returns:
+        Tuple containing:
+        - A batch of arrays with values in the range [start, end].
+            Padded with padding_value.
+            Shape: [B, max(L_bs)]
+        - The number of values of the linspace sequences in the batch.
+            Shape: [B]
+        - The maximum length of the linspace sequences in the batch.
+    """
+    # Compute the steps of the linspace sequences in parallel.
+    L_bs = nums.astype(np.intp)  # [B]
+    max_L_bs = int(L_bs.max())
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", category=RuntimeWarning
+        )  # ignore division by zero since we already handle it in np.where
+        steps = np.where(L_bs != 1, (stops - starts) / (L_bs - 1), 0)  # [B]
+
+    # Compute the starts and offsets of the linspace sequences in parallel.
+    starts_repeated = np.repeat(starts, L_bs)  # [L]
+    steps_repeated = np.repeat(steps, L_bs)  # [L]
+    offsets_packed = np.cumsum(steps_repeated)  # [L]
+
+    # Correct the offsets to start from zero for each sequence.
+    nonzero_idcs = np.nonzero(L_bs)[0]  # [B_nonzero]
+    L_bs_nonzero = L_bs[nonzero_idcs]  # [B_nonzero]
+    if len(nonzero_idcs) != 0:
+        start_idcs = np.cumsum(L_bs_nonzero) - L_bs_nonzero  # [B_nonzero]
+        corrections_packed = np.repeat(
+            offsets_packed[start_idcs], L_bs_nonzero
+        )  # [L]
+        offsets_packed -= corrections_packed
+
+    # Compute the linspace sequences in parallel.
+    linspaces = starts_repeated + offsets_packed  # [L]
+
+    # Set the last element of each linspace to the stop value manually to avoid
+    # numerical issues.
+    if len(nonzero_idcs) != 0:
+        stop_idcs = np.cumsum(L_bs_nonzero) - 1  # [B_nonzero]
+
+        # Only set the stop values for sequences with at least two elements.
+        atleasttwo_idcs = nonzero_idcs[L_bs_nonzero != 1]  # [B_atleasttwo]
+        stop_idcs = stop_idcs[L_bs_nonzero != 1]  # [B_atleasttwo]
+
+        linspaces[stop_idcs] = stops[atleasttwo_idcs].astype(linspaces.dtype)
+
+    # Cast to the desired dtype.
+    if dtype is not None:
+        linspaces = linspaces.astype(dtype)
+
+    return linspaces, L_bs, max_L_bs
 
 
 def take_batched(

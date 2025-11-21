@@ -1,3 +1,5 @@
+# pyright: reportPossiblyUnboundVariable=false
+
 from __future__ import annotations
 
 from math import pi, sqrt
@@ -5,7 +7,11 @@ from typing import overload
 
 import numpy as np
 import numpy.typing as npt
-import torch
+
+try:
+    import torch
+except ImportError:
+    pass
 
 
 @overload

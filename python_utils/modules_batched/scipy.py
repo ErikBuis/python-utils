@@ -1,20 +1,21 @@
 from __future__ import annotations
 
-import torch
+import numpy as np
+import numpy.typing as npt
 from scipy.interpolate import griddata
 from scipy.spatial import QhullError
 
 
 def griddata_batched(
-    points: torch.Tensor,
-    values: torch.Tensor,
-    P_bs: torch.Tensor,
-    xi: torch.Tensor,
-    X_bs: torch.Tensor,
+    points: npt.NDArray[np.number],
+    values: npt.NDArray[np.number],
+    P_bs: npt.NDArray[np.integer],
+    xi: npt.NDArray[np.number],
+    X_bs: npt.NDArray[np.integer],
     method: str = "linear",
-    fill_value: float = torch.nan,
+    fill_value: float = np.nan,
     rescale: bool = False,
-) -> torch.Tensor:
+) -> npt.NDArray[np.floating]:
     """
     A batched version of scipy.interpolate.griddata.
 
@@ -62,25 +63,22 @@ def griddata_batched(
             Shape: [B, max(X_bs)]
     """
     B, max_X_bs, _ = xi.shape
-    device = points.device
 
     # Initialize the output array.
-    values_interpolated = torch.full((B, max_X_bs), fill_value, device=device)
+    values_interpolated = np.full((B, max_X_bs), fill_value)
 
     # Loop over the batch and interpolate the values.
     for b in range(B):
         if P_bs[b] == 0:
             continue  # no points to interpolate between
         try:
-            values_interpolated[b, : X_bs[b]] = torch.from_numpy(
-                griddata(
-                    points[b, : P_bs[b]],
-                    values[b, : P_bs[b]],
-                    xi[b, : X_bs[b]],
-                    method=method,
-                    fill_value=fill_value,
-                    rescale=rescale,
-                )
+            values_interpolated[b, : X_bs[b]] = griddata(
+                points[b, : P_bs[b]],
+                values[b, : P_bs[b]],
+                xi[b, : X_bs[b]],
+                method=method,
+                fill_value=fill_value,
+                rescale=rescale,
             )
         except QhullError:  # the convex hull is degenerate
             pass  # leave the fill_value in place
