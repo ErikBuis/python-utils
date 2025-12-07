@@ -26,7 +26,7 @@ class NDArrayGeneric(np.ndarray, Generic[T]):
         return super().__getitem__(key)  # type: ignore
 
 
-# ################################## PADDING ###################################
+# ########################### PACK/PAD/SEQUENTIALIZE ###########################
 
 
 # Unlike with torch, in numpy we can't cache this function because numpy arrays
@@ -71,8 +71,34 @@ def pack_padded(
             Shape: [L, *]
     """
     max_L_bs = values.shape[1]
+
     mask = mask_padding(L_bs, max_L_bs)  # [B, max(L_bs)]
     return values[mask]
+
+
+def pack_sequence(
+    values: Sequence[npt.NDArray[NpGeneric]],
+) -> npt.NDArray[NpGeneric]:
+    """Pack a batch of sequences into a single array.
+
+    This function is provided for symmetry with sequentialize_packed(), but is
+    not really needed since using np.concat() directly is often clearer for the
+    reader.
+
+    Args:
+        values: The sequence of values to pack.
+            Length: B
+            Shape of inner arrays: [L_b, *]
+
+    Returns:
+        The packed values. If the input is empty, returns an empty array with
+        dtype float64.
+            Shape: [L, *]
+    """
+    if len(values) == 0:
+        return np.empty((0,), dtype=np.float64)  # type: ignore
+
+    return np.concat(values)  # [L, *]
 
 
 def pad_packed(
@@ -115,27 +141,6 @@ def pad_packed(
     values_padded[mask] = values
 
     return values_padded
-
-
-def pack_sequence(
-    values: Sequence[npt.NDArray[NpGeneric]],
-) -> npt.NDArray[NpGeneric]:
-    """Pack a batch of sequences into a single array.
-
-    This function is provided for symmetry with sequentialize_packed(),
-    but is not really needed since using np.concat() directly is often clearer
-    for the reader.
-
-    Args:
-        values: The sequence of values to pack.
-            Length: B
-            Shape of inner arrays: [L_b, *]
-
-    Returns:
-        The packed values.
-            Shape: [L, *]
-    """
-    return np.concat(values)  # [L, *]
 
 
 def pad_sequence(
@@ -193,6 +198,9 @@ def sequentialize_packed(
             Length: B
             Shape of inner arrays: [L_b, *]
     """
+    if len(L_bs) == 0:
+        return []
+
     L_bs_cumsum = L_bs.cumsum(axis=0)  # [B]
     return np.split(values, L_bs_cumsum[:-1])
 
@@ -214,6 +222,54 @@ def sequentialize_padded(
             Shape of inner arrays: [L_b, *]
     """
     return sequentialize_packed(pack_padded(values, L_bs), L_bs)
+
+
+def apply_mask(
+    values: npt.NDArray[NpGeneric],
+    mask: npt.NDArray[np.bool_],
+    L_bs: npt.NDArray[NpInteger],
+    padding_value: Any = None,
+) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[NpInteger]]:
+    """Apply an additional mask to a batch of values.
+
+    All values that are not marked for removal by the mask will be kept, while
+    the remaining values will be moved to the front of the array. Since the
+    number of kept values in each sample can change, the function will also
+    return the number of kept values in each sample.
+
+    Args:
+        values: The values to apply the mask to. Padding could be arbitrary.
+            Shape: [B, max(L_bs), *]
+        mask: The mask to apply. Padding could be arbitrary, since the function
+            will apply the original mask internally in addition to the given
+            mask.
+            Shape: [B, max(L_bs)]
+        L_bs: The number of valid values in each sample.
+            Shape: [B]
+        padding_value: The value to pad the values with. If None, the values
+            are padded with random values. This is faster than padding with
+            a specific value.
+
+    Returns:
+        Tuple containing:
+        - The values with the given mask applied. Padded with padding_value.
+            Shape: [B, max(L_bs_kept), *]
+        - The number of kept values in each sample.
+            Shape: [B]
+    """
+    max_L_bs = values.shape[1]
+
+    # Create a mask that indicates which values should be kept in each sample.
+    mask = mask & mask_padding(L_bs, max_L_bs)  # [B, max(L_bs)]
+    L_bs_kept = mask.sum(axis=1)  # [B]
+    max_L_bs_kept = int(L_bs_kept.max()) if len(L_bs_kept) != 0 else 0
+
+    # Move the masked values to the front of the array.
+    values = pad_packed(
+        values[mask], L_bs_kept, max_L_bs_kept, padding_value=padding_value
+    )  # [B, max(L_bs_kept), *]
+
+    return values, L_bs_kept
 
 
 def replace_padding(
@@ -247,13 +303,20 @@ def replace_padding(
             Shape: [B, max(L_bs), *]
     """
     B, max_L_bs, *star = values.shape
+
+    # Create a mask that indicates which values are valid in each sample.
     mask = mask_padding(L_bs, max_L_bs)  # [B, max(L_bs)]
+
+    # Handle in-place operations.
     values_padded = values if in_place else values.copy()
 
     # Handle the case where padding_value is a scalar.
     if not isinstance(padding_value, np.ndarray):
         values_padded[~mask] = padding_value
         return values_padded
+
+    # Convert padding_value to the same dtype as values.
+    padding_value = padding_value.astype(values.dtype)
 
     # Handle shapes that are missing the star dimensions.
     if (
@@ -264,7 +327,7 @@ def replace_padding(
         or padding_value.shape == (B * max_L_bs - L_bs.sum(),)
     ):
         padding_value = padding_value.reshape(
-            *padding_value.shape, *[1] * len(star)
+            (*padding_value.shape, *[1] * len(star))
         )
 
     # Now handle all expected shapes.
@@ -319,64 +382,26 @@ def last_valid_value_padding(
         The padded values. Padded with the last valid value.
             Shape: [B, max(L_bs), *]
     """
-    B = len(L_bs)
+    B, max_L_bs, *star = values.shape
+
+    # Determine the padding value for each sample.
     arange_B = np.arange(B)
-    padding_value = values[arange_B, L_bs - 1]  # [B, *]
+    padding_value = (
+        values[arange_B, L_bs - 1]
+        if max_L_bs != 0
+        else np.empty((B, *star), dtype=values.dtype)
+    )  # [B, *]
     if padding_value_empty_rows is not None:
         padding_value = padding_value.copy()
         padding_value[L_bs == 0] = padding_value_empty_rows
+
+    # Replace the padding values using per row replacement.
     padding_value_new = np.expand_dims(padding_value, 1)  # [B, 1, *]
     values = replace_padding(
         values, L_bs, padding_value=padding_value_new, in_place=in_place
     )  # [B, max(L_bs), *]
+
     return values
-
-
-def apply_mask(
-    values: npt.NDArray[NpGeneric],
-    mask: npt.NDArray[np.bool_],
-    L_bs: npt.NDArray[NpInteger],
-    padding_value: Any = None,
-) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[NpInteger]]:
-    """Apply an additional mask to a batch of values.
-
-    All values that are not marked for removal by the mask will be kept, while
-    the remaining values will be moved to the front of the array. Since the
-    number of kept values in each sample can change, the function will also
-    return the number of kept values in each sample.
-
-    Args:
-        values: The values to apply the mask to. Padding could be arbitrary.
-            Shape: [B, max(L_bs), *]
-        mask: The mask to apply. Padding could be arbitrary, since the function
-            will apply the original mask internally in addition to the given
-            mask.
-            Shape: [B, max(L_bs)]
-        L_bs: The number of valid values in each sample.
-            Shape: [B]
-        padding_value: The value to pad the values with. If None, the values
-            are padded with random values. This is faster than padding with
-            a specific value.
-
-    Returns:
-        Tuple containing:
-        - The values with the given mask applied. Padded with padding_value.
-            Shape: [B, max(L_bs_kept), *]
-        - The number of kept values in each sample.
-            Shape: [B]
-    """
-    # Create a mask that indicates which values should be kept in each sample.
-    max_L_bs = values.shape[1]
-    mask = mask & mask_padding(L_bs, max_L_bs)  # [B, max(L_bs)]
-    L_bs_kept = mask.sum(axis=1)  # [B]
-    max_L_bs_kept = int(L_bs_kept.max())
-
-    # Move the masked values to the front of the array.
-    values = pad_packed(
-        values[mask], L_bs_kept, max_L_bs_kept, padding_value=padding_value
-    )  # [B, max(L_bs_kept), *]
-
-    return values, L_bs_kept
 
 
 # #################################### MATHS ###################################
