@@ -260,8 +260,8 @@ def interp_batched(
     left_idx = right_idx - 1  # [B, N]
 
     # Clamp indices to valid range (we will handle the edges later).
-    left_idx = left_idx.clip(a_min=0, a_max=M - 1)  # [B, N]
-    right_idx = right_idx.clip(a_min=0, a_max=M - 1)  # [B, N]
+    left_idx = left_idx.clip(min=0, max=M - 1)  # [B, N]
+    right_idx = right_idx.clip(min=0, max=M - 1)  # [B, N]
 
     # Gather neighbour values.
     x_left = np.take_along_axis(xp, left_idx, 1)  # [B, N]
@@ -320,7 +320,7 @@ def sample_unique_batched(
     # sample with replacement. To do this, the np.clip(min=num_samples) and
     # % L_b operations are used.
     weights = mask_padding(
-        L_bs.clip(amin=num_samples), max_L_bs
+        L_bs.clip(min=num_samples), max_L_bs
     ).astype(np.float64)  # [B, max(L_bs)]  # fmt: skip
     weights = weights / weights.sum(axis=1, keepdims=True)  # [B, max(L_bs)]
     rng = np.random.default_rng()
