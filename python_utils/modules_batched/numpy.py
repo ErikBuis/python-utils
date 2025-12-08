@@ -208,6 +208,11 @@ def interp_batched(
 
     This function performs linear interpolation on a batch of 1D arrays.
 
+    Warning: This function internally uses a for-loop over the batch dimension.
+    This is because unlike torch.searchsorted(), np.searchsorted() does not
+    support batched inputs, and there is no other low-level numpy function to
+    vectorize this operation.
+
     Args:
         x: The x-coordinates at which to evaluate the interpolated values.
             Shape: [B, N]
@@ -229,7 +234,7 @@ def interp_batched(
         The interpolated values for each batch.
             Shape: [B, N]
     """
-    _, M = xp.shape
+    B, M = xp.shape
 
     # Handle periodic interpolation.
     if period is not None:
@@ -249,7 +254,9 @@ def interp_batched(
         )
 
     # Find indices of neighbours in xp.
-    right_idx = np.searchsorted(xp, x)  # [B, N]
+    right_idx = np.stack(
+        [np.searchsorted(xp[b], x[b]) for b in range(B)]
+    )  # [B, N]
     left_idx = right_idx - 1  # [B, N]
 
     # Clamp indices to valid range (we will handle the edges later).
