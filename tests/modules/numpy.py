@@ -179,27 +179,31 @@ class TestPackSequence:
         self,
         simple_sequence: list[npt.NDArray[np.float64]],
         simple_packed: npt.NDArray[np.float64],
+        simple_L_bs: npt.NDArray[np.int64],
     ) -> None:
-        packed = pack_sequence(simple_sequence)
+        max_L_bs = int(simple_L_bs.max())
+        packed = pack_sequence(simple_sequence, max_L_bs)
         assert np.array_equal(packed, simple_packed)
 
     def test_pack_sequence_multi_dimensional(
         self,
         multidim_sequence: list[npt.NDArray[np.float64]],
         multidim_packed: npt.NDArray[np.float64],
+        multidim_L_bs: npt.NDArray[np.int64],
     ) -> None:
-        packed = pack_sequence(multidim_sequence)
+        max_L_bs = int(multidim_L_bs.max())
+        packed = pack_sequence(multidim_sequence, max_L_bs)
         assert np.array_equal(packed, multidim_packed)
 
     def test_pack_sequence_all_zeros(self) -> None:
         values = [np.empty(0), np.empty(0), np.empty(0)]
-        packed = pack_sequence(values)
+        packed = pack_sequence(values, 0)
         expected_packed = np.empty(0)
         assert np.array_equal(packed, expected_packed)
 
     def test_pack_sequence_empty(self) -> None:
         values = []
-        packed = pack_sequence(values)
+        packed = pack_sequence(values, 0)
         expected_packed = np.empty(0)
         assert np.array_equal(packed, expected_packed)
 

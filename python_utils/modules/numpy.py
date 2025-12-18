@@ -28,6 +28,42 @@ class NDArrayGeneric(np.ndarray, Generic[T]):
 
 # ########################### PACK/PAD/SEQUENTIALIZE ###########################
 
+# Functions for packing, padding, and sequentializing numpy arrays.
+#
+# Sometimes, a batch of samples contains variable-length data. For example, in a
+# batch of sequences, each sequence could have a different length. To convert
+# between the above-mentioned representations, we provide several functions.
+#
+# These functions use the following naming conventions:
+# - L_bs has shape [B] (batch)
+# - L_bs[b]    : L_b
+# - L_bs.sum() : L
+# - L_bs.max() : max_L_bs or max(L_bs)
+#
+# The *_multidim() functions in this module are a generalization of this concept
+# to multiple dimensions. For example, in a batch of images, each image could
+# have a different height and width. The multi-dimensional padding and packing
+# functions allow us to handle such cases.
+#
+# These *_multidim() functions use the following naming conventions:
+# - L_bsds has shape [B, D] (batch x dimension)
+# - L_bsds[:, d]              : L_bsd
+# - L_bsds[b, :]              : L_bds
+# - L_bsds[b, d]              : L_bd
+# - L_bsds.prod(axis=1)       : L_bs
+# - L_bsds.prod(axis=1).sum() : L
+# - L_bsds.max(axis=0)        : max_L_bsds or max(L_bsds)
+# - L_bsds.max(axis=0)[d]     : max_L_bsd or max(L_bsd)
+# - L_bsds.prod(axis=1).max() : max_L_bs or max(L_bs)
+# - L_bsds.max(axis=0).prod() : theory_max_L_bs or prod(max(L_bsds))
+#
+# Note on max_L_bs vs theory_max_L_bs:
+# max_L_bs gives the maximum number of values of an actual sample, while
+# theory_max_L_bs gives the theoretical maximum number of values in any sample.
+# The latter can be larger than max_L_bs in certain cases, such as when one
+# sample has shape [10, 10] and another sample has shape [20, 5]. In this case,
+# theory_max_L_bs = 200, but max_L_bs = 100.
+
 
 # Unlike with torch, in numpy we can't cache this function because numpy arrays
 # are not hashable.
@@ -55,6 +91,47 @@ def mask_padding(
     )  # [B, max(L_bs)]  # fmt: skip
 
 
+def mask_padding_multidim(
+    L_bsds: npt.NDArray[np.integer], max_L_bsds: npt.NDArray[np.integer]
+) -> npt.NDArray[np.bool_]:
+    """Create a multi-dimensional mask based on per-batch sizes.
+
+    Args:
+        L_bsds: The number of valid values in each sample for each dimension.
+            Shape: [B, D]
+        max_L_bsds: The maximum number of values of any element in the batch for
+            each dimension. Must be equal to max(L_bsds).
+            Shape: [D]
+
+    Returns:
+        A mask that indicates which values are valid in each sample.
+        mask[b, i_0, ..., i_{D+1}] is True if i_d < L_bd for all d in [0, D)
+        and False otherwise.
+            Shape: [B, max(L_bs0), ..., max(L_bs{D-1})]
+    """
+    B, D = L_bsds.shape
+    dtype = L_bsds.dtype
+
+    # Create coordinate grids for each dimension.
+    mask = np.ones((B, *max_L_bsds), dtype=np.bool_)
+    for d in range(D):
+        # Create coordinates for dimension d.
+        coords = np.arange(max_L_bsds[d], dtype=dtype)  # [max(L_bsd)]
+
+        # Reshape coords to [1, 1, ..., max(L_bsd), ..., 1].
+        unsqueeze_shape = (1, *[1] * d, max_L_bsds[d], *[1] * (D - d - 1))
+        coords_unsqueezed = coords.reshape(unsqueeze_shape)
+
+        # Reshape L_bsd to [B, 1, ..., 1] for broadcasting.
+        unsqueeze_shape = (B, *[1] * D)
+        L_bsd_unsqueezed = L_bsds[:, d].reshape(unsqueeze_shape)
+
+        # Create the mask by comparing each coordinate with its limits.
+        mask &= coords_unsqueezed < L_bsd_unsqueezed
+
+    return mask
+
+
 def pack_padded(
     values: npt.NDArray[NpGeneric], L_bs: npt.NDArray[np.integer]
 ) -> npt.NDArray[NpGeneric]:
@@ -76,29 +153,82 @@ def pack_padded(
     return values[mask]
 
 
+def pack_padded_multidim(
+    values: npt.NDArray[NpGeneric], L_bsds: npt.NDArray[np.integer]
+) -> npt.NDArray[NpGeneric]:
+    """Pack a batch of multi-dimensionally padded values into a single array.
+
+    Args:
+        values: The values to pack. Padding could be arbitrary.
+            Shape: [B, max(L_bs0), ..., max(L_bs{D-1}), *]
+        L_bsds: The number of valid values in each sample for each dimension.
+            Shape: [B, D]
+
+    Returns:
+        The packed values.
+            Shape: [L, *]
+    """
+    D = L_bsds.shape[1]
+    max_L_bsds = np.array(values.shape[1 : 1 + D])  # [D]
+
+    mask = mask_padding_multidim(
+        L_bsds, max_L_bsds
+    )  # [B, max(L_bs0), ..., max(L_bs{D-1})]
+    return values[mask]
+
+
 def pack_sequence(
-    values: Sequence[npt.NDArray[NpGeneric]],
+    values: Sequence[npt.NDArray[NpGeneric]], max_L_bs: int
 ) -> npt.NDArray[NpGeneric]:
     """Pack a batch of sequences into a single array.
-
-    This function is provided for symmetry with sequentialize_packed(), but is
-    not really needed since using np.concat() directly is often clearer for the
-    reader.
 
     Args:
         values: The sequence of values to pack.
             Length: B
             Shape of inner arrays: [L_b, *]
+        max_L_bs: The maximum number of values of any element in the batch.
+            Must be equal to max(L_bs).
 
     Returns:
         The packed values. If the input is empty, returns an empty array with
         dtype float64.
             Shape: [L, *]
     """
-    if len(values) == 0:
+    B = len(values)
+    if B == 0:
         return np.empty((0,), dtype=np.float64)  # type: ignore
 
     return np.concat(values)  # [L, *]
+
+
+def pack_sequence_multidim(
+    values: Sequence[npt.NDArray[NpGeneric]],
+    max_L_bsds: npt.NDArray[np.integer],
+) -> npt.NDArray[NpGeneric]:
+    """Pack a batch of multi-dimensional sequences into a single array.
+
+    Args:
+        values: The sequence of values to pack.
+            Length: B
+            Shape of inner arrays: [L_b0, ..., L_b{D-1}, *]
+        max_L_bsds: The maximum number of values of any element in the batch for
+            each dimension. Must be equal to max(L_bsds).
+            Shape: [D]
+
+    Returns:
+        The packed values. If the input is empty, returns an empty array with
+        dtype float64.
+            Shape: [L, *]
+    """
+    B = len(values)
+    D = len(max_L_bsds)
+    if B == 0:
+        return np.empty((0,), dtype=np.float64)  # type: ignore
+
+    return np.concat([
+        values[b].reshape((-1, *values[b].shape[D:]))  # [L_b, *]
+        for b in range(B)
+    ])  # [L, *]
 
 
 def pad_packed(
@@ -125,9 +255,10 @@ def pad_packed(
             Shape: [B, max(L_bs), *]
     """
     B = len(L_bs)
+    star = values.shape[1:]
     dtype = values.dtype
 
-    padded_shape = (B, max_L_bs, *values.shape[1:])
+    padded_shape = (B, max_L_bs, *star)
     if padding_value is None:
         values_padded = np.empty(padded_shape, dtype=dtype)
     elif padding_value == 0:
@@ -138,6 +269,53 @@ def pad_packed(
         values_padded = np.full(padded_shape, padding_value, dtype=dtype)
 
     mask = mask_padding(L_bs, max_L_bs)  # [B, max(L_bs)]
+    values_padded[mask] = values
+
+    return values_padded
+
+
+def pad_packed_multidim(
+    values: npt.NDArray[NpGeneric],
+    L_bsds: npt.NDArray[np.integer],
+    max_L_bsds: npt.NDArray[np.integer],
+    padding_value: Any = None,
+) -> npt.NDArray[NpGeneric]:
+    """Pad a batch of multi-dimensionally packed values to create an array
+    with a fixed size.
+
+    Args:
+        values: The values to pad.
+            Shape: [L, *]
+        L_bsds: The number of valid values in each sample for each dimension.
+            Shape: [B, D]
+        max_L_bsds: The maximum number of values of any element in the batch for
+            each dimension. Must be equal to max(L_bsds).
+            Shape: [D]
+        padding_value: The value to pad the values with. If None, the values
+            are padded with random values. This is faster than padding with
+            a specific value.
+
+    Returns:
+        The padded values. Padded with padding_value.
+            Shape: [B, max(L_bs0), ..., max(L_bs{D-1}), *]
+    """
+    B = len(L_bsds)
+    star = values.shape[1:]
+    dtype = values.dtype
+
+    padded_shape = (B, *max_L_bsds, *star)
+    if padding_value is None:
+        values_padded = np.empty(padded_shape, dtype=dtype)
+    elif padding_value == 0:
+        values_padded = np.zeros(padded_shape, dtype=dtype)
+    elif padding_value == 1:
+        values_padded = np.ones(padded_shape, dtype=dtype)
+    else:
+        values_padded = np.full(padded_shape, padding_value, dtype=dtype)
+
+    mask = mask_padding_multidim(
+        L_bsds, max_L_bsds
+    )  # [B, max(L_bs0), ..., max(L_bs{D-1})]
     values_padded[mask] = values
 
     return values_padded
@@ -178,8 +356,55 @@ def pad_sequence(
             Shape: [B, max(L_bs), *]
     """
     return pad_packed(
-        pack_sequence(values), L_bs, max_L_bs, padding_value=padding_value
+        pack_sequence(values, max_L_bs),
+        L_bs,
+        max_L_bs,
+        padding_value=padding_value,
     )  # [B, max(L_bs), *]
+
+
+def pad_sequence_multidim(
+    values: Sequence[npt.NDArray[NpGeneric]],
+    L_bsds: npt.NDArray[np.integer],
+    max_L_bsds: npt.NDArray[np.integer],
+    padding_value: Any = None,
+) -> npt.NDArray[NpGeneric]:
+    """Pad a batch of multi-dimensional sequences to create an array with a
+    fixed size.
+
+    This function is equivalent to torch.nn.utils.rnn.pad_sequence(), but
+    surprisingly it is a bit faster, even if the padding value is not set to
+    None! And if the padding value is set to None, the function will be even
+    faster, since it will not need to overwrite the allocated memory. The former
+    is because torch.nn.utils.rnn.pad_sequence() performs some extra checks that
+    we skip here. It is also a bit more flexible, since it allows for the batch
+    dimension to be at axis=1 instead of axis=0.
+
+    In conclusion, you should almost always use this function instead.
+
+    Args:
+        values: The sequence of values to pad.
+            Length: B
+            Shape of inner arrays: [L_b0, ..., L_b{D-1}, *]
+        L_bsds: The number of valid values in each sample for each dimension.
+            Shape: [B, D]
+        max_L_bsds: The maximum number of values of any element in the batch for
+            each dimension. Must be equal to max(L_bsds).
+            Shape: [D]
+        padding_value: The value to pad the values with. If None, the values are
+            padded with random values. This is faster than padding with a
+            specific value.
+
+    Returns:
+        The padded values. Padded with padding_value.
+            Shape: [B, max(L_bs0), ..., max(L_bs{D-1}), *]
+    """
+    return pad_packed_multidim(
+        pack_sequence_multidim(values, max_L_bsds),
+        L_bsds,
+        max_L_bsds,
+        padding_value=padding_value,
+    )  # [B, max(L_bs0), ..., max(L_bs{D-1}), *]
 
 
 def sequentialize_packed(
@@ -198,11 +423,43 @@ def sequentialize_packed(
             Length: B
             Shape of inner arrays: [L_b, *]
     """
-    if len(L_bs) == 0:
+    B = len(L_bs)
+    if B == 0:
         return []
 
     L_bs_cumsum = L_bs.cumsum(axis=0)  # [B]
-    return np.split(values, L_bs_cumsum[:-1])
+    return np.split(values, L_bs_cumsum[:-1])  # B x [L_b, *]
+
+
+def sequentialize_packed_multidim(
+    values: npt.NDArray[NpGeneric], L_bsds: npt.NDArray[np.integer]
+) -> list[npt.NDArray[NpGeneric]]:
+    """Convert a batch of multi-dimensionally packed values to a sequence of
+    values.
+
+    Args:
+        values: The packed values to convert.
+            Shape: [L, *]
+        L_bsds: The number of valid values in each sample for each dimension.
+            Shape: [B, D]
+
+    Returns:
+        The values as a sequence.
+            Length: B
+            Shape of inner arrays: [L_b0, ..., L_b{D-1}, *]
+    """
+    B = len(L_bsds)
+    if B == 0:
+        return []
+
+    star = values.shape[1:]
+    L_bs = L_bsds.prod(axis=1)  # [B]
+    L_bs_cumsum = L_bs.cumsum(axis=0)  # [B]
+    values_split = np.split(values, L_bs_cumsum[:-1])  # B x [L_b, *]
+    return [
+        values_b.reshape((*L_bsds[b], *star))  # [L_b0, ..., L_b{D-1}, *]
+        for b, values_b in enumerate(values_split)
+    ]
 
 
 def sequentialize_padded(
@@ -221,7 +478,29 @@ def sequentialize_padded(
             Length: B
             Shape of inner arrays: [L_b, *]
     """
-    return sequentialize_packed(pack_padded(values, L_bs), L_bs)
+    return sequentialize_packed(pack_padded(values, L_bs), L_bs)  # B x [L_b, *]
+
+
+def sequentialize_padded_multidim(
+    values: npt.NDArray[NpGeneric], L_bsds: npt.NDArray[np.integer]
+) -> list[npt.NDArray[NpGeneric]]:
+    """Convert a batch of multi-dimensionally padded values to a sequence of
+    values.
+
+    Args:
+        values: The padded values to convert. Padding could be arbitrary.
+            Shape: [B, max(L_bs0), ..., max(L_bs{D-1}), *]
+        L_bsds: The number of valid values in each sample for each dimension.
+            Shape: [B, D]
+
+    Returns:
+        The values as a sequence.
+            Length: B
+            Shape of inner arrays: [L_b0, ..., L_b{D-1}, *]
+    """
+    return sequentialize_packed_multidim(
+        pack_padded_multidim(values, L_bsds), L_bsds
+    )  # B x [L_b0, ..., L_b{D-1}, *]
 
 
 def apply_mask(
@@ -232,17 +511,16 @@ def apply_mask(
 ) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[NpInteger]]:
     """Apply an additional mask to a batch of values.
 
-    All values that are not marked for removal by the mask will be kept, while
-    the remaining values will be moved to the front of the array. Since the
-    number of kept values in each sample can change, the function will also
-    return the number of kept values in each sample.
+    All values that are marked for keeping by the mask will be moved to the
+    front of the array. Since the number of kept values in each sample can
+    change, the function will also return the number of kept values in each
+    sample.
 
     Args:
         values: The values to apply the mask to. Padding could be arbitrary.
             Shape: [B, max(L_bs), *]
         mask: The mask to apply. Padding could be arbitrary, since the function
-            will apply the original mask internally in addition to the given
-            mask.
+            will apply the original mask in addition to the given mask.
             Shape: [B, max(L_bs)]
         L_bs: The number of valid values in each sample.
             Shape: [B]
@@ -268,7 +546,62 @@ def apply_mask(
     values = pad_packed(
         values[mask], L_bs_kept, max_L_bs_kept, padding_value=padding_value
     )  # [B, max(L_bs_kept), *]
+    return values, L_bs_kept
 
+
+def apply_mask_multidim(
+    values: npt.NDArray[NpGeneric],
+    mask: npt.NDArray[np.bool_],
+    L_bsds: npt.NDArray[NpInteger],
+    padding_value: Any = None,
+) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[NpInteger]]:
+    """Apply an additional mask to a batch of multi-dimensionally padded values.
+
+    All values that are marked for keeping by the mask will be moved to the
+    front of the array. Since the number of kept values in each sample can
+    change, the function will also return the number of kept values in each
+    sample.
+
+    Warning: Since the number of kept values in each sample could be
+    inconsistent across dimensions, it is not possible to return the kept values
+    in a multi-dimensional format. Instead, the number of kept values is summed
+    across all dimensions, and the kept values are returned in a padded format
+    with a single padding dimension. Note that this differs from the behavior of
+    other *_multidim() functions in our module!
+
+    Args:
+        values: The values to apply the mask to. Padding could be arbitrary.
+            Shape: [B, max(L_bs0), ..., max(L_bs{D-1}), *]
+        mask: The mask to apply. Padding could be arbitrary, since the function
+            will apply the original mask in addition to the given mask.
+            Shape: [B, max(L_bs0), ..., max(L_bs{D-1})]
+        L_bsds: The number of valid values in each sample for each dimension.
+            Shape: [B, D]
+        padding_value: The value to pad the values with. If None, the values
+            are padded with random values. This is faster than padding with
+            a specific value.
+
+    Returns:
+        Tuple containing:
+        - The values with the given mask applied. Padded with padding_value.
+            Shape: [B, max(L_bs_kept), *]
+        - The number of kept values in each sample.
+            Shape: [B]
+    """
+    D = L_bsds.shape[1]
+    max_L_bsds = np.array(values.shape[1 : 1 + D])  # [D]
+
+    # Create a mask that indicates which values should be kept in each sample.
+    mask = mask & mask_padding_multidim(
+        L_bsds, max_L_bsds
+    )  # [B, max(L_bs0), ..., max(L_bs{D-1})]
+    L_bs_kept = mask.sum(axis=tuple(range(1, D + 1)))  # [B]
+    max_L_bs_kept = int(L_bs_kept.max()) if len(L_bs_kept) != 0 else 0
+
+    # Move the masked values to the front of the array.
+    values = pad_packed(
+        values[mask], L_bs_kept, max_L_bs_kept, padding_value=padding_value
+    )  # [B, max(L_bs_kept), *]
     return values, L_bs_kept
 
 
@@ -278,7 +611,7 @@ def replace_padding(
     padding_value: Any = 0,
     in_place: bool = False,
 ) -> npt.NDArray[NpGeneric]:
-    """Pad the values with padding_value to create an array with a fixed size.
+    """Replace any existing values padding in one of several ways.
 
     Args:
         values: The values to pad. Padding could be arbitrary.
@@ -303,6 +636,7 @@ def replace_padding(
             Shape: [B, max(L_bs), *]
     """
     B, max_L_bs, *star = values.shape
+    L = L_bs.sum()
 
     # Create a mask that indicates which values are valid in each sample.
     mask = mask_padding(L_bs, max_L_bs)  # [B, max(L_bs)]
@@ -324,15 +658,15 @@ def replace_padding(
         or padding_value.shape == (B, max_L_bs)
         or padding_value.shape == (B, 1)
         or padding_value.shape == (1, max_L_bs)
-        or padding_value.shape == (B * max_L_bs - L_bs.sum(),)
+        or padding_value.shape == (B * max_L_bs - L,)
     ):
         padding_value = padding_value.reshape(
             (*padding_value.shape, *[1] * len(star))
         )
 
     # Now handle all expected shapes.
-    # Note that the shape of the value to be set (values_padded[~mask]) is
-    # always [B * max_L_bs - L_bs.sum(), *].
+    # Note that the shape of the array to be set, i.e. values_padded[~mask], is
+    # always [B * max_L_bs - L, *].
     if padding_value.shape == tuple(star):
         values_padded[~mask] = padding_value
     elif padding_value.shape == (B, max_L_bs, *star):
@@ -345,7 +679,7 @@ def replace_padding(
         values_padded[~mask] = np.broadcast_to(
             padding_value, (B, max_L_bs, *star)
         )[~mask]
-    elif padding_value.shape == (B * max_L_bs - L_bs.sum(), *star):
+    elif padding_value.shape == (B * max_L_bs - L, *star):
         values_padded[~mask] = padding_value
     else:
         raise ValueError(
@@ -353,8 +687,106 @@ def replace_padding(
             f" Got {list(padding_value.shape)}, but expected one of: [],"
             f" {star}, {[B, max_L_bs]}, {[B, max_L_bs, *star]}, {[B, 1]},"
             f" {[B, 1, *star]}, {[1, max_L_bs]},  {[1, max_L_bs, *star]},"
-            f" {[B * max_L_bs - L_bs.sum()]}, or"
-            f" {[B * max_L_bs - L_bs.sum(), *star]}"
+            f" {[B * max_L_bs - L]}, or {[B * max_L_bs - L, *star]}"
+        )
+
+    return values_padded
+
+
+def replace_padding_multidim(
+    values: npt.NDArray[NpGeneric],
+    L_bsds: npt.NDArray[np.integer],
+    padding_value: Any = 0,
+    in_place: bool = False,
+) -> npt.NDArray[NpGeneric]:
+    """Replace any existing multi-dimensional values padding in one of several
+    ways.
+
+    Args:
+        values: The values to pad. Padding could be arbitrary.
+            Shape: [B, max(L_bs0), ..., max(L_bs{D-1}), *]
+        L_bsds: The number of valid values in each sample for each dimension.
+            Shape: [B, D]
+        padding_value: The value to pad the values with. Can be one of:
+            - A scalar value, or an array of shape [] or [*], containing the
+              value to pad all elements with.
+            - An array of shape [B, max(L_bs0), ..., max(L_bs{D-1})] or
+              [B, max(L_bs0), ..., max(L_bs{D-1}), *], containing the value to
+              pad each element with.
+            - An array of shape [B, 1, ..., 1] or [B, 1, ..., 1, *], containing
+              the value to pad each row with.
+            - An array of shape [1, max(L_bs0), ..., max(L_bs{D-1})] or
+              [1, max(L_bs0), ..., max(L_bs{D-1}), *], containing the value to
+              pad each column with.
+            - An array of shape [B * prod(max(L_bsds)) - L] or
+              [B * prod(max(L_bsds)) - L, *], containing the value to pad each
+              element in the padding mask with.
+        in_place: Whether to perform the operation in-place.
+
+    Returns:
+        The padded values. Padded with padding_value.
+            Shape: [B, max(L_bs0), ..., max(L_bs{D-1}), *]
+    """
+    B, D = L_bsds.shape
+    max_L_bsds = np.array(values.shape[1 : 1 + D])  # [D]
+    star = list(values.shape[1 + D :])
+    L_bs = L_bsds.prod(axis=1)  # [B]
+    L = L_bs.sum()
+    theory_max_L_bs = max_L_bsds.prod()
+
+    # Create a mask that indicates which values are valid in each sample.
+    mask = mask_padding_multidim(
+        L_bsds, max_L_bsds
+    )  # [B, max(L_bs0), ..., max(L_bs{D-1})]
+
+    # Handle in-place operations.
+    values_padded = values if in_place else values.copy()
+
+    # Handle the case where padding_value is a scalar.
+    if not isinstance(padding_value, np.ndarray):
+        values_padded[~mask] = padding_value
+        return values_padded
+
+    # Convert padding_value to the same dtype as values.
+    padding_value = padding_value.astype(values.dtype)
+
+    # Handle shapes that are missing the star dimensions.
+    if (
+        padding_value.shape == ()
+        or padding_value.shape == (B, *max_L_bsds)
+        or padding_value.shape == (B, *[1] * D)
+        or padding_value.shape == (1, *max_L_bsds)
+        or padding_value.shape == (B * theory_max_L_bs - L,)
+    ):
+        padding_value = padding_value.reshape(
+            (*padding_value.shape, *[1] * len(star))
+        )
+
+    # Now handle all expected shapes.
+    # Note that the shape of the array to be set, i.e. values_padded[~mask], is
+    # always [B * prod(max(L_bsds)) - L, *].
+    if padding_value.shape == tuple(star):
+        values_padded[~mask] = padding_value
+    elif padding_value.shape == (B, *max_L_bsds, *star):
+        values_padded[~mask] = padding_value[~mask]
+    elif padding_value.shape == (B, *[1] * D, *star):
+        values_padded[~mask] = padding_value.squeeze(
+            tuple(range(1, D + 1))
+        ).repeat(theory_max_L_bs - L_bs, axis=0)
+    elif padding_value.shape == (1, *max_L_bsds, *star):
+        values_padded[~mask] = np.broadcast_to(
+            padding_value, (B, *max_L_bsds, *star)
+        )[~mask]
+    elif padding_value.shape == (B * theory_max_L_bs - L, *star):
+        values_padded[~mask] = padding_value
+    else:
+        raise ValueError(
+            "Shape of padding_value did not match any of the expected shapes."
+            f" Got {list(padding_value.shape)}, but expected one of: [],"
+            f" {star}, {[B, *max_L_bsds]}, {[B, *max_L_bsds, *star]},"
+            f" {[B, *[1] * D]}, {[B, *[1] * D, *star]}, {[1, *max_L_bsds]},"
+            f" {[1, *max_L_bsds, *star]}, {[B * theory_max_L_bs - L]}, or"
+            f" {[B * theory_max_L_bs - L, *star]}"
         )
 
     return values_padded
@@ -375,7 +807,9 @@ def last_valid_value_padding(
             Shape: [B]
         padding_value_empty_rows: The value to pad empty rows with (i.e. when
             L_b == 0 for some b). If None, empty rows are padded with random
-            values. This is faster than padding with a specific value.
+            values. This is faster than padding with a specific value. Can be a
+            scalar value, or an array of shape [] or [*], containing the value
+            to pad all empty rows with.
         in_place: Whether to perform the operation in-place.
 
     Returns:
@@ -396,10 +830,64 @@ def last_valid_value_padding(
         padding_value[L_bs == 0] = padding_value_empty_rows
 
     # Replace the padding values using per row replacement.
-    padding_value_new = np.expand_dims(padding_value, 1)  # [B, 1, *]
+    padding_value = np.expand_dims(padding_value, 1)  # [B, 1, *]
     values = replace_padding(
-        values, L_bs, padding_value=padding_value_new, in_place=in_place
+        values, L_bs, padding_value=padding_value, in_place=in_place
     )  # [B, max(L_bs), *]
+
+    return values
+
+
+def last_valid_value_padding_multidim(
+    values: npt.NDArray[NpGeneric],
+    L_bsds: npt.NDArray[np.integer],
+    padding_value_empty_rows: Any = None,
+    in_place: bool = False,
+) -> npt.NDArray[NpGeneric]:
+    """Pad the multi-dimensional values with the last valid value for each
+    sample.
+
+    The last valid value is defined as the last valid value if we were to
+    flatten all padding dimensions into a single dimension.
+
+    Args:
+        values: The values to pad. Padding could be arbitrary.
+            Shape: [B, max(L_bs0), ..., max(L_bs{D-1}), *]
+        L_bsds: The number of valid values in each sample for each dimension.
+            Shape: [B, D]
+        padding_value_empty_rows: The value to pad empty rows with (i.e. when
+            prod(L_bsds[b]) == 0 for some b). If None, empty rows are padded
+            with random values. This is faster than padding with a specific
+            value. Can be a scalar value, or an array of shape [] or [*],
+            containing the value to pad all empty rows with.
+        in_place: Whether to perform the operation in-place.
+
+    Returns:
+        The padded values. Padded with the last valid value.
+            Shape: [B, max(L_bs0), ..., max(L_bs{D-1}), *]
+    """
+    B, D = L_bsds.shape
+    max_L_bsds = np.array(values.shape[1 : 1 + D])  # [D]
+    star = list(values.shape[1 + D :])
+    L_bs = L_bsds.prod(axis=1)  # [B]
+    theory_max_L_bs = max_L_bsds.prod()
+
+    # Determine the padding value for each sample.
+    arange_B = np.arange(B)
+    padding_value = (
+        values[(arange_B, *np.split(L_bsds - 1, D, axis=1))]
+        if theory_max_L_bs != 0
+        else np.empty((B, *star), dtype=values.dtype)
+    )  # [B, *]
+    if padding_value_empty_rows is not None:
+        padding_value = padding_value.copy()
+        padding_value[L_bs == 0] = padding_value_empty_rows
+
+    # Replace the padding values using per row replacement.
+    padding_value = np.expand_dims(padding_value, 1)  # [B, 1, *]
+    values = replace_padding_multidim(
+        values, L_bsds, padding_value=padding_value, in_place=in_place
+    )  # [B, max(L_bs0), ..., max(L_bs{D-1}), *]
 
     return values
 

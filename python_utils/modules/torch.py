@@ -174,25 +174,24 @@ def pack_padded(values: torch.Tensor, L_bs: torch.Tensor) -> torch.Tensor:
 
 
 def pack_sequence(
-    values: tuple[torch.Tensor] | list[torch.Tensor],
+    values: tuple[torch.Tensor] | list[torch.Tensor], max_L_bs: int
 ) -> torch.Tensor:
     """Pack a batch of sequences into a single tensor.
-
-    This function is provided for symmetry with sequentialize_packed(), but is
-    not really needed since using torch.concat() directly is often clearer for
-    the reader.
 
     Args:
         values: The sequence of values to pack.
             Length: B
             Shape of inner tensors: [L_b, *]
+        max_L_bs: The maximum number of values of any element in the batch.
+            Must be equal to max(L_bs).
 
     Returns:
         The packed values. If the input is empty, returns an empty tensor with
         dtype float32.
             Shape: [L, *]
     """
-    if len(values) == 0:
+    B = len(values)
+    if B == 0:
         return torch.empty(0, dtype=torch.float32)
 
     return torch.concat(values)  # [L, *]
@@ -222,10 +221,11 @@ def pad_packed(
             Shape: [B, max(L_bs), *]
     """
     B = len(L_bs)
+    star = values.shape[1:]
     device = values.device
     dtype = values.dtype
 
-    padded_shape = (B, max_L_bs, *values.shape[1:])
+    padded_shape = (B, max_L_bs, *star)
     if padding_value is None:
         values_padded = torch.empty(padded_shape, device=device, dtype=dtype)
     elif padding_value == 0:
@@ -278,7 +278,10 @@ def pad_sequence(
             Shape: [B, max(L_bs), *]
     """
     return pad_packed(
-        pack_sequence(values), L_bs, max_L_bs, padding_value=padding_value
+        pack_sequence(values, max_L_bs),
+        L_bs,
+        max_L_bs,
+        padding_value=padding_value,
     )  # [B, max(L_bs), *]
 
 
@@ -296,9 +299,9 @@ def sequentialize_packed(
     Returns:
         The values as a sequence.
             Length: B
-            Shape of inner arrays: [L_b, *]
+            Shape of inner tensors: [L_b, *]
     """
-    return list(torch.split(values, L_bs.tolist()))
+    return list(torch.split(values, L_bs.tolist()))  # B x [L_b, *]
 
 
 def sequentialize_padded(
@@ -315,7 +318,7 @@ def sequentialize_padded(
     Returns:
         The values as a sequence.
             Length: B
-            Shape of inner arrays: [L_b, *]
+            Shape of inner tensors: [L_b, *]
     """
     return sequentialize_packed(pack_padded(values, L_bs), L_bs)
 
@@ -328,17 +331,16 @@ def apply_mask(
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Apply an additional mask to a batch of values.
 
-    All values that are not marked for removal by the mask will be kept, while
-    the remaining values will be moved to the front of the tensor. Since the
-    number of kept values in each sample can change, the function will also
-    return the number of kept values in each sample.
+    All values that are marked for keeping by the mask will be moved to the
+    front of the tensor. Since the number of kept values in each sample can
+    change, the function will also return the number of kept values in each
+    sample.
 
     Args:
         values: The values to apply the mask to. Padding could be arbitrary.
             Shape: [B, max(L_bs), *]
         mask: The mask to apply. Padding could be arbitrary, since the function
-            will apply the original mask internally in addition to the given
-            mask.
+            will apply the original mask in addition to the given mask.
             Shape: [B, max(L_bs)]
         L_bs: The number of valid values in each sample.
             Shape: [B]
@@ -364,7 +366,6 @@ def apply_mask(
     values = pad_packed(
         values[mask], L_bs_kept, max_L_bs_kept, padding_value=padding_value
     )  # [B, max(L_bs_kept), *]
-
     return values, L_bs_kept
 
 
@@ -374,7 +375,7 @@ def replace_padding(
     padding_value: Any = 0,
     in_place: bool = False,
 ) -> torch.Tensor:
-    """Pad the values with padding_value to create a tensor with a fixed size.
+    """Replace any existing values padding in one of several ways.
 
     Args:
         values: The values to pad. Padding could be arbitrary.
@@ -399,6 +400,7 @@ def replace_padding(
             Shape: [B, max(L_bs), *]
     """
     B, max_L_bs, *star = values.shape
+    L = L_bs.sum()
 
     # Create a mask that indicates which values are valid in each sample.
     mask = mask_padding(L_bs, max_L_bs)  # [B, max(L_bs)]
@@ -420,15 +422,15 @@ def replace_padding(
         or padding_value.shape == (B, max_L_bs)
         or padding_value.shape == (B, 1)
         or padding_value.shape == (1, max_L_bs)
-        or padding_value.shape == (B * max_L_bs - L_bs.sum(),)
+        or padding_value.shape == (B * max_L_bs - L,)
     ):
         padding_value = padding_value.reshape(
             (*padding_value.shape, *[1] * len(star))
         )
 
     # Now handle all expected shapes.
-    # Note that the shape of the value to be set (values_padded[~mask]) is
-    # always [B * max_L_bs - L_bs.sum(), *].
+    # Note that the shape of the tensor to be set, i.e. values_padded[~mask], is
+    # always [B * max_L_bs - L, *].
     if padding_value.shape == tuple(star):
         values_padded[~mask] = padding_value
     elif padding_value.shape == (B, max_L_bs, *star):
@@ -439,7 +441,7 @@ def replace_padding(
         )
     elif padding_value.shape == (1, max_L_bs, *star):
         values_padded[~mask] = padding_value.expand(B, max_L_bs, *star)[~mask]
-    elif padding_value.shape == (B * max_L_bs - L_bs.sum(), *star):
+    elif padding_value.shape == (B * max_L_bs - L, *star):
         values_padded[~mask] = padding_value
     else:
         raise ValueError(
@@ -447,8 +449,7 @@ def replace_padding(
             f" Got {list(padding_value.shape)}, but expected one of: [],"
             f" {star}, {[B, max_L_bs]}, {[B, max_L_bs, *star]}, {[B, 1]},"
             f" {[B, 1, *star]}, {[1, max_L_bs]},  {[1, max_L_bs, *star]},"
-            f" {[B * max_L_bs - L_bs.sum()]}, or"
-            f" {[B * max_L_bs - L_bs.sum(), *star]}"
+            f" {[B * max_L_bs - L]}, or {[B * max_L_bs - L, *star]}"
         )
 
     return values_padded
@@ -469,7 +470,9 @@ def last_valid_value_padding(
             Shape: [B]
         padding_value_empty_rows: The value to pad empty rows with (i.e. when
             L_b == 0 for some b). If None, empty rows are padded with random
-            values. This is faster than padding with a specific value.
+            values. This is faster than padding with a specific value. Can be a
+            scalar value, or a tensor of shape [] or [*], containing the value
+            to pad all empty rows with.
         in_place: Whether to perform the operation in-place.
 
     Returns:

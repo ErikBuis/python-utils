@@ -717,15 +717,14 @@ def index_select_batched(
         The selected values.
             Shape: [B, N_0, ..., N_{dim-1}, N_select, N_{dim+1}, ..., N_{D-1}]
     """
-    idcs_reshape = [1] * values.ndim
-    idcs_reshape[0] = indices.shape[0]
-    idcs_reshape[dim + 1] = indices.shape[1]
-    idcs_expand = list(values.shape)
-    idcs_expand[dim + 1] = indices.shape[1]
-    return values.gather(
-        dim + 1,
-        indices.reshape(idcs_reshape).expand(idcs_expand).to(torch.int64),
-    )
+    unsqueezed_shape = [1] * values.ndim
+    unsqueezed_shape[0] = indices.shape[0]
+    unsqueezed_shape[dim + 1] = indices.shape[1]
+    indices_unsqueezed = indices.reshape(unsqueezed_shape)
+    expanded_shape = list(values.shape)
+    expanded_shape[dim + 1] = indices.shape[1]
+    indices_expanded = indices_unsqueezed.expand(expanded_shape)
+    return values.gather(dim + 1, indices_expanded.to(torch.int64))
 
 
 def repeat_interleave_batched(

@@ -18,6 +18,7 @@ from ..modules.numpy import (
     pack_padded,
     pad_packed,
     replace_padding,
+    replace_padding_multidim,
 )
 
 # ################################### MATHS ####################################
@@ -698,16 +699,14 @@ def take_batched(
         The selected values.
             Shape: [B, N_0, ..., N_{axis-1}, N_select, N_{axis+1}, ..., N_{D-1}]
     """
-    idcs_reshape = [1] * values.ndim
-    idcs_reshape[0] = indices.shape[0]
-    idcs_reshape[axis + 1] = indices.shape[1]
-    idcs_expand = list(values.shape)
-    idcs_expand[axis + 1] = indices.shape[1]
-    return np.take_along_axis(
-        values,
-        np.broadcast_to(indices.reshape(idcs_reshape), idcs_expand),
-        axis + 1,
-    )
+    unsqueezed_shape = [1] * values.ndim
+    unsqueezed_shape[0] = indices.shape[0]
+    unsqueezed_shape[axis + 1] = indices.shape[1]
+    indices_unsqueezed = indices.reshape(unsqueezed_shape)
+    expanded_shape = list(values.shape)
+    expanded_shape[axis + 1] = indices.shape[1]
+    indices_expanded = np.broadcast_to(indices_unsqueezed, expanded_shape)
+    return np.take_along_axis(values, indices_expanded, axis + 1)
 
 
 def repeat_batched(
@@ -807,6 +806,121 @@ def repeat_batched(
         values, 1, axis + 1
     )  # [B, N_0, ..., max_sum_repeats, ..., N_{D-1}]
     return values
+
+
+def meshgrid_batched(
+    *xi: tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp], int],
+    indexing: str = "xy",
+    sparse: bool = False,
+    padding_value: Any = None,
+) -> tuple[npt.NDArray[NpGeneric], ...]:
+    """Create a meshgrid from a batch of arrays.
+
+    This function is like np.meshgrid(), but supports batched inputs.
+
+    Args:
+        *xi: List of tuples containing:
+            - Padded input arrays representing the coordinates of a grid.
+                Padding could be arbitrary.
+                Shape: [B, max(X_bsd)]
+            - The lengths of the input arrays.
+                Shape: [B]
+            - The maximum length of the input arrays.
+            Length: D
+        indexing: The indexing convention used. 'ij' returns a meshgrid with
+            matrix indexing, while 'xy' returns a meshgrid with Cartesian
+            indexing.
+        sparse: If True, the shape of the returned coordinate array for
+            dimension d is reduced from [B, max(X_bs0), ..., max(X_bs{D-1})] to
+            [B, 1, ..., max(X_bsd), ..., 1]. This is useful for memory
+            conservation when the full grid is intended to be used with
+            broadcasting. When all coordinates are used in an expression,
+            broadcasting still leads to a fully-dimensional result array.
+            Warning: if sparse=True, the padding is only applied along the
+            dimension of the coordinate array, which means that any broadcasted
+            arrays may still contain arbitrary padding values in the other
+            dimensions. If you need to set a specific padding value, consider
+            using sparse=False or handling the padding manually after obtaining
+            the meshgrid.
+        padding_value: The value to pad the outputs with. If None, the outputs
+            are padded with random values. This is faster than padding with a
+            specific value.
+
+    Returns:
+        Tuple of [B, max(X_bs0), ..., max(X_bs{D-1})] shaped arrays if indexing
+        is 'ij' or tuple of [B, max(X_bs1), max(X_bs0), ..., max(X_bs{D-1})]
+        shaped arrays if indexing is 'xy'. The arrays represent the
+        D-dimensional meshgrid formed by the input arrays. Padded with
+        padding_value.
+    """
+    x_arrs, X_bsds, max_X_bsds = map(
+        list, zip(*xi)
+    )  # D x [B, max(X_bsd)], D x [B], D
+    X_bsds = np.stack(X_bsds, axis=1)  # [B, D]
+    max_X_bsds = np.array(max_X_bsds)  # [D]
+
+    B, D = X_bsds.shape
+
+    # Create the expanded shape.
+    expanded_shape = [B, *max_X_bsds]
+
+    # Swap the first two axes if indexing is 'xy'.
+    if indexing == "xy" and D >= 2:
+        expanded_shape[1], expanded_shape[2] = (
+            expanded_shape[2],
+            expanded_shape[1],
+        )
+
+    # Go through each input array and create the corresponding meshgrid.
+    meshgrids = []
+    for d in range(D):
+        # Prepare the shape of the output arrays.
+        unsqueezed_shape = [B, *[1] * D]
+        unsqueezed_shape[d + 1] = max_X_bsds[d]
+
+        # Swap the first two axes if indexing is 'xy'.
+        if indexing == "xy" and D >= 2 and d <= 1:
+            unsqueezed_shape[1], unsqueezed_shape[2] = (
+                unsqueezed_shape[2],
+                unsqueezed_shape[1],
+            )
+
+        # Create the meshgrid.
+        meshgrid = x_arrs[d].reshape(
+            unsqueezed_shape
+        )  # [B, 1, ..., max(X_bsd), ..., 1]
+
+        if sparse:
+            # Pad the outputs with the padding value.
+            if padding_value is not None:
+                meshgrid = np.moveaxis(
+                    meshgrid, d + 1, 1
+                )  # [B, max(X_bsd), 1, ..., 1]
+                replace_padding(
+                    meshgrid,
+                    X_bsds[:, d],
+                    padding_value=padding_value,
+                    in_place=True,
+                )
+                meshgrid = np.moveaxis(
+                    meshgrid, 1, d + 1
+                )  # [B, 1, ..., max(X_bsd), ..., 1]
+
+        else:
+            # Broadcast to the full shape if not sparse.
+            meshgrid = np.broadcast_to(
+                meshgrid, expanded_shape
+            )  # [B, max(X_bs1), ..., max(X_bs{D-1})]
+
+            # Pad the outputs with the padding value.
+            if padding_value is not None:
+                replace_padding_multidim(
+                    meshgrid, X_bsds, padding_value=padding_value, in_place=True
+                )
+
+        meshgrids.append(meshgrid)
+
+    return tuple(meshgrids)
 
 
 # ######################## ADVANCED ARRAY MANIPULATION #########################

@@ -182,28 +182,34 @@ class TestPackPadded:
 
 class TestPackSequence:
     def test_pack_sequence_simple(
-        self, simple_sequence: list[torch.Tensor], simple_packed: torch.Tensor
+        self,
+        simple_sequence: list[torch.Tensor],
+        simple_packed: torch.Tensor,
+        simple_L_bs: torch.Tensor,
     ) -> None:
-        packed = pack_sequence(simple_sequence)
+        max_L_bs = int(simple_L_bs.max())
+        packed = pack_sequence(simple_sequence, max_L_bs)
         assert torch.equal(packed, simple_packed)
 
     def test_pack_sequence_multi_dimensional(
         self,
         multidim_sequence: list[torch.Tensor],
         multidim_packed: torch.Tensor,
+        multidim_L_bs: torch.Tensor,
     ) -> None:
-        packed = pack_sequence(multidim_sequence)
+        max_L_bs = int(multidim_L_bs.max())
+        packed = pack_sequence(multidim_sequence, max_L_bs)
         assert torch.equal(packed, multidim_packed)
 
     def test_pack_sequence_all_zeros(self) -> None:
         values = [torch.empty(0), torch.empty(0), torch.empty(0)]
-        packed = pack_sequence(values)
+        packed = pack_sequence(values, 0)
         expected_packed = torch.empty(0)
         assert torch.equal(packed, expected_packed)
 
     def test_pack_sequence_empty(self) -> None:
         values = []
-        packed = pack_sequence(values)
+        packed = pack_sequence(values, 0)
         expected_packed = torch.empty(0)
         assert torch.equal(packed, expected_packed)
 
