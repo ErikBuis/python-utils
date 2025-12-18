@@ -812,6 +812,7 @@ def meshgrid_batched(
     *xi: tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp], int],
     indexing: str = "xy",
     sparse: bool = False,
+    copy: bool = True,
     padding_value: Any = None,
 ) -> tuple[npt.NDArray[NpGeneric], ...]:
     """Create a meshgrid from a batch of arrays.
@@ -837,11 +838,17 @@ def meshgrid_batched(
             broadcasting. When all coordinates are used in an expression,
             broadcasting still leads to a fully-dimensional result array.
             Warning: if sparse=True, the padding is only applied along the
-            dimension of the coordinate array, which means that any broadcasted
-            arrays may still contain arbitrary padding values in the other
-            dimensions. If you need to set a specific padding value, consider
-            using sparse=False or handling the padding manually after obtaining
-            the meshgrid.
+            dimension of the corresponding coordinate array, which means that
+            any broadcasts you perform on the meshgrids this function returns
+            may still contain arbitrary padding values in the other dimensions.
+            If you need to set a specific padding value for all dimensions,
+            you should use sparse=False instead.
+        copy: If False, a view into the original arrays are returned in order to
+            conserve memory. Default is True. Please note that sparse=False,
+            copy=False will likely return non-contiguous arrays. Furthermore,
+            more than one element of a broadcast array may refer to a single
+            memory location. If you need to write to the arrays, make copies
+            first.
         padding_value: The value to pad the outputs with. If None, the outputs
             are padded with random values. This is faster than padding with a
             specific value.
@@ -849,9 +856,10 @@ def meshgrid_batched(
     Returns:
         Tuple of [B, max(X_bs0), ..., max(X_bs{D-1})] shaped arrays if indexing
         is 'ij' or tuple of [B, max(X_bs1), max(X_bs0), ..., max(X_bs{D-1})]
-        shaped arrays if indexing is 'xy'. The arrays represent the
-        D-dimensional meshgrid formed by the input arrays. Padded with
-        padding_value.
+        shaped arrays if indexing is 'xy'. If sparse=True, the shape of the d-th
+        output array is reduced to [B, 1, ..., max(X_bsd), ..., 1]. Each output
+        array contains the D-dimensional meshgrid formed by the input arrays.
+        Padded with padding_value.
     """
     x_arrs, X_bsds, max_X_bsds = map(
         list, zip(*xi)
@@ -861,7 +869,7 @@ def meshgrid_batched(
 
     B, D = X_bsds.shape
 
-    # Create the expanded shape.
+    # Prepare the shape of the non-sparse output arrays.
     expanded_shape = [B, *max_X_bsds]
 
     # Swap the first two axes if indexing is 'xy'.
@@ -874,7 +882,7 @@ def meshgrid_batched(
     # Go through each input array and create the corresponding meshgrid.
     meshgrids = []
     for d in range(D):
-        # Prepare the shape of the output arrays.
+        # Prepare the shape of the sparse output arrays.
         unsqueezed_shape = [B, *[1] * D]
         unsqueezed_shape[d + 1] = max_X_bsds[d]
 
@@ -896,11 +904,8 @@ def meshgrid_batched(
                 meshgrid = np.moveaxis(
                     meshgrid, d + 1, 1
                 )  # [B, max(X_bsd), 1, ..., 1]
-                replace_padding(
-                    meshgrid,
-                    X_bsds[:, d],
-                    padding_value=padding_value,
-                    in_place=True,
+                meshgrid = replace_padding(
+                    meshgrid, X_bsds[:, d], padding_value=padding_value
                 )
                 meshgrid = np.moveaxis(
                     meshgrid, 1, d + 1
@@ -914,9 +919,14 @@ def meshgrid_batched(
 
             # Pad the outputs with the padding value.
             if padding_value is not None:
-                replace_padding_multidim(
-                    meshgrid, X_bsds, padding_value=padding_value, in_place=True
+                meshgrid = replace_padding_multidim(
+                    meshgrid, X_bsds, padding_value=padding_value
                 )
+
+        # Make a copy if requested (if padding was applied, a copy has already
+        # been made).
+        if copy and padding_value is None:
+            meshgrid = meshgrid.copy()
 
         meshgrids.append(meshgrid)
 
