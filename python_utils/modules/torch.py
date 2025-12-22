@@ -122,6 +122,42 @@ def collate_replace_corrupted(
 
 # ########################### PACK/PAD/SEQUENTIALIZE ###########################
 
+# Functions for packing, padding, and sequentializing torch tensors.
+#
+# Sometimes, a batch of samples contains variable-length data. For example, in a
+# batch of sequences, each sequence could have a different length. To convert
+# between the above-mentioned representations, we provide several functions.
+#
+# These functions use the following naming conventions:
+# - L_bs has shape [B] (batch)
+# - L_bs[b]    : L_b
+# - L_bs.sum() : L
+# - L_bs.max() : max_L_bs or max(L_bs)
+#
+# The *_multidim() functions in this module are a generalization of this concept
+# to multiple dimensions. For example, in a batch of images, each image could
+# have a different height and width. The multi-dimensional padding and packing
+# functions allow us to handle such cases.
+#
+# These *_multidim() functions use the following naming conventions:
+# - L_bsds has shape [B, D] (batch x dimension)
+# - L_bsds[:, d]              : L_bsd
+# - L_bsds[b, :]              : L_bds
+# - L_bsds[b, d]              : L_bd
+# - L_bsds.prod(axis=1)       : L_bs
+# - L_bsds.prod(axis=1).sum() : L
+# - L_bsds.max(axis=0)        : max_L_bsds or max(L_bsds)
+# - L_bsds.max(axis=0)[d]     : max_L_bsd or max(L_bsd)
+# - L_bsds.prod(axis=1).max() : max_L_bs or max(L_bs)
+# - L_bsds.max(axis=0).prod() : theory_max_L_bs or prod(max(L_bsds))
+#
+# Note on max_L_bs vs theory_max_L_bs:
+# max_L_bs gives the maximum number of values of an actual sample, while
+# theory_max_L_bs gives the theoretical maximum number of values in any sample.
+# The latter can be larger than max_L_bs in certain cases, such as when one
+# sample has shape [10, 10] and another sample has shape [20, 5]. In this case,
+# theory_max_L_bs = 200, but max_L_bs = 100.
+
 
 # Warning: The lru_cache caches inputs by memory address, so if you call this
 # function with different tensors that have the same values, it will not
@@ -154,6 +190,52 @@ def mask_padding(L_bs: torch.Tensor, max_L_bs: int) -> torch.Tensor:
     )  # [B, max(L_bs)]  # fmt: skip
 
 
+def mask_padding_multidim(
+    L_bsds: torch.Tensor, max_L_bsds: torch.Tensor
+) -> torch.Tensor:
+    """Create a multi-dimensional mask based on per-batch sizes.
+
+    Args:
+        L_bsds: The number of valid values in each sample for each dimension.
+            Shape: [B, D]
+        max_L_bsds: The maximum number of values of any element in the batch for
+            each dimension. Must be equal to max(L_bsds).
+            Shape: [D]
+
+    Returns:
+        A mask that indicates which values are valid in each sample.
+        mask[b, i_0, ..., i_{D+1}] is True if i_d < L_bd for all d in [0, D)
+        and False otherwise.
+            Shape: [B, max(L_bs0), ..., max(L_bs{D-1})]
+    """
+    B, D = L_bsds.shape
+    device = L_bsds.device
+    dtype = L_bsds.dtype
+
+    # Create coordinate grids for each dimension.
+    mask = torch.ones(
+        (B, *max_L_bsds), device=device, dtype=torch.bool  # type: ignore
+    )
+    for d in range(D):
+        # Create coordinates for dimension d.
+        coords = torch.arange(
+            max_L_bsds[d], device=device, dtype=dtype  # type: ignore
+        )  # [max(L_bsd)]
+
+        # Reshape coords to [1, 1, ..., max(L_bsd), ..., 1].
+        unsqueeze_shape = (1, *[1] * d, max_L_bsds[d], *[1] * (D - d - 1))
+        coords_unsqueezed = coords.reshape(unsqueeze_shape)
+
+        # Reshape L_bsd to [B, 1, ..., 1] for broadcasting.
+        unsqueeze_shape = (B, *[1] * D)
+        L_bsd_unsqueezed = L_bsds[:, d].reshape(unsqueeze_shape)
+
+        # Create the mask by comparing each coordinate with its limits.
+        mask &= coords_unsqueezed < L_bsd_unsqueezed
+
+    return mask
+
+
 def pack_padded(values: torch.Tensor, L_bs: torch.Tensor) -> torch.Tensor:
     """Pack a batch of padded values into a single tensor.
 
@@ -173,8 +255,33 @@ def pack_padded(values: torch.Tensor, L_bs: torch.Tensor) -> torch.Tensor:
     return values[mask]
 
 
+def pack_padded_multidim(
+    values: torch.Tensor, L_bsds: torch.Tensor
+) -> torch.Tensor:
+    """Pack a batch of multi-dimensionally padded values into a single tensor.
+
+    Args:
+        values: The values to pack. Padding could be arbitrary.
+            Shape: [B, max(L_bs0), ..., max(L_bs{D-1}), *]
+        L_bsds: The number of valid values in each sample for each dimension.
+            Shape: [B, D]
+
+    Returns:
+        The packed values.
+            Shape: [L, *]
+    """
+    D = L_bsds.shape[1]
+    device = L_bsds.device
+
+    max_L_bsds = torch.tensor(values.shape[1 : 1 + D], device=device)  # [D]
+    mask = mask_padding_multidim(
+        L_bsds, max_L_bsds
+    )  # [B, max(L_bs0), ..., max(L_bs{D-1})]
+    return values[mask]
+
+
 def pack_sequence(
-    values: tuple[torch.Tensor] | list[torch.Tensor], max_L_bs: int
+    values: tuple[torch.Tensor, ...] | list[torch.Tensor], max_L_bs: int
 ) -> torch.Tensor:
     """Pack a batch of sequences into a single tensor.
 
@@ -195,6 +302,36 @@ def pack_sequence(
         return torch.empty(0, dtype=torch.float32)
 
     return torch.concat(values)  # [L, *]
+
+
+def pack_sequence_multidim(
+    values: tuple[torch.Tensor, ...] | list[torch.Tensor],
+    max_L_bsds: torch.Tensor,
+) -> torch.Tensor:
+    """Pack a batch of multi-dimensional sequences into a single tensor.
+
+    Args:
+        values: The sequence of values to pack.
+            Length: B
+            Shape of inner tensors: [L_b0, ..., L_b{D-1}, *]
+        max_L_bsds: The maximum number of values of any element in the batch for
+            each dimension. Must be equal to max(L_bsds).
+            Shape: [D]
+
+    Returns:
+        The packed values. If the input is empty, returns an empty tensor with
+        dtype float32.
+            Shape: [L, *]
+    """
+    B = len(values)
+    D = len(max_L_bsds)
+    if B == 0:
+        return torch.empty(0, dtype=torch.float32)
+
+    return torch.concat([
+        values[b].reshape((-1, *values[b].shape[D:]))  # [L_b, *]
+        for b in range(B)
+    ])  # [L, *]
 
 
 def pad_packed(
@@ -243,8 +380,67 @@ def pad_packed(
     return values_padded
 
 
+def pad_packed_multidim(
+    values: torch.Tensor,
+    L_bsds: torch.Tensor,
+    max_L_bsds: torch.Tensor,
+    padding_value: Any = None,
+) -> torch.Tensor:
+    """Pad a batch of multi-dimensionally packed values to create a tensor
+    with a fixed size.
+
+    Args:
+        values: The values to pad.
+            Shape: [L, *]
+        L_bsds: The number of valid values in each sample for each dimension.
+            Shape: [B, D]
+        max_L_bsds: The maximum number of values of any element in the batch for
+            each dimension. Must be equal to max(L_bsds).
+            Shape: [D]
+        padding_value: The value to pad the values with. If None, the values
+            are padded with random values. This is faster than padding with
+            a specific value.
+
+    Returns:
+        The padded values. Padded with padding_value.
+            Shape: [B, max(L_bs0), ..., max(L_bs{D-1}), *]
+    """
+    B = len(L_bsds)
+    star = values.shape[1:]
+    device = values.device
+    dtype = values.dtype
+
+    padded_shape = (B, *max_L_bsds, *star)
+    if padding_value is None:
+        values_padded = torch.empty(
+            padded_shape, device=device, dtype=dtype  # type: ignore
+        )
+    elif padding_value == 0:
+        values_padded = torch.zeros(
+            padded_shape, device=device, dtype=dtype  # type: ignore
+        )
+    elif padding_value == 1:
+        values_padded = torch.ones(
+            padded_shape, device=device, dtype=dtype  # type: ignore
+        )
+    else:
+        values_padded = torch.full(
+            padded_shape,  # type: ignore
+            padding_value,
+            device=device,
+            dtype=dtype,
+        )
+
+    mask = mask_padding_multidim(
+        L_bsds, max_L_bsds
+    )  # [B, max(L_bs0), ..., max(L_bs{D-1})]
+    values_padded[mask] = values
+
+    return values_padded
+
+
 def pad_sequence(
-    values: tuple[torch.Tensor] | list[torch.Tensor],
+    values: tuple[torch.Tensor, ...] | list[torch.Tensor],
     L_bs: torch.Tensor,
     max_L_bs: int,
     padding_value: Any = None,
@@ -285,6 +481,50 @@ def pad_sequence(
     )  # [B, max(L_bs), *]
 
 
+def pad_sequence_multidim(
+    values: tuple[torch.Tensor, ...] | list[torch.Tensor],
+    L_bsds: torch.Tensor,
+    max_L_bsds: torch.Tensor,
+    padding_value: Any = None,
+) -> torch.Tensor:
+    """Pad a batch of multi-dimensional sequences to create a tensor with a
+    fixed size.
+
+    This function is equivalent to torch.nn.utils.rnn.pad_sequence(), but
+    surprisingly it is a bit faster, even if the padding value is not set to
+    None! And if the padding value is set to None, the function will be even
+    faster, since it will not need to overwrite the allocated memory. The former
+    is because torch.nn.utils.rnn.pad_sequence() performs some extra checks that
+    we skip here. It is also a bit more flexible, since it allows for the batch
+    dimension to be at dim=1 instead of dim=0.
+
+    In conclusion, you should almost always use this function instead.
+
+    Args:
+        values: The sequence of values to pad.
+            Length: B
+            Shape of inner tensors: [L_b0, ..., L_b{D-1}, *]
+        L_bsds: The number of valid values in each sample for each dimension.
+            Shape: [B, D]
+        max_L_bsds: The maximum number of values of any element in the batch for
+            each dimension. Must be equal to max(L_bsds).
+            Shape: [D]
+        padding_value: The value to pad the values with. If None, the values are
+            padded with random values. This is faster than padding with a
+            specific value.
+
+    Returns:
+        The padded values. Padded with padding_value.
+            Shape: [B, max(L_bs0), ..., max(L_bs{D-1}), *]
+    """
+    return pad_packed_multidim(
+        pack_sequence_multidim(values, max_L_bsds),
+        L_bsds,
+        max_L_bsds,
+        padding_value=padding_value,
+    )  # [B, max(L_bs0), ..., max(L_bs{D-1}), *]
+
+
 def sequentialize_packed(
     values: torch.Tensor, L_bs: torch.Tensor
 ) -> list[torch.Tensor]:
@@ -304,6 +544,34 @@ def sequentialize_packed(
     return list(torch.split(values, L_bs.tolist()))  # B x [L_b, *]
 
 
+def sequentialize_packed_multidim(
+    values: torch.Tensor, L_bsds: torch.Tensor
+) -> list[torch.Tensor]:
+    """Convert a batch of multi-dimensionally packed values to a sequence of
+    values.
+
+    Args:
+        values: The packed values to convert.
+            Shape: [L, *]
+        L_bsds: The number of valid values in each sample for each dimension.
+            Shape: [B, D]
+
+    Returns:
+        The values as a sequence.
+            Length: B
+            Shape of inner tensors: [L_b0, ..., L_b{D-1}, *]
+    """
+    star = values.shape[1:]
+    L_bs = L_bsds.prod(dim=1)  # [B]
+    values_split = torch.split(values, L_bs.tolist())  # B x [L_b, *]
+    return [
+        values_b.reshape(
+            (*L_bsds[b], *star)  # type: ignore
+        )  # [L_b0, ..., L_b{D-1}, *]
+        for b, values_b in enumerate(values_split)
+    ]
+
+
 def sequentialize_padded(
     values: torch.Tensor, L_bs: torch.Tensor
 ) -> list[torch.Tensor]:
@@ -320,7 +588,29 @@ def sequentialize_padded(
             Length: B
             Shape of inner tensors: [L_b, *]
     """
-    return sequentialize_packed(pack_padded(values, L_bs), L_bs)
+    return sequentialize_packed(pack_padded(values, L_bs), L_bs)  # B x [L_b, *]
+
+
+def sequentialize_padded_multidim(
+    values: torch.Tensor, L_bsds: torch.Tensor
+) -> list[torch.Tensor]:
+    """Convert a batch of multi-dimensionally padded values to a sequence of
+    values.
+
+    Args:
+        values: The padded values to convert. Padding could be arbitrary.
+            Shape: [B, max(L_bs0), ..., max(L_bs{D-1}), *]
+        L_bsds: The number of valid values in each sample for each dimension.
+            Shape: [B, D]
+
+    Returns:
+        The values as a sequence.
+            Length: B
+            Shape of inner tensors: [L_b0, ..., L_b{D-1}, *]
+    """
+    return sequentialize_packed_multidim(
+        pack_padded_multidim(values, L_bsds), L_bsds
+    )  # B x [L_b0, ..., L_b{D-1}, *]
 
 
 def apply_mask(
@@ -369,6 +659,63 @@ def apply_mask(
     return values, L_bs_kept
 
 
+def apply_mask_multidim(
+    values: torch.Tensor,
+    mask: torch.Tensor,
+    L_bsds: torch.Tensor,
+    padding_value: Any = None,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Apply an additional mask to a batch of multi-dimensionally padded values.
+
+    All values that are marked for keeping by the mask will be moved to the
+    front of the tensor. Since the number of kept values in each sample can
+    change, the function will also return the number of kept values in each
+    sample.
+
+    Warning: Since the number of kept values in each sample could be
+    inconsistent across dimensions, it is not possible to return the kept values
+    in a multi-dimensional format. Instead, the number of kept values is summed
+    across all dimensions, and the kept values are returned in a padded format
+    with a single padding dimension. Note that this differs from the behavior of
+    other *_multidim() functions in our module!
+
+    Args:
+        values: The values to apply the mask to. Padding could be arbitrary.
+            Shape: [B, max(L_bs0), ..., max(L_bs{D-1}), *]
+        mask: The mask to apply. Padding could be arbitrary, since the function
+            will apply the original mask in addition to the given mask.
+            Shape: [B, max(L_bs0), ..., max(L_bs{D-1})]
+        L_bsds: The number of valid values in each sample for each dimension.
+            Shape: [B, D]
+        padding_value: The value to pad the values with. If None, the values
+            are padded with random values. This is faster than padding with
+            a specific value.
+
+    Returns:
+        Tuple containing:
+        - The values with the given mask applied. Padded with padding_value.
+            Shape: [B, max(L_bs_kept), *]
+        - The number of kept values in each sample.
+            Shape: [B]
+    """
+    D = L_bsds.shape[1]
+    device = L_bsds.device
+    max_L_bsds = torch.tensor(values.shape[1 : 1 + D], device=device)  # [D]
+
+    # Create a mask that indicates which values should be kept in each sample.
+    mask = mask & mask_padding_multidim(
+        L_bsds, max_L_bsds
+    )  # [B, max(L_bs0), ..., max(L_bs{D-1})]
+    L_bs_kept = mask.sum(dim=tuple(range(1, D + 1)))  # [B]
+    max_L_bs_kept = int(L_bs_kept.max()) if len(L_bs_kept) != 0 else 0
+
+    # Move the masked values to the front of the tensor.
+    values = pad_packed(
+        values[mask], L_bs_kept, max_L_bs_kept, padding_value=padding_value
+    )  # [B, max(L_bs_kept), *]
+    return values, L_bs_kept
+
+
 def replace_padding(
     values: torch.Tensor,
     L_bs: torch.Tensor,
@@ -401,6 +748,8 @@ def replace_padding(
     """
     B, max_L_bs, *star = values.shape
     L = L_bs.sum()
+    device = values.device
+    dtype = values.dtype
 
     # Create a mask that indicates which values are valid in each sample.
     mask = mask_padding(L_bs, max_L_bs)  # [B, max(L_bs)]
@@ -414,7 +763,7 @@ def replace_padding(
         return values_padded
 
     # Convert padding_value to the same device and dtype as values.
-    padding_value = padding_value.to(device=values.device, dtype=values.dtype)
+    padding_value = padding_value.to(device=device, dtype=dtype)
 
     # Handle shapes that are missing the star dimensions.
     if (
@@ -455,6 +804,109 @@ def replace_padding(
     return values_padded
 
 
+def replace_padding_multidim(
+    values: torch.Tensor,
+    L_bsds: torch.Tensor,
+    padding_value: Any = 0,
+    in_place: bool = False,
+) -> torch.Tensor:
+    """Replace any existing multi-dimensional values padding in one of several
+    ways.
+
+    Args:
+        values: The values to pad. Padding could be arbitrary.
+            Shape: [B, max(L_bs0), ..., max(L_bs{D-1}), *]
+        L_bsds: The number of valid values in each sample for each dimension.
+            Shape: [B, D]
+        padding_value: The value to pad the values with. Can be one of:
+            - A scalar value, or a tensor of shape [] or [*], containing the
+              value to pad all elements with.
+            - A tensor of shape [B, max(L_bs0), ..., max(L_bs{D-1})] or
+              [B, max(L_bs0), ..., max(L_bs{D-1}), *], containing the value to
+              pad each element with.
+            - A tensor of shape [B, 1, ..., 1] or [B, 1, ..., 1, *], containing
+              the value to pad each row with.
+            - A tensor of shape [1, max(L_bs0), ..., max(L_bs{D-1})] or
+              [1, max(L_bs0), ..., max(L_bs{D-1}), *], containing the value to
+              pad each column with.
+            - A tensor of shape [B * prod(max(L_bsds)) - L] or
+              [B * prod(max(L_bsds)) - L, *], containing the value to pad each
+              element in the padding mask with.
+        in_place: Whether to perform the operation in-place.
+
+    Returns:
+        The padded values. Padded with padding_value.
+            Shape: [B, max(L_bs0), ..., max(L_bs{D-1}), *]
+    """
+    B, D = L_bsds.shape
+    device = L_bsds.device
+    dtype = values.dtype
+    max_L_bsds = torch.tensor(values.shape[1 : 1 + D], device=device)  # [D]
+    star = list(values.shape[1 + D :])
+    L_bs = L_bsds.prod(dim=1)  # [B]
+    L = L_bs.sum()
+    theory_max_L_bs = max_L_bsds.prod()
+
+    # Create a mask that indicates which values are valid in each sample.
+    mask = mask_padding_multidim(
+        L_bsds, max_L_bsds
+    )  # [B, max(L_bs0), ..., max(L_bs{D-1})]
+
+    # Handle in-place operations.
+    values_padded = values if in_place else values.clone()
+
+    # Handle the case where padding_value is a scalar.
+    if not isinstance(padding_value, torch.Tensor):
+        values_padded[~mask] = padding_value
+        return values_padded
+
+    # Convert padding_value to the same device and dtype as values.
+    padding_value = padding_value.to(device=device, dtype=dtype)
+
+    # Handle shapes that are missing the star dimensions.
+    if (
+        padding_value.shape == ()
+        or padding_value.shape == (B, *max_L_bsds)
+        or padding_value.shape == (B, *[1] * D)
+        or padding_value.shape == (1, *max_L_bsds)
+        or padding_value.shape == (B * theory_max_L_bs - L,)
+    ):
+        padding_value = padding_value.reshape(
+            (*padding_value.shape, *[1] * len(star))
+        )
+
+    # Now handle all expected shapes.
+    # Note that the shape of the tensor to be set, i.e. values_padded[~mask], is
+    # always [B * prod(max(L_bsds)) - L, *].
+    if padding_value.shape == tuple(star):
+        values_padded[~mask] = padding_value
+    elif padding_value.shape == (B, *max_L_bsds, *star):
+        values_padded[~mask] = padding_value[~mask]
+    elif padding_value.shape == (B, *[1] * D, *star):
+        values_padded[~mask] = padding_value.squeeze(
+            tuple(range(1, D + 1))
+        ).repeat_interleave(theory_max_L_bs - L_bs, dim=0)
+    elif padding_value.shape == (1, *max_L_bsds, *star):
+        values_padded[~mask] = padding_value.expand(B, *max_L_bsds, *star)[
+            ~mask
+        ]
+    elif padding_value.shape == (B * theory_max_L_bs - L, *star):
+        values_padded[~mask] = padding_value
+    else:
+        raise ValueError(
+            "Shape of padding_value did not match any of the expected shapes."
+            f" Got {list(padding_value.shape)}, but expected one of: [],"
+            f" {star}, {[B, *max_L_bsds.tolist()]},"
+            f" {[B, *max_L_bsds.tolist(), *star]}, {[B, *[1] * D]},"
+            f" {[B, *[1] * D, *star]}, {[1, *max_L_bsds.tolist()]},"
+            f" {[1, *max_L_bsds.tolist(), *star]},"
+            f" {[B * theory_max_L_bs.item() - L]}, or"
+            f" {[B * theory_max_L_bs.item() - L, *star]}"
+        )
+
+    return values_padded
+
+
 def last_valid_value_padding(
     values: torch.Tensor,
     L_bs: torch.Tensor,
@@ -480,13 +932,15 @@ def last_valid_value_padding(
             Shape: [B, max(L_bs), *]
     """
     B, max_L_bs, *star = values.shape
+    device = values.device
+    dtype = values.dtype
 
     # Determine the padding value for each sample.
-    arange_B = torch.arange(B, device=values.device)
+    arange_B = torch.arange(B, device=device)
     padding_value = (
         values[arange_B, L_bs - 1]
         if max_L_bs != 0
-        else torch.empty((B, *star), device=values.device, dtype=values.dtype)
+        else torch.empty((B, *star), device=device, dtype=dtype)
     )  # [B, *]
     if padding_value_empty_rows is not None:
         padding_value = padding_value.clone()
@@ -497,6 +951,62 @@ def last_valid_value_padding(
     values = replace_padding(
         values, L_bs, padding_value=padding_value, in_place=in_place
     )  # [B, max(L_bs), *]
+
+    return values
+
+
+def last_valid_value_padding_multidim(
+    values: torch.Tensor,
+    L_bsds: torch.Tensor,
+    padding_value_empty_rows: Any = None,
+    in_place: bool = False,
+) -> torch.Tensor:
+    """Pad the multi-dimensional values with the last valid value for each
+    sample.
+
+    The last valid value is defined as the last valid value if we were to
+    flatten all padding dimensions into a single dimension.
+
+    Args:
+        values: The values to pad. Padding could be arbitrary.
+            Shape: [B, max(L_bs0), ..., max(L_bs{D-1}), *]
+        L_bsds: The number of valid values in each sample for each dimension.
+            Shape: [B, D]
+        padding_value_empty_rows: The value to pad empty rows with (i.e. when
+            prod(L_bsds[b]) == 0 for some b). If None, empty rows are padded
+            with random values. This is faster than padding with a specific
+            value. Can be a scalar value, or a tensor of shape [] or [*],
+            containing the value to pad all empty rows with.
+        in_place: Whether to perform the operation in-place.
+
+    Returns:
+        The padded values. Padded with the last valid value.
+            Shape: [B, max(L_bs0), ..., max(L_bs{D-1}), *]
+    """
+    B, D = L_bsds.shape
+    device = L_bsds.device
+    dtype = values.dtype
+    max_L_bsds = torch.tensor(values.shape[1 : 1 + D], device=device)  # [D]
+    star = list(values.shape[1 + D :])
+    L_bs = L_bsds.prod(dim=1)  # [B]
+    theory_max_L_bs = max_L_bsds.prod()
+
+    # Determine the padding value for each sample.
+    arange_B = torch.arange(B, device=device)
+    padding_value = (
+        values[(arange_B, *torch.split(L_bsds - 1, 1, dim=1))]
+        if theory_max_L_bs != 0
+        else torch.empty((B, *star), device=device, dtype=dtype)
+    )  # [B, *]
+    if padding_value_empty_rows is not None:
+        padding_value = padding_value.clone()
+        padding_value[L_bs == 0] = padding_value_empty_rows
+
+    # Replace the padding values using per row replacement.
+    padding_value = padding_value.unsqueeze(1)  # [B, 1, *]
+    values = replace_padding_multidim(
+        values, L_bsds, padding_value=padding_value, in_place=in_place
+    )  # [B, max(L_bs0), ..., max(L_bs{D-1}), *]
 
     return values
 
@@ -801,8 +1311,10 @@ def swap_idcs_vals(x: torch.Tensor) -> torch.Tensor:
     if x.ndim != 1:
         raise ValueError("x must be 1D.")
 
+    device = x.device
+    dtype = x.dtype
     x_swapped = torch.empty_like(x)
-    x_swapped[x] = torch.arange(len(x), device=x.device, dtype=x.dtype)
+    x_swapped[x] = torch.arange(len(x), device=device, dtype=dtype)
     return x_swapped
 
 
@@ -838,9 +1350,11 @@ def swap_idcs_vals_duplicates(
     if x.ndim != 1:
         raise ValueError("x must be 1D.")
 
+    dtype = x.dtype
+
     # Believe it or not, this O(n log n) algorithm is actually faster than a
     # native implementation that uses a Python for loop with complexity O(n).
-    return x.argsort(stable=stable).to(x.dtype)
+    return x.argsort(stable=stable).to(dtype)
 
 
 # ############################ CONSECUTIVE SEGMENTS ############################
@@ -866,18 +1380,19 @@ def starts_segments(x: torch.Tensor, dim: int = 0) -> torch.Tensor:
     tensor([0, 3, 5, 6])
     """
     N_dim = x.shape[dim]
+    device = x.device
 
     # Find the indices where the values change.
     is_change = (
         torch.concat(
             [
-                torch.ones(1, device=x.device, dtype=torch.bool),
+                torch.ones(1, device=device, dtype=torch.bool),
                 (
                     x.index_select(
-                        dim, torch.arange(0, N_dim - 1, device=x.device)
+                        dim, torch.arange(0, N_dim - 1, device=device)
                     )  # [N_0, ..., N_dim - 1, ..., N_{D-1}]
                     != x.index_select(
-                        dim, torch.arange(1, N_dim, device=x.device)
+                        dim, torch.arange(1, N_dim, device=device)
                     )  # [N_0, ..., N_dim - 1, ..., N_{D-1}]
                 ).any(
                     dim=tuple(i for i in range(x.ndim) if i != dim)
@@ -886,7 +1401,7 @@ def starts_segments(x: torch.Tensor, dim: int = 0) -> torch.Tensor:
             dim=0,
         )  # [N_dim]
         if N_dim > 0
-        else torch.empty(0, device=x.device, dtype=torch.bool)
+        else torch.empty(0, device=device, dtype=torch.bool)
     )  # [N_dim]
 
     # Find the start of each consecutive segment.
@@ -935,13 +1450,14 @@ def counts_segments(
     tensor([3, 2, 1, 4])
     """
     N_dim = x.shape[dim]
+    device = x.device
 
     # Find the start of each consecutive segment.
     starts = starts_segments(x, dim=dim)  # [S]
 
     # Prepare starts for count calculation.
     starts_with_N_dim = torch.concat(
-        [starts, torch.full((1,), N_dim, device=x.device, dtype=torch.int32)],
+        [starts, torch.full((1,), N_dim, device=device, dtype=torch.int32)],
         dim=0,
     )  # [S + 1]
 
@@ -949,7 +1465,7 @@ def counts_segments(
     counts = (
         starts_with_N_dim.diff(dim=0)  # [S]
         if N_dim > 0
-        else torch.empty(0, device=x.device, dtype=torch.int32)
+        else torch.empty(0, device=device, dtype=torch.int32)
     )  # [S]
 
     if return_starts:
@@ -1036,6 +1552,8 @@ def outer_indices_segments(
     >>> outer_idcs
     tensor([0, 0, 0, 1, 1, 2, 3, 3, 3, 3])
     """
+    device = x.device
+
     # Find the start (optional) and count of each consecutive segment.
     if return_starts:
         counts, starts = counts_segments(
@@ -1046,7 +1564,7 @@ def outer_indices_segments(
 
     # Calculate the outer indices.
     outer_idcs = torch.arange(
-        counts.shape[0], device=x.device, dtype=torch.int32
+        counts.shape[0], device=device, dtype=torch.int32
     ).repeat_interleave(  # [S]
         counts, dim=0
     )  # [N_dim]
@@ -1210,11 +1728,14 @@ def lexsort(
     if isinstance(keys, tuple):
         keys = torch.stack(keys)  # [K, N_0, ..., N_dim, ..., N_{D-1}]
 
+    device = keys.device
+    dtype = keys.dtype
+
     # If the tensor is an integer tensor, first try sorting by representing
     # each of the "tuples" as a single integer. This is much faster than
     # lexsorting along the given dimension.
     if (
-        keys.dtype
+        dtype
         in (
             torch.int8,
             torch.int16,
@@ -1250,7 +1771,7 @@ def lexsort(
     # converting to integers, we have to use np.lexsort(). Unfortunately, torch
     # doesn't have a np.lexsort() equivalent, so we have to use numpy here.
     return torch.from_numpy(np.lexsort(keys.numpy(force=True), axis=dim)).to(
-        keys.device
+        device
     )
 
 
@@ -1929,7 +2450,8 @@ def counts_segments_ints(x: torch.Tensor, high: int) -> torch.Tensor:
     if x.ndim != 1:
         raise ValueError("x must be a 1D tensor.")
 
-    freqs = torch.zeros(high, device=x.device, dtype=torch.int32)
+    device = x.device
+    freqs = torch.zeros(high, device=device, dtype=torch.int32)
     uniques, counts = unique_consecutive(
         x, return_counts=True, dim=0
     )  # [U], [U]

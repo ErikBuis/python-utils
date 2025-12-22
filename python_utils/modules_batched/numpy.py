@@ -397,13 +397,14 @@ def arange_batched(
     padding_value: Any = None,
     dtype: np.dtype | None = None,
 ) -> tuple[npt.NDArray[np.number], npt.NDArray[np.intp]]:
-    """Create a batch of arrays with values in the range [start, end).
+    """Create a batch of arrays with values in the range [start, stop).
 
     Args:
-        starts: The start value for each array in the batch.
+        starts: The start value for each array in the batch. If stops is None,
+            the range is [0, start).
             Shape: [B]
-        stops: The end value for each array in the batch. If None, the end
-            value is set to the start value.
+        stops: The end value for each array in the batch. The interval is
+            half-open, so this end value is not included.
             Shape: [B]
         steps: The step value for each array in the batch. If None, the step
             value is set to 1.
@@ -415,7 +416,7 @@ def arange_batched(
 
     Returns:
         Tuple containing:
-        - A batch of arrays with values in the range [start, end).
+        - A batch of arrays with values in the range [start, stop).
             Padded with padding_value.
             Shape: [B, max(L_bs)]
         - The number of values of the arange sequences in the batch.
@@ -465,13 +466,14 @@ def arange_batched_packed(
     steps: npt.NDArray[np.number] | None = None,
     dtype: np.dtype | None = None,
 ) -> tuple[npt.NDArray[np.number], npt.NDArray[np.intp], int]:
-    """Create a batch of arrays with values in the range [start, end).
+    """Create a batch of arrays with values in the range [start, stop).
 
     Args:
-        starts: The start value for each array in the batch.
+        starts: The start value for each array in the batch. If stops is None,
+            the range is [0, start).
             Shape: [B]
-        stops: The end value for each array in the batch. If None, the end
-            value is set to the start value.
+        stops: The end value for each array in the batch. The interval is
+            half-open, so this end value is not included.
             Shape: [B]
         steps: The step value for each array in the batch. If None, the step
             value is set to 1.
@@ -480,7 +482,7 @@ def arange_batched_packed(
 
     Returns:
         Tuple containing:
-        - A batch of arrays with values in the range [start, end).
+        - A batch of arrays with values in the range [start, stop).
             Shape: [L]
         - The number of values of the arange sequences in the batch.
             Shape: [B]
@@ -502,22 +504,19 @@ def arange_batched_packed(
     if steps is None:
         steps = np.ones(B, dtype=inferred_dtype)
 
-    # Compute the starts and offsets of the arange sequences in parallel.
+    # Compute the starts and steps of the arange sequences in parallel.
     L_bs = np.ceil((stops - starts) / steps).astype(np.intp)  # [B]
     max_L_bs = int(L_bs.max())
-    starts_repeated = np.repeat(starts, L_bs)  # [L]
-    steps_repeated = np.repeat(steps, L_bs)  # [L]
-    offsets_packed = np.cumsum(steps_repeated)  # [L]
+    starts_repeated = starts.repeat(L_bs)  # [L]
+    steps_repeated = steps.repeat(L_bs)  # [L]
 
-    # Correct the offsets to start from zero for each sequence.
-    nonzero_idcs = np.nonzero(L_bs)[0]  # [B_nonzero]
-    L_bs_nonzero = L_bs[nonzero_idcs]  # [B_nonzero]
-    if len(nonzero_idcs) != 0:
-        start_idcs = np.cumsum(L_bs_nonzero) - L_bs_nonzero  # [B_nonzero]
-        corrections_packed = np.repeat(
-            offsets_packed[start_idcs], L_bs_nonzero
-        )  # [L]
-        offsets_packed -= corrections_packed
+    # Compute the offsets for each arange sequence in parallel.
+    L_bs_without_last = L_bs[:-1]  # [B - 1]
+    offsets_packed = np.ones_like(steps_repeated)  # [L]
+    offsets_packed[0] = 0
+    offsets_packed[L_bs_without_last.cumsum()] -= L_bs_without_last  # [B - 1]
+    offsets_packed = offsets_packed.cumsum()  # [L]
+    offsets_packed *= steps_repeated  # [L]
 
     # Compute the arange sequences in parallel.
     aranges = starts_repeated + offsets_packed  # [L]
@@ -536,7 +535,7 @@ def linspace_batched(
     padding_value: Any = None,
     dtype: np.dtype | None = None,
 ) -> tuple[npt.NDArray[np.number], npt.NDArray[np.intp]]:
-    """Create a batch of arrays with values in the range [start, end].
+    """Create a batch of arrays with values in the range [start, stop].
 
     Args:
         starts: The start value for each array in the batch.
@@ -553,10 +552,11 @@ def linspace_batched(
 
     Returns:
         Tuple containing:
-        - A batch of arrays with values in the range [start, end].
+        - A batch of arrays with values in the range [start, stop].
             Padded with padding_value.
             Shape: [B, max(L_bs)]
-        - The number of values of the linspace sequences in the batch.
+        - The number of values of the linspace sequences in the batch. This is
+            the same as nums.
             Shape: [B]
     """
     inferred_dtype = np.promote_types(
@@ -580,15 +580,16 @@ def linspace_batched(
     )  # [B, max(L_bs)]  # fmt: skip
 
     # Set the last element of each linspace to the stop value manually to avoid
-    # numerical issues.
+    # floating point issues.
     nonzero_idcs = np.nonzero(L_bs)[0]  # [B_nonzero]
     L_bs_nonzero = L_bs[nonzero_idcs]  # [B_nonzero]
     if len(nonzero_idcs) != 0:
         stop_idcs = L_bs_nonzero - 1  # [B_nonzero]
 
         # Only set the stop values for sequences with at least two elements.
-        atleasttwo_idcs = nonzero_idcs[L_bs_nonzero != 1]  # [B_atleasttwo]
-        stop_idcs = stop_idcs[L_bs_nonzero != 1]  # [B_atleasttwo]
+        is_atleasttwo = L_bs_nonzero != 1  # [B_nonzero]
+        atleasttwo_idcs = nonzero_idcs[is_atleasttwo]  # [B_atleasttwo]
+        stop_idcs = stop_idcs[is_atleasttwo]  # [B_atleasttwo]
 
         linspaces[atleasttwo_idcs, stop_idcs] = stops[atleasttwo_idcs].astype(
             linspaces.dtype
@@ -613,7 +614,7 @@ def linspace_batched_packed(
     nums: npt.NDArray[np.integer],
     dtype: np.dtype | None = None,
 ) -> tuple[npt.NDArray[np.number], npt.NDArray[np.intp], int]:
-    """Create a batch of arrays with values in the range [start, end].
+    """Create a batch of arrays with values in the range [start, stop].
 
     Args:
         starts: The start value for each array in the batch.
@@ -627,10 +628,11 @@ def linspace_batched_packed(
 
     Returns:
         Tuple containing:
-        - A batch of arrays with values in the range [start, end].
+        - A batch of arrays with values in the range [start, stop].
             Padded with padding_value.
             Shape: [B, max(L_bs)]
-        - The number of values of the linspace sequences in the batch.
+        - The number of values of the linspace sequences in the batch. This is
+            the same as nums.
             Shape: [B]
         - The maximum length of the linspace sequences in the batch.
     """
@@ -643,32 +645,32 @@ def linspace_batched_packed(
         )  # ignore division by zero since we already handle it in np.where
         steps = np.where(L_bs != 1, (stops - starts) / (L_bs - 1), 0)  # [B]
 
-    # Compute the starts and offsets of the linspace sequences in parallel.
-    starts_repeated = np.repeat(starts, L_bs)  # [L]
-    steps_repeated = np.repeat(steps, L_bs)  # [L]
-    offsets_packed = np.cumsum(steps_repeated)  # [L]
+    # Compute the starts and steps of the linspace sequences in parallel.
+    starts_repeated = starts.repeat(L_bs)  # [L]
+    steps_repeated = steps.repeat(L_bs)  # [L]
 
-    # Correct the offsets to start from zero for each sequence.
-    nonzero_idcs = np.nonzero(L_bs)[0]  # [B_nonzero]
-    L_bs_nonzero = L_bs[nonzero_idcs]  # [B_nonzero]
-    if len(nonzero_idcs) != 0:
-        start_idcs = np.cumsum(L_bs_nonzero) - L_bs_nonzero  # [B_nonzero]
-        corrections_packed = np.repeat(
-            offsets_packed[start_idcs], L_bs_nonzero
-        )  # [L]
-        offsets_packed -= corrections_packed
+    # Compute the offsets for each linspace sequence in parallel.
+    L_bs_without_last = L_bs[:-1]  # [B - 1]
+    offsets_packed = np.ones_like(steps_repeated)  # [L]
+    offsets_packed[0] = 0
+    offsets_packed[L_bs_without_last.cumsum()] -= L_bs_without_last  # [B - 1]
+    offsets_packed = offsets_packed.cumsum()  # [L]
+    offsets_packed *= steps_repeated  # [L]
 
     # Compute the linspace sequences in parallel.
     linspaces = starts_repeated + offsets_packed  # [L]
 
     # Set the last element of each linspace to the stop value manually to avoid
-    # numerical issues.
+    # floating point issues.
+    nonzero_idcs = np.nonzero(L_bs)[0]  # [B_nonzero]
+    L_bs_nonzero = L_bs[nonzero_idcs]  # [B_nonzero]
     if len(nonzero_idcs) != 0:
         stop_idcs = np.cumsum(L_bs_nonzero) - 1  # [B_nonzero]
 
         # Only set the stop values for sequences with at least two elements.
-        atleasttwo_idcs = nonzero_idcs[L_bs_nonzero != 1]  # [B_atleasttwo]
-        stop_idcs = stop_idcs[L_bs_nonzero != 1]  # [B_atleasttwo]
+        is_atleasttwo = L_bs_nonzero != 1  # [B_nonzero]
+        atleasttwo_idcs = nonzero_idcs[is_atleasttwo]  # [B_atleasttwo]
+        stop_idcs = stop_idcs[is_atleasttwo]  # [B_atleasttwo]
 
         linspaces[stop_idcs] = stops[atleasttwo_idcs].astype(linspaces.dtype)
 
@@ -677,6 +679,131 @@ def linspace_batched_packed(
         linspaces = linspaces.astype(dtype)
 
     return linspaces, L_bs, max_L_bs
+
+
+def meshgrid_batched(
+    *xi: tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp], int],
+    indexing: str = "xy",
+    sparse: bool = False,
+    copy: bool = True,
+    padding_value: Any = None,
+) -> tuple[npt.NDArray[NpGeneric], ...]:
+    """Create a meshgrid from a batch of arrays.
+
+    This function is like np.meshgrid(), but supports batched inputs.
+
+    Args:
+        *xi: List of tuples containing:
+            - Padded input arrays representing the coordinates of a grid.
+                Padding could be arbitrary.
+                Shape: [B, max(X_bsd)]
+            - The lengths of the input arrays.
+                Shape: [B]
+            - The maximum length of the input arrays.
+            Length: D
+        indexing: The indexing convention used. 'ij' returns a meshgrid with
+            matrix indexing, while 'xy' returns a meshgrid with Cartesian
+            indexing.
+        sparse: If True, the shape of the returned coordinate array for
+            dimension d is reduced from [B, max(X_bs0), ..., max(X_bs{D-1})] to
+            [B, 1, ..., max(X_bsd), ..., 1]. This is useful for memory
+            conservation when the full grid is intended to be used with
+            broadcasting. When all coordinates are used in an expression,
+            broadcasting still leads to a fully-dimensional result array.
+            Warning: if sparse=True, the padding is only applied along the
+            dimension of the corresponding coordinate array, which means that
+            any broadcasts you perform on the meshgrids this function returns
+            may still contain arbitrary padding values in the other dimensions.
+            If you need to set a specific padding value for all dimensions,
+            you should use sparse=False instead.
+        copy: If False, a view into the original arrays are returned in order to
+            conserve memory. Default is True. Please note that sparse=False,
+            copy=False will likely return non-contiguous arrays. Furthermore,
+            more than one element of a broadcast array may refer to a single
+            memory location. If you need to write to the arrays, make copies
+            first.
+        padding_value: The value to pad the outputs with. If None, the outputs
+            are padded with random values. This is faster than padding with a
+            specific value.
+
+    Returns:
+        Tuple of [B, max(X_bs0), ..., max(X_bs{D-1})] shaped arrays if indexing
+        is 'ij' or tuple of [B, max(X_bs1), max(X_bs0), ..., max(X_bs{D-1})]
+        shaped arrays if indexing is 'xy'. If sparse=True, the shape of the d-th
+        output array is reduced to [B, 1, ..., max(X_bsd), ..., 1]. Each output
+        array contains the D-dimensional meshgrid formed by the input arrays.
+        Padded with padding_value.
+    """
+    x_arrs, X_bsds, max_X_bsds = map(
+        list, zip(*xi)
+    )  # D x [B, max(X_bsd)], D x [B], D
+    X_bsds = np.stack(X_bsds, axis=1)  # [B, D]
+    max_X_bsds = np.array(max_X_bsds)  # [D]
+
+    B, D = X_bsds.shape
+
+    # Prepare the shape of the output arrays.
+    expanded_shape = [B, *max_X_bsds]
+
+    # Swap the first two axes if indexing is 'xy'.
+    if indexing == "xy" and D >= 2:
+        expanded_shape[1], expanded_shape[2] = (
+            expanded_shape[2],
+            expanded_shape[1],
+        )
+
+    # Go through each input array and create the corresponding meshgrid.
+    meshgrids = []
+    for d in range(D):
+        # Prepare the shape of the sparse output arrays.
+        unsqueezed_shape = [B, *[1] * D]
+        unsqueezed_shape[d + 1] = max_X_bsds[d]
+
+        # Swap the first two axes if indexing is 'xy'.
+        if indexing == "xy" and D >= 2 and d <= 1:
+            unsqueezed_shape[1], unsqueezed_shape[2] = (
+                unsqueezed_shape[2],
+                unsqueezed_shape[1],
+            )
+
+        # Create the meshgrid.
+        meshgrid = x_arrs[d].reshape(
+            unsqueezed_shape
+        )  # [B, 1, ..., max(X_bsd), ..., 1]
+
+        if sparse:
+            # Pad the outputs with the padding value.
+            if padding_value is not None:
+                meshgrid = np.moveaxis(
+                    meshgrid, d + 1, 1
+                )  # [B, max(X_bsd), 1, ..., 1]
+                meshgrid = replace_padding(
+                    meshgrid, X_bsds[:, d], padding_value=padding_value
+                )
+                meshgrid = np.moveaxis(
+                    meshgrid, 1, d + 1
+                )  # [B, 1, ..., max(X_bsd), ..., 1]
+
+        else:
+            # Broadcast to the full shape if not sparse.
+            meshgrid = np.broadcast_to(
+                meshgrid, expanded_shape
+            )  # [B, max(X_bs1), ..., max(X_bs{D-1})]
+
+            # Pad the outputs with the padding value.
+            if padding_value is not None:
+                meshgrid = replace_padding_multidim(
+                    meshgrid, X_bsds, padding_value=padding_value
+                )
+
+        # Make a copy if requested (if padding was applied, a copy has already
+        # been made).
+        if copy and padding_value is None:
+            meshgrid = meshgrid.copy()
+
+        meshgrids.append(meshgrid)
+
+    return tuple(meshgrids)
 
 
 def take_batched(
@@ -808,131 +935,6 @@ def repeat_batched(
     return values
 
 
-def meshgrid_batched(
-    *xi: tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp], int],
-    indexing: str = "xy",
-    sparse: bool = False,
-    copy: bool = True,
-    padding_value: Any = None,
-) -> tuple[npt.NDArray[NpGeneric], ...]:
-    """Create a meshgrid from a batch of arrays.
-
-    This function is like np.meshgrid(), but supports batched inputs.
-
-    Args:
-        *xi: List of tuples containing:
-            - Padded input arrays representing the coordinates of a grid.
-                Padding could be arbitrary.
-                Shape: [B, max(X_bsd)]
-            - The lengths of the input arrays.
-                Shape: [B]
-            - The maximum length of the input arrays.
-            Length: D
-        indexing: The indexing convention used. 'ij' returns a meshgrid with
-            matrix indexing, while 'xy' returns a meshgrid with Cartesian
-            indexing.
-        sparse: If True, the shape of the returned coordinate array for
-            dimension d is reduced from [B, max(X_bs0), ..., max(X_bs{D-1})] to
-            [B, 1, ..., max(X_bsd), ..., 1]. This is useful for memory
-            conservation when the full grid is intended to be used with
-            broadcasting. When all coordinates are used in an expression,
-            broadcasting still leads to a fully-dimensional result array.
-            Warning: if sparse=True, the padding is only applied along the
-            dimension of the corresponding coordinate array, which means that
-            any broadcasts you perform on the meshgrids this function returns
-            may still contain arbitrary padding values in the other dimensions.
-            If you need to set a specific padding value for all dimensions,
-            you should use sparse=False instead.
-        copy: If False, a view into the original arrays are returned in order to
-            conserve memory. Default is True. Please note that sparse=False,
-            copy=False will likely return non-contiguous arrays. Furthermore,
-            more than one element of a broadcast array may refer to a single
-            memory location. If you need to write to the arrays, make copies
-            first.
-        padding_value: The value to pad the outputs with. If None, the outputs
-            are padded with random values. This is faster than padding with a
-            specific value.
-
-    Returns:
-        Tuple of [B, max(X_bs0), ..., max(X_bs{D-1})] shaped arrays if indexing
-        is 'ij' or tuple of [B, max(X_bs1), max(X_bs0), ..., max(X_bs{D-1})]
-        shaped arrays if indexing is 'xy'. If sparse=True, the shape of the d-th
-        output array is reduced to [B, 1, ..., max(X_bsd), ..., 1]. Each output
-        array contains the D-dimensional meshgrid formed by the input arrays.
-        Padded with padding_value.
-    """
-    x_arrs, X_bsds, max_X_bsds = map(
-        list, zip(*xi)
-    )  # D x [B, max(X_bsd)], D x [B], D
-    X_bsds = np.stack(X_bsds, axis=1)  # [B, D]
-    max_X_bsds = np.array(max_X_bsds)  # [D]
-
-    B, D = X_bsds.shape
-
-    # Prepare the shape of the non-sparse output arrays.
-    expanded_shape = [B, *max_X_bsds]
-
-    # Swap the first two axes if indexing is 'xy'.
-    if indexing == "xy" and D >= 2:
-        expanded_shape[1], expanded_shape[2] = (
-            expanded_shape[2],
-            expanded_shape[1],
-        )
-
-    # Go through each input array and create the corresponding meshgrid.
-    meshgrids = []
-    for d in range(D):
-        # Prepare the shape of the sparse output arrays.
-        unsqueezed_shape = [B, *[1] * D]
-        unsqueezed_shape[d + 1] = max_X_bsds[d]
-
-        # Swap the first two axes if indexing is 'xy'.
-        if indexing == "xy" and D >= 2 and d <= 1:
-            unsqueezed_shape[1], unsqueezed_shape[2] = (
-                unsqueezed_shape[2],
-                unsqueezed_shape[1],
-            )
-
-        # Create the meshgrid.
-        meshgrid = x_arrs[d].reshape(
-            unsqueezed_shape
-        )  # [B, 1, ..., max(X_bsd), ..., 1]
-
-        if sparse:
-            # Pad the outputs with the padding value.
-            if padding_value is not None:
-                meshgrid = np.moveaxis(
-                    meshgrid, d + 1, 1
-                )  # [B, max(X_bsd), 1, ..., 1]
-                meshgrid = replace_padding(
-                    meshgrid, X_bsds[:, d], padding_value=padding_value
-                )
-                meshgrid = np.moveaxis(
-                    meshgrid, 1, d + 1
-                )  # [B, 1, ..., max(X_bsd), ..., 1]
-
-        else:
-            # Broadcast to the full shape if not sparse.
-            meshgrid = np.broadcast_to(
-                meshgrid, expanded_shape
-            )  # [B, max(X_bs1), ..., max(X_bs{D-1})]
-
-            # Pad the outputs with the padding value.
-            if padding_value is not None:
-                meshgrid = replace_padding_multidim(
-                    meshgrid, X_bsds, padding_value=padding_value
-                )
-
-        # Make a copy if requested (if padding was applied, a copy has already
-        # been made).
-        if copy and padding_value is None:
-            meshgrid = meshgrid.copy()
-
-        meshgrids.append(meshgrid)
-
-    return tuple(meshgrids)
-
-
 # ######################## ADVANCED ARRAY MANIPULATION #########################
 
 
@@ -967,9 +969,10 @@ def swap_idcs_vals_batched(x: npt.NDArray[NpInteger]) -> npt.NDArray[NpInteger]:
         raise ValueError("x must be a batch of 1D arrays.")
 
     B, N = x.shape
+    dtype = x.dtype
     x_swapped = np.empty_like(x)
-    x_swapped[np.expand_dims(np.arange(B, dtype=x.dtype), 1), x] = (
-        np.expand_dims(np.arange(N, dtype=x.dtype), 0)
+    x_swapped[np.expand_dims(np.arange(B, dtype=dtype), 1), x] = np.expand_dims(
+        np.arange(N, dtype=dtype), 0
     )
     return x_swapped
 
@@ -1010,9 +1013,11 @@ def swap_idcs_vals_duplicates_batched(
     if x.ndim != 2:
         raise ValueError("x must be a batch of 1D arrays.")
 
+    dtype = x.dtype
+
     # Believe it or not, this O(n log n) algorithm is actually faster than a
     # native implementation that uses a Python for loop with complexity O(n).
-    return x.argsort(axis=1, stable=stable).astype(x.dtype)  # type: ignore
+    return x.argsort(axis=1, stable=stable).astype(dtype)  # type: ignore
 
 
 # ############################ CONSECUTIVE SEGMENTS ############################

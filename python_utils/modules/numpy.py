@@ -169,8 +169,8 @@ def pack_padded_multidim(
             Shape: [L, *]
     """
     D = L_bsds.shape[1]
-    max_L_bsds = np.array(values.shape[1 : 1 + D])  # [D]
 
+    max_L_bsds = np.array(values.shape[1 : 1 + D])  # [D]
     mask = mask_padding_multidim(
         L_bsds, max_L_bsds
     )  # [B, max(L_bs0), ..., max(L_bs{D-1})]
@@ -637,6 +637,7 @@ def replace_padding(
     """
     B, max_L_bs, *star = values.shape
     L = L_bs.sum()
+    dtype = values.dtype
 
     # Create a mask that indicates which values are valid in each sample.
     mask = mask_padding(L_bs, max_L_bs)  # [B, max(L_bs)]
@@ -650,7 +651,7 @@ def replace_padding(
         return values_padded
 
     # Convert padding_value to the same dtype as values.
-    padding_value = padding_value.astype(values.dtype)
+    padding_value = padding_value.astype(dtype)
 
     # Handle shapes that are missing the star dimensions.
     if (
@@ -728,6 +729,7 @@ def replace_padding_multidim(
             Shape: [B, max(L_bs0), ..., max(L_bs{D-1}), *]
     """
     B, D = L_bsds.shape
+    dtype = values.dtype
     max_L_bsds = np.array(values.shape[1 : 1 + D])  # [D]
     star = list(values.shape[1 + D :])
     L_bs = L_bsds.prod(axis=1)  # [B]
@@ -748,7 +750,7 @@ def replace_padding_multidim(
         return values_padded
 
     # Convert padding_value to the same dtype as values.
-    padding_value = padding_value.astype(values.dtype)
+    padding_value = padding_value.astype(dtype)
 
     # Handle shapes that are missing the star dimensions.
     if (
@@ -817,13 +819,14 @@ def last_valid_value_padding(
             Shape: [B, max(L_bs), *]
     """
     B, max_L_bs, *star = values.shape
+    dtype = values.dtype
 
     # Determine the padding value for each sample.
     arange_B = np.arange(B)
     padding_value = (
         values[arange_B, L_bs - 1]
         if max_L_bs != 0
-        else np.empty((B, *star), dtype=values.dtype)
+        else np.empty((B, *star), dtype=dtype)
     )  # [B, *]
     if padding_value_empty_rows is not None:
         padding_value = padding_value.copy()
@@ -867,6 +870,7 @@ def last_valid_value_padding_multidim(
             Shape: [B, max(L_bs0), ..., max(L_bs{D-1}), *]
     """
     B, D = L_bsds.shape
+    dtype = values.dtype
     max_L_bsds = np.array(values.shape[1 : 1 + D])  # [D]
     star = list(values.shape[1 + D :])
     L_bs = L_bsds.prod(axis=1)  # [B]
@@ -877,7 +881,7 @@ def last_valid_value_padding_multidim(
     padding_value = (
         values[(arange_B, *np.split(L_bsds - 1, D, axis=1))]
         if theory_max_L_bs != 0
-        else np.empty((B, *star), dtype=values.dtype)
+        else np.empty((B, *star), dtype=dtype)
     )  # [B, *]
     if padding_value_empty_rows is not None:
         padding_value = padding_value.copy()
@@ -1010,8 +1014,9 @@ def swap_idcs_vals(x: npt.NDArray[NpInteger]) -> npt.NDArray[NpInteger]:
     if x.ndim != 1:
         raise ValueError("x must be 1D.")
 
+    dtype = x.dtype
     x_swapped = np.empty_like(x)
-    x_swapped[x] = np.arange(len(x), dtype=x.dtype)
+    x_swapped[x] = np.arange(len(x), dtype=dtype)
     return x_swapped
 
 
@@ -1047,9 +1052,11 @@ def swap_idcs_vals_duplicates(
     if x.ndim != 1:
         raise ValueError("x must be 1D.")
 
+    dtype = x.dtype
+
     # Believe it or not, this O(n log n) algorithm is actually faster than a
     # native implementation that uses a Python for loop with complexity O(n).
-    return x.argsort(stable=stable).astype(x.dtype)  # type: ignore
+    return x.argsort(stable=stable).astype(dtype)  # type: ignore
 
 
 # ############################ CONSECUTIVE SEGMENTS ############################
@@ -1424,10 +1431,12 @@ def lexsort(
     if isinstance(keys, tuple):
         keys = np.stack(keys)  # [K, N_0, ..., N_axis, ..., N_{D-1}]
 
+    dtype = keys.dtype
+
     # If the array is an integer array, first try sorting by representing
     # each of the "tuples" as a single integer. This is much faster than
     # lexsorting along the given dimension.
-    if np.issubdtype(keys.dtype, np.integer) and keys.size != 0:
+    if np.issubdtype(dtype, np.integer) and keys.size != 0:
         # Compute the minimum and maximum values for each key.
         axes_flat = tuple(range(1, keys.ndim))
         maxs = np.amax(keys, axis=axes_flat, keepdims=True)  # [K, 1, ..., 1]

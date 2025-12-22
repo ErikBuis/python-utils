@@ -13,6 +13,7 @@ from ..modules.torch import (
     pack_padded,
     pad_packed,
     replace_padding,
+    replace_padding_multidim,
 )
 
 # ################################### MATHS ####################################
@@ -373,13 +374,14 @@ def arange_batched(
     dtype: torch.dtype | None = None,
     requires_grad: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Create a batch of tensors with values in the range [start, end).
+    """Create a batch of tensors with values in the range [start, stop).
 
     Args:
-        starts: The start value for each tensor in the batch.
+        starts: The start value for each tensor in the batch. If stops is None,
+            the range is [0, start).
             Shape: [B]
-        stops: The end value for each tensor in the batch. If None, the end
-            value is set to the start value.
+        stops: The end value for each tensor in the batch. The interval is
+            half-open, so this end value is not included.
             Shape: [B]
         steps: The step value for each tensor in the batch. If None, the step
             value is set to 1.
@@ -393,7 +395,7 @@ def arange_batched(
 
     Returns:
         Tuple containing:
-        - A batch of tensors with values in the range [start, end).
+        - A batch of tensors with values in the range [start, stop).
             Padded with padding_value.
             Shape: [B, max(L_bs)]
         - The number of values of any arange sequence in the batch.
@@ -453,13 +455,14 @@ def arange_batched_packed(
     dtype: torch.dtype | None = None,
     requires_grad: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, int]:
-    """Create a batch of tensors with values in the range [start, end).
+    """Create a batch of tensors with values in the range [start, stop).
 
     Args:
-        starts: The start value for each tensor in the batch.
+        starts: The start value for each tensor in the batch. If stops is None,
+            the range is [0, start).
             Shape: [B]
-        stops: The end value for each tensor in the batch. If None, the end
-            value is set to the start value.
+        stops: The end value for each tensor in the batch. The interval is
+            half-open, so this end value is not included.
             Shape: [B]
         steps: The step value for each tensor in the batch. If None, the step
             value is set to 1.
@@ -471,7 +474,7 @@ def arange_batched_packed(
 
     Returns:
         Tuple containing:
-        - A batch of tensors with values in the range [start, end).
+        - A batch of tensors with values in the range [start, stop).
             Shape: [L]
         - The number of values of the arange sequences in the batch.
             Shape: [B]
@@ -499,17 +502,14 @@ def arange_batched_packed(
     max_L_bs = int(L_bs.max())
     starts_repeated = starts.repeat_interleave(L_bs)  # [L]
     steps_repeated = steps.repeat_interleave(L_bs)  # [L]
-    offsets_packed = steps_repeated.cumsum(0)  # [L]
 
-    # Correct the offsets to start from zero for each sequence.
-    nonzero_idcs = L_bs.nonzero(as_tuple=True)[0]  # [B_nonzero]
-    L_bs_nonzero = L_bs[nonzero_idcs]  # [B_nonzero]
-    if len(nonzero_idcs) != 0:
-        start_idcs = L_bs_nonzero.cumsum(0) - L_bs_nonzero  # [B_nonzero]
-        corrections_packed = offsets_packed[start_idcs].repeat_interleave(
-            L_bs_nonzero
-        )  # [L]
-        offsets_packed -= corrections_packed
+    # Compute the offsets for each arange sequence in parallel.
+    L_bs_without_last = L_bs[:-1]  # [B - 1]
+    offsets_packed = torch.ones_like(steps_repeated)  # [L]
+    offsets_packed[0] = 0
+    offsets_packed[L_bs_without_last.cumsum(0)] -= L_bs_without_last  # [B - 1]
+    offsets_packed = offsets_packed.cumsum(0)  # [L]
+    offsets_packed *= steps_repeated  # [L]
 
     # Compute the arange sequences in parallel.
     aranges = starts_repeated + offsets_packed  # [L]
@@ -535,7 +535,7 @@ def linspace_batched(
     dtype: torch.dtype | None = None,
     requires_grad: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Create a batch of tensors with values in the range [start, end].
+    """Create a batch of tensors with values in the range [start, stop].
 
     Args:
         starts: The start value for each tensor in the batch.
@@ -554,10 +554,11 @@ def linspace_batched(
 
     Returns:
         Tuple containing:
-        - A batch of tensors with values in the range [start, end].
+        - A batch of tensors with values in the range [start, stop].
             Padded with padding_value.
             Shape: [B, max(L_bs)]
-        - The number of values of any linspace sequence in the batch.
+        - The number of values of any linspace sequence in the batch. This is
+            the same as nums.
             Shape: [B]
     """
     device = device if device is not None else starts.device
@@ -582,15 +583,16 @@ def linspace_batched(
     )  # [B, max(L_bs)]  # fmt: skip
 
     # Set the last element of each linspace to the stop value manually to avoid
-    # numerical issues.
+    # floating point issues.
     nonzero_idcs = L_bs.nonzero(as_tuple=True)[0]  # [B_nonzero]
     L_bs_nonzero = L_bs[nonzero_idcs]  # [B_nonzero]
     if len(nonzero_idcs) != 0:
         stop_idcs = L_bs_nonzero - 1  # [B_nonzero]
 
         # Only set the stop values for sequences with at least two elements.
-        atleasttwo_idcs = nonzero_idcs[L_bs_nonzero != 1]  # [B_atleasttwo]
-        stop_idcs = stop_idcs[L_bs_nonzero != 1]  # [B_atleasttwo]
+        is_atleasttwo = L_bs_nonzero != 1
+        atleasttwo_idcs = nonzero_idcs[is_atleasttwo]  # [B_atleasttwo]
+        stop_idcs = stop_idcs[is_atleasttwo]  # [B_atleasttwo]
 
         linspaces[atleasttwo_idcs, stop_idcs] = stops[atleasttwo_idcs].to(
             linspaces.dtype
@@ -622,7 +624,7 @@ def linspace_batched_packed(
     dtype: torch.dtype | None = None,
     requires_grad: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, int]:
-    """Create a batch of tensors with values in the range [start, end].
+    """Create a batch of tensors with values in the range [start, stop].
 
     Args:
         starts: The start value for each tensor in the batch.
@@ -638,10 +640,11 @@ def linspace_batched_packed(
 
     Returns:
         Tuple containing:
-        - A batch of tensors with values in the range [start, end].
+        - A batch of tensors with values in the range [start, stop].
             Padded with padding_value.
             Shape: [B, max(L_bs)]
-        - The number of values of the linspace sequences in the batch.
+        - The number of values of the linspace sequences in the batch. This is
+            the same as nums.
             Shape: [B]
         - The maximum length of the linspace sequences in the batch.
     """
@@ -653,35 +656,35 @@ def linspace_batched_packed(
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore", category=RuntimeWarning
-        )  # ignore division by zero since we already handle it in np.where
+        )  # ignore division by zero since we already handle it in torch.where
         steps = torch.where(L_bs != 1, (stops - starts) / (L_bs - 1), 0)  # [B]
 
     # Compute the starts and offsets of the linspace sequences in parallel.
     starts_repeated = starts.repeat_interleave(L_bs)  # [L]
     steps_repeated = steps.repeat_interleave(L_bs)  # [L]
-    offsets_packed = steps_repeated.cumsum(0)  # [L]
 
-    # Correct the offsets to start from zero for each sequence.
-    nonzero_idcs = L_bs.nonzero(as_tuple=True)[0]  # [B_nonzero]
-    L_bs_nonzero = L_bs[nonzero_idcs]  # [B_nonzero]
-    if len(nonzero_idcs) != 0:
-        start_idcs = L_bs_nonzero.cumsum(0) - L_bs_nonzero  # [B_nonzero]
-        corrections_packed = offsets_packed[start_idcs].repeat_interleave(
-            L_bs_nonzero
-        )  # [L]
-        offsets_packed -= corrections_packed
+    # Compute the offsets for each linspace sequence in parallel.
+    L_bs_without_last = L_bs[:-1]  # [B - 1]
+    offsets_packed = torch.ones_like(steps_repeated)  # [L]
+    offsets_packed[0] = 0
+    offsets_packed[L_bs_without_last.cumsum(0)] -= L_bs_without_last  # [B - 1]
+    offsets_packed = offsets_packed.cumsum(0)  # [L]
+    offsets_packed *= steps_repeated  # [L]
 
     # Compute the linspace sequences in parallel.
     linspaces = starts_repeated + offsets_packed  # [L]
 
     # Set the last element of each linspace to the stop value manually to avoid
-    # numerical issues.
+    # floating point issues.
+    nonzero_idcs = L_bs.nonzero(as_tuple=True)[0]  # [B_nonzero]
+    L_bs_nonzero = L_bs[nonzero_idcs]  # [B_nonzero]
     if len(nonzero_idcs) != 0:
         stop_idcs = L_bs_nonzero.cumsum(0) - 1  # [B_nonzero]
 
         # Only set the stop values for sequences with at least two elements.
-        atleasttwo_idcs = nonzero_idcs[L_bs_nonzero != 1]  # [B_atleasttwo]
-        stop_idcs = stop_idcs[L_bs_nonzero != 1]  # [B_atleasttwo]
+        is_atleasttwo = L_bs_nonzero != 1
+        atleasttwo_idcs = nonzero_idcs[is_atleasttwo]  # [B_atleasttwo]
+        stop_idcs = stop_idcs[is_atleasttwo]  # [B_atleasttwo]
 
         linspaces[stop_idcs] = stops[atleasttwo_idcs].to(linspaces.dtype)
 
@@ -695,6 +698,131 @@ def linspace_batched_packed(
         linspaces.requires_grad_()
 
     return linspaces, L_bs, max_L_bs
+
+
+def meshgrid_batched(
+    *xi: tuple[torch.Tensor, torch.Tensor, int],
+    indexing: str = "xy",
+    sparse: bool = False,
+    copy: bool = True,
+    padding_value: Any = None,
+) -> tuple[torch.Tensor, ...]:
+    """Create a meshgrid from a batch of tensors.
+
+    This function is like torch.meshgrid(), but supports batched inputs.
+
+    Args:
+        *xi: List of tuples containing:
+            - Padded input tensors representing the coordinates of a grid.
+                Padding could be arbitrary.
+                Shape: [B, max(X_bsd)]
+            - The lengths of the input tensors.
+                Shape: [B]
+            - The maximum length of the input tensors.
+            Length: D
+        indexing: The indexing convention used. 'ij' returns a meshgrid with
+            matrix indexing, while 'xy' returns a meshgrid with Cartesian
+            indexing.
+        sparse: If True, the shape of the returned coordinate tensor for
+            dimension d is reduced from [B, max(X_bs0), ..., max(X_bs{D-1})] to
+            [B, 1, ..., max(X_bsd), ..., 1]. This is useful for memory
+            conservation when the full grid is intended to be used with
+            broadcasting. When all coordinates are used in an expression,
+            broadcasting still leads to a fully-dimensional result tensor.
+            Warning: if sparse=True, the padding is only applied along the
+            dimension of the corresponding coordinate tensor, which means that
+            any broadcasts you perform on the meshgrids this function returns
+            may still contain arbitrary padding values in the other dimensions.
+            If you need to set a specific padding value for all dimensions,
+            you should use sparse=False instead.
+        copy: If False, a view into the original tensors are returned in order
+            to conserve memory. Default is True. Please note that sparse=False,
+            copy=False will likely return non-contiguous tensors. Furthermore,
+            more than one element of a broadcast tensor may refer to a single
+            memory location. If you need to write to the tensors, make copies
+            first.
+        padding_value: The value to pad the outputs with. If None, the outputs
+            are padded with random values. This is faster than padding with a
+            specific value.
+
+    Returns:
+        Tuple of [B, max(X_bs0), ..., max(X_bs{D-1})] shaped tensors if indexing
+        is 'ij' or tuple of [B, max(X_bs1), max(X_bs0), ..., max(X_bs{D-1})]
+        shaped tensors if indexing is 'xy'. If sparse=True, the shape of the
+        d-th output tensor is reduced to [B, 1, ..., max(X_bsd), ..., 1]. Each
+        output tensor contains the D-dimensional meshgrid formed by the input
+        tensors. Padded with padding_value.
+    """
+    x_arrs, X_bsds, max_X_bsds = map(
+        list, zip(*xi)
+    )  # D x [B, max(X_bsd)], D x [B], D
+    X_bsds = torch.stack(X_bsds, dim=1)  # [B, D]
+    max_X_bsds = torch.tensor(max_X_bsds)  # [D]
+
+    B, D = X_bsds.shape
+
+    # Prepare the shape of the output tensors.
+    expanded_shape = [B, *max_X_bsds]
+
+    # Swap the first two axes if indexing is 'xy'.
+    if indexing == "xy" and D >= 2:
+        expanded_shape[1], expanded_shape[2] = (
+            expanded_shape[2],
+            expanded_shape[1],
+        )
+
+    # Go through each input tensor and create the corresponding meshgrid.
+    meshgrids = []
+    for d in range(D):
+        # Prepare the shape of the sparse output tensors.
+        unsqueezed_shape = [B, *[1] * D]
+        unsqueezed_shape[d + 1] = max_X_bsds[d]  # type: ignore
+
+        # Swap the first two axes if indexing is 'xy'.
+        if indexing == "xy" and D >= 2 and d <= 1:
+            unsqueezed_shape[1], unsqueezed_shape[2] = (
+                unsqueezed_shape[2],
+                unsqueezed_shape[1],
+            )
+
+        # Create the meshgrid.
+        meshgrid = x_arrs[d].reshape(
+            unsqueezed_shape
+        )  # [B, 1, ..., max(X_bsd), ..., 1]
+
+        if sparse:
+            # Pad the outputs with the padding value.
+            if padding_value is not None:
+                meshgrid = torch.moveaxis(
+                    meshgrid, d + 1, 1
+                )  # [B, max(X_bsd), 1, ..., 1]
+                meshgrid = replace_padding(
+                    meshgrid, X_bsds[:, d], padding_value=padding_value
+                )
+                meshgrid = torch.moveaxis(
+                    meshgrid, 1, d + 1
+                )  # [B, 1, ..., max(X_bsd), ..., 1]
+
+        else:
+            # Broadcast to the full shape if not sparse.
+            meshgrid = meshgrid.expand(
+                expanded_shape
+            )  # [B, max(X_bs0), ..., max(X_bs{D-1})]
+
+            # Pad the outputs with the padding value.
+            if padding_value is not None:
+                meshgrid = replace_padding_multidim(
+                    meshgrid, X_bsds, padding_value=padding_value
+                )
+
+        # Make a copy if requested (if padding was applied, a copy has already
+        # been made).
+        if copy and padding_value is None:
+            meshgrid = meshgrid.clone()
+
+        meshgrids.append(meshgrid)
+
+    return tuple(meshgrids)
 
 
 def index_select_batched(
@@ -860,10 +988,12 @@ def swap_idcs_vals_batched(x: torch.Tensor) -> torch.Tensor:
         raise ValueError("x must be a batch of 1D tensors.")
 
     B, N = x.shape
+    device = x.device
+    dtype = x.dtype
     x_swapped = torch.empty_like(x)
-    x_swapped[
-        torch.arange(B, device=x.device, dtype=x.dtype).unsqueeze(1), x
-    ] = torch.arange(N, device=x.device, dtype=x.dtype).unsqueeze(0)
+    x_swapped[torch.arange(B, device=device, dtype=dtype).unsqueeze(1), x] = (
+        torch.arange(N, device=device, dtype=dtype).unsqueeze(0)
+    )
     return x_swapped
 
 
@@ -903,9 +1033,11 @@ def swap_idcs_vals_duplicates_batched(
     if x.ndim != 2:
         raise ValueError("x must be a batch of 1D tensors.")
 
+    dtype = x.dtype
+
     # Believe it or not, this O(n log n) algorithm is actually faster than a
     # native implementation that uses a Python for loop with complexity O(n).
-    return x.argsort(dim=1, stable=stable).to(x.dtype)
+    return x.argsort(dim=1, stable=stable).to(dtype)
 
 
 # ############################ CONSECUTIVE SEGMENTS ############################
@@ -952,18 +1084,19 @@ def starts_segments_batched(
     tensor([4, 3])
     """
     B, N_dim = x.shape[0], x.shape[dim + 1]
+    device = x.device
 
     # Find the indices where the values change.
     is_change = (
         torch.concat(
             [
-                torch.ones((B, 1), device=x.device, dtype=torch.bool),
+                torch.ones((B, 1), device=device, dtype=torch.bool),
                 (
                     x.index_select(
-                        dim + 1, torch.arange(0, N_dim - 1, device=x.device)
+                        dim + 1, torch.arange(0, N_dim - 1, device=device)
                     )  # [B, N_0, ..., N_dim - 1, ..., N_{D-1}]
                     != x.index_select(
-                        dim + 1, torch.arange(1, N_dim, device=x.device)
+                        dim + 1, torch.arange(1, N_dim, device=device)
                     )  # [B, N_0, ..., N_dim - 1, ..., N_{D-1}]
                 ).any(
                     dim=tuple(
@@ -974,7 +1107,7 @@ def starts_segments_batched(
             dim=1,
         )  # [B, N_dim]
         if N_dim > 0
-        else torch.empty((B, 0), device=x.device, dtype=torch.bool)
+        else torch.empty((B, 0), device=device, dtype=torch.bool)
     )  # [B, N_dim]
 
     # Find the start of each consecutive segment.
@@ -1064,6 +1197,7 @@ def counts_segments_batched(
     tensor([4, 3])
     """
     B, N_dim = x.shape[0], x.shape[dim + 1]
+    device = x.device
 
     # Find the start of each consecutive segment.
     starts, S_bs = starts_segments_batched(
@@ -1072,16 +1206,16 @@ def counts_segments_batched(
 
     # Prepare starts for count calculation.
     starts_with_N_dim = torch.concat(
-        [starts, torch.full((B, 1), N_dim, device=x.device, dtype=torch.int32)],
+        [starts, torch.full((B, 1), N_dim, device=device, dtype=torch.int32)],
         dim=1,
     )  # [B, max(S_bs) + 1]
-    starts_with_N_dim[torch.arange(B, device=x.device), S_bs] = N_dim
+    starts_with_N_dim[torch.arange(B, device=device), S_bs] = N_dim
 
     # Find the count of each consecutive segment.
     counts = (
         starts_with_N_dim.diff(dim=1)  # [B, max(S_bs)]
         if N_dim > 0
-        else torch.empty((B, 0), device=x.device, dtype=torch.int32)
+        else torch.empty((B, 0), device=device, dtype=torch.int32)
     )  # [S]
 
     # Replace the padding values if requested.
@@ -1190,6 +1324,7 @@ def outer_indices_segments_batched(
     tensor([4, 3])
     """
     B, N_dim = x.shape[0], x.shape[dim + 1]
+    device = x.device
 
     # Find the start (optional) and count of each consecutive segment.
     if return_starts:
@@ -1204,14 +1339,14 @@ def outer_indices_segments_batched(
     # Prepare counts for outer index calculation.
     counts_with_zeros = replace_padding(counts, S_bs)
     sum_counts = torch.full(
-        (B,), N_dim, device=x.device, dtype=torch.int32
+        (B,), N_dim, device=device, dtype=torch.int32
     )  # [B]
     max_sum_counts = N_dim
 
     # Calculate the outer indices.
     outer_idcs = repeat_interleave_batched(
         torch.arange(
-            counts.shape[1], device=x.device, dtype=torch.int32
+            counts.shape[1], device=device, dtype=torch.int32
         ).unsqueeze(0).expand_as(counts),  # [B, max(S_bs)]  # fmt: skip
         counts_with_zeros,
         sum_counts,
@@ -1330,6 +1465,7 @@ def inner_indices_segments_batched(
     tensor([4, 3])
     """
     B, N_dim = x.shape[0], x.shape[dim + 1]
+    device = x.device
 
     # Find the start and count of each consecutive segment.
     counts, S_bs, starts = counts_segments_batched(
@@ -1339,14 +1475,14 @@ def inner_indices_segments_batched(
     # Prepare counts for inner index calculation.
     counts_with_zeros = replace_padding(counts, S_bs)
     sum_counts = torch.full(
-        (B,), N_dim, device=x.device, dtype=torch.int32
+        (B,), N_dim, device=device, dtype=torch.int32
     )  # [B]
     max_sum_counts = N_dim
 
     # Calculate the inner indices.
     inner_idcs = (
         torch.arange(
-            N_dim, device=x.device, dtype=torch.int32
+            N_dim, device=device, dtype=torch.int32
         ).unsqueeze(0)  # [1, N_dim]
         - repeat_interleave_batched(
             starts, counts_with_zeros, sum_counts, max_sum_counts, dim=0
@@ -2113,13 +2249,14 @@ def counts_segments_ints_batched(
         raise ValueError("x must be a batch of 1D tensors.")
 
     B = x.shape[0]
+    device = x.device
 
-    freqs = torch.zeros((B, high), device=x.device, dtype=torch.int32)
+    freqs = torch.zeros((B, high), device=device, dtype=torch.int32)
     uniques, U_bs, counts = unique_consecutive_batched(
         x, return_counts=True, dim=0
     )  # [B, max(U_bs)], [B], [B, max(U_bs)]
     freqs[
-        torch.arange(B, device=x.device).repeat_interleave(U_bs),  # [U]
+        torch.arange(B, device=device).repeat_interleave(U_bs),  # [U]
         pack_padded(uniques, U_bs),  # [U]
     ] = pack_padded(counts, U_bs)  # [U]  # fmt: skip
     return freqs, U_bs
@@ -2324,6 +2461,8 @@ def groupby_batched(
     tensor([[2, 1, 3, 1],
             [3, 3, 1, 0]], dtype=torch.int32)
     """
+    device = keys.device
+
     # Create a mapping from keys to values.
     keys_unique, U_bs, backmap, counts = unique_batched(
         keys,
@@ -2348,15 +2487,13 @@ def groupby_batched(
 
     # Prepare counts for outer index calculation.
     counts_with_zeros = replace_padding(counts, U_bs)
-    sum_counts = torch.full(
-        (B,), N, device=keys.device, dtype=torch.int32
-    )  # [B]
+    sum_counts = torch.full((B,), N, device=device, dtype=torch.int32)  # [B]
     max_sum_counts = N
 
     # Calculate outer indices.
     outer_idcs = repeat_interleave_batched(
         torch.arange(
-            counts.shape[1], device=keys.device, dtype=torch.int32
+            counts.shape[1], device=device, dtype=torch.int32
         ).unsqueeze(0).expand_as(counts),  # [B, max(U_bs)]  # fmt: skip
         counts_with_zeros,
         sum_counts,
@@ -2368,7 +2505,7 @@ def groupby_batched(
     masks = (
         outer_idcs.unsqueeze(1)  # [B, 1, N]
         == torch.arange(
-            counts.shape[1], device=keys.device, dtype=torch.int32
+            counts.shape[1], device=device, dtype=torch.int32
         ).unsqueeze(0).unsqueeze(2)  # [1, max(U_bs), 1]
     )  # [B, max(U_bs), N]  # fmt: skip
 
