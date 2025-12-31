@@ -268,9 +268,12 @@ def monotonic_linear_fractional_rescaling_batched(
     it will always return a number between 0 and 1.
 
     The inverse of the function is:
+    >>> rng = np.random.default_rng()
+    >>> x = rng.uniform(0, 1, size=(10,))
+    >>> r = rng.normal(0, 1, size=(10,))
     >>> y = monotonic_linear_fractional_rescaling_batched(x, r)
     >>> y_inv = monotonic_linear_fractional_rescaling_batched(y, -r)
-    >>> assert torch.allclose(x, y_inv)
+    >>> np.allclose(x, y_inv)
     True
 
     Args:

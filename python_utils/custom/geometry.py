@@ -381,7 +381,7 @@ class Interval:
 
         Examples:
         >>> str(Interval("[", 1, 2, ")"))
-        "[1, 2)"
+        '[1, 2)'
         """
         return (
             f'{"[" if self._start_included else "("}{self._start}, '
@@ -649,7 +649,7 @@ class NumberSet:
         Examples:
         >>> ns = NumberSet(0, 10, Interval("[", 1, 5, ")"))
         >>> str(ns)
-        "{0, [1, 5), 10}"
+        '{0, [1, 5), 10}'
         """
         return f"{{{', '.join(map(str, self.components))}}}"
 
@@ -2191,8 +2191,8 @@ class GeometricObject2D(ABC):
         epsilon on a specific instance however could lead to some asymmetric
         behavior where symmetry would be expected, such as:
 
-        >>> u = GeometricObject(a, b)
-        >>> v = GeometricObject(a, b + 0.2)
+        >>> u = Vector2D(3, 5)
+        >>> v = Vector2D(3, 5.2)
         >>> u.epsilon = 0.5  # don't set it nearly this large
         >>> u == v
         True

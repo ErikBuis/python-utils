@@ -869,7 +869,7 @@ class TestLastValidValuePadding:
 class TestInterp(unittest.TestCase):
     def test_interp_equivalent_np(self) -> None:
         x = torch.rand(100) * 102 - 1  # in [-1, 101)
-        xp = (torch.rand(100)).sort().values * 100  # in [0, 100)
+        xp = torch.rand(100).sort().values * 100  # in [0, 100)
         fp = torch.rand(100)  # in [0, 1)
         left = -1
         right = 101

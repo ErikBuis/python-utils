@@ -323,9 +323,12 @@ def monotonic_linear_fractional_rescaling(x: float, r: float) -> float:
     it will always return a number between 0 and 1.
 
     The inverse of the function is:
+    >>> import random
+    >>> x = random.uniform(0, 1)
+    >>> r = random.normalvariate(0, 1)
     >>> y = monotonic_linear_fractional_rescaling(x, r)
     >>> y_inv = monotonic_linear_fractional_rescaling(y, -r)
-    >>> assert x - y_inv < 1e-6
+    >>> abs(x - y_inv) < 1e-6
     True
 
     Args:

@@ -11,17 +11,57 @@ from ..modules.numpy import (
     NpGeneric1,
     NpGeneric2,
     NpInteger,
+    NpNumber,
     apply_mask,
     counts_segments,
     lexsort,
-    mask_padding,
     pack_padded,
+    pack_padded_multidim,
     pad_packed,
+    pad_packed_multidim,
     replace_padding,
     replace_padding_multidim,
 )
 
 # ################################### MATHS ####################################
+
+
+def sum_padding_batched(
+    values: npt.NDArray[NpNumber],
+    L_bs: npt.NDArray[np.integer],
+    is_padding_zero: bool = False,
+) -> npt.NDArray[NpNumber]:
+    """Calculate the sum for each sample in the batch.
+
+    Args:
+        values: The values to calculate the sum for. Padded with zeros if
+            is_padding_zero is True. Otherwise, padding could be arbitrary.
+            Shape: [B, max(L_bs), *]
+        L_bs: The number of valid values in each sample.
+            Shape: [B]
+        is_padding_zero: Whether the values are padded with zeros already.
+            Setting this to True when the values are already padded with zeros
+            can speed up the calculation.
+
+    Returns:
+        The sum value for each sample.
+            Shape: [B, *]
+
+    Examples:
+    >>> values = np.array([
+    ...     [1, 2, 3, -1],
+    ...     [5, -1, -1, -1],
+    ...     [-1, -1, -1, -1],
+    ...     [13, 14, 15, 16],
+    ... ])
+    >>> L_bs = np.array([3, 1, 0, 4])
+    >>> sum_padding_batched(values, L_bs)
+    array([ 6,  5,  0, 58])
+    """
+    if not is_padding_zero:
+        values = replace_padding(values, L_bs)
+
+    return values.sum(axis=1)  # [B, *]
 
 
 def mean_padding_batched(
@@ -44,14 +84,25 @@ def mean_padding_batched(
     Returns:
         The mean value for each sample.
             Shape: [B, *]
-    """
-    if not is_padding_zero:
-        values = replace_padding(values, L_bs)
 
-    return (
-        values.sum(axis=1)  # [B, *]
-        / L_bs.reshape(-1, *([1] * (values.ndim - 2)))  # [B, *]
-    )  # [B, *]  # fmt: skip
+    Examples:
+    >>> values = np.array([
+    ...     [1, 2, 3, -1],
+    ...     [5, -1, -1, -1],
+    ...     [-1, -1, -1, -1],
+    ...     [13, 14, 15, 16],
+    ... ])
+    >>> L_bs = np.array([3, 1, 0, 4])
+    >>> with warnings.catch_warnings():
+    ...     warnings.filterwarnings("ignore", category=RuntimeWarning)
+    ...     mean_padding_batched(values, L_bs)
+    array([ 2. ,  5. ,  nan, 14.5])
+    """
+    return sum_padding_batched(
+        values, L_bs, is_padding_zero=is_padding_zero
+    ) / L_bs.reshape(
+        -1, *[1] * (values.ndim - 2)
+    )  # [B, *]  # [B, *]  # type: ignore
 
 
 def stddev_padding_batched(
@@ -78,6 +129,19 @@ def stddev_padding_batched(
     Returns:
         The standard deviation for each sample.
             Shape: [B, *]
+
+    Examples:
+    >>> values = np.array([
+    ...     [1, 2, 3, -1],
+    ...     [5, -1, -1, -1],
+    ...     [-1, -1, -1, -1],
+    ...     [13, 14, 15, 16],
+    ... ])
+    >>> L_bs = np.array([3, 1, 0, 4])
+    >>> with warnings.catch_warnings():
+    ...     warnings.filterwarnings("ignore", category=RuntimeWarning)
+    ...     stddev_padding_batched(values, L_bs)
+    array([0.81649658, 0.        ,        nan, 1.11803399])
     """
     means = mean_padding_batched(
         values, L_bs, is_padding_zero=is_padding_zero
@@ -108,9 +172,22 @@ def min_padding_batched(
     Returns:
         The minimum value for each sample.
             Shape: [B, *]
+
+    Examples:
+    >>> values = np.array([
+    ...     [1, 2, 3, -1],
+    ...     [5, -1, -1, -1],
+    ...     [-1, -1, -1, -1],
+    ...     [13, 14, 15, 16],
+    ... ])
+    >>> L_bs = np.array([3, 1, 0, 4])
+    >>> min_padding_batched(values, L_bs)
+    array([ 1.,  5., inf, 13.])
     """
     if not is_padding_inf:
-        values = replace_padding(values, L_bs, padding_value=float("inf"))
+        values = replace_padding(
+            values.astype(np.float64), L_bs, padding_value=float("inf")
+        )
 
     return np.amin(values, axis=1)  # [B, *]
 
@@ -136,9 +213,22 @@ def max_padding_batched(
     Returns:
         The maximum value for each sample.
             Shape: [B, *]
+
+    Examples:
+    >>> values = np.array([
+    ...     [1, 2, 3, -1],
+    ...     [5, -1, -1, -1],
+    ...     [-1, -1, -1, -1],
+    ...     [13, 14, 15, 16],
+    ... ])
+    >>> L_bs = np.array([3, 1, 0, 4])
+    >>> max_padding_batched(values, L_bs)
+    array([ 3.,  5., -inf, 16.])
     """
     if not is_padding_minus_inf:
-        values = replace_padding(values, L_bs, padding_value=float("-inf"))
+        values = replace_padding(
+            values.astype(np.float64), L_bs, padding_value=float("-inf")
+        )
 
     return np.amax(values, axis=1)  # [B, *]
 
@@ -163,11 +253,22 @@ def any_padding_batched(
     Returns:
         Whether any value is True for each sample.
             Shape: [B, *]
+
+    Examples:
+    >>> values = np.array([
+    ...     [False, False, True, False],
+    ...     [False, False, False, False],
+    ...     [False, False, False, False],
+    ...     [True, True, True, True],
+    ... ])
+    >>> L_bs = np.array([3, 2, 0, 4])
+    >>> any_padding_batched(values, L_bs)
+    array([ True, False, False,  True])
     """
     if not is_padding_false:
         values = replace_padding(values, L_bs, padding_value=False)
 
-    return values.any(axis=1)  # [B, *]
+    return values.any(axis=1)  # [B, *]  # type: ignore
 
 
 def all_padding_batched(
@@ -190,11 +291,22 @@ def all_padding_batched(
     Returns:
         Whether all values are True for each sample.
             Shape: [B, *]
+
+    Examples:
+    >>> values = np.array([
+    ...     [True, True, True, False],
+    ...     [True, True, False, False],
+    ...     [True, True, False, True],
+    ...     [False, True, True, True],
+    ... ])
+    >>> L_bs = np.array([3, 2, 0, 4])
+    >>> all_padding_batched(values, L_bs)
+    array([ True,  True,  True, False])
     """
     if not is_padding_true:
         values = replace_padding(values, L_bs, padding_value=True)
 
-    return values.all(axis=1)  # [B, *]
+    return values.all(axis=1)  # [B, *]  # type: ignore
 
 
 def interp_batched(
@@ -205,9 +317,7 @@ def interp_batched(
     right: npt.NDArray[np.number] | None = None,
     period: npt.NDArray[np.number] | None = None,
 ) -> npt.NDArray[np.number]:
-    """Like np.interp(), but batched.
-
-    This function performs linear interpolation on a batch of 1D arrays.
+    """Perform linear interpolation for a batch of 1D arrays.
 
     Warning: This function internally uses a for-loop over the batch dimension.
     This is because unlike torch.searchsorted(), np.searchsorted() does not
@@ -234,18 +344,54 @@ def interp_batched(
     Returns:
         The interpolated values for each batch.
             Shape: [B, N]
-    """
-    B, M = xp.shape
 
+    Examples:
+    >>> x = np.array([
+    ...     [10.5, 200.0, 40.0, 56.0],
+    ...     [1.5, 2.5, 10.0, -1.0],
+    ... ])
+    >>> xp = np.array([
+    ...     [0.0, 1.0, 20.0, 100.0],
+    ...     [0.0, 1.0, 2.0, 3.0],
+    ... ])
+    >>> fp = np.array([
+    ...     [0.0, 100.0, 200.0, 300.0],
+    ...     [0.0, 10.0, 20.0, 30.0],
+    ... ])
+    >>> interp_batched(x, xp, fp)
+    array([[150., 300., 225., 245.],
+           [ 15.,  25.,  30.,   0.]])
+    """
     # Handle periodic interpolation.
     if period is not None:
         if (period <= 0).any():
             raise ValueError("period must be positive.")
 
-        xp_mod = xp % np.expand_dims(period, 1)  # [B, M]  # type: ignore
-        sorted_idcs = xp_mod.argsort(axis=1)  # [B, M]
-        xp = np.take_along_axis(xp_mod, sorted_idcs, 1)  # [B, M]
+        # Normalize x and xp to [0, period).
+        x %= np.expand_dims(period, 1)  # [B, N]  # type: ignore
+        xp %= np.expand_dims(period, 1)  # [B, M]  # type: ignore
+
+        # Re-sort xp and fp after the modulo operation.
+        sorted_idcs = xp.argsort(axis=1)  # [B, M]
+        xp = np.take_along_axis(xp, sorted_idcs, 1)  # [B, M]
         fp = np.take_along_axis(fp, sorted_idcs, 1)  # [B, M]
+
+        # Extend xp and fp arrays to handle wrap-around interpolation. Add the
+        # last point before the first, and the first point after the last.
+        xp = np.concat(
+            [
+                np.expand_dims(xp[:, -1] - period, 1),
+                xp,
+                np.expand_dims(xp[:, 0] + period, 1),
+            ],
+            axis=1,
+        )  # [B, M + 2]
+        fp = np.concat(
+            [np.expand_dims(fp[:, -1], 1), fp, np.expand_dims(fp[:, 0], 1)],
+            axis=1,
+        )  # [B, M + 2]
+
+    B, M = xp.shape
 
     # Check if xp is weakly monotonically increasing.
     if not (np.diff(xp, axis=1) >= 0).all():
@@ -278,17 +424,19 @@ def interp_batched(
     # Perform interpolation.
     y = y_left + p * (y_right - y_left)  # [B, N]
 
-    # Handle left edge.
-    if left is None:
-        left = fp[:, 0]  # [B]
-    is_left = x < xp[:, [0]]  # [B, N]
-    y[is_left] = left.repeat(is_left.sum(axis=1)).astype(y.dtype)
+    # Handle edges only if period is not specified.
+    if period is None:
+        # Handle left edge.
+        if left is None:
+            left = fp[:, 0]  # [B]
+        is_left = x < xp[:, [0]]  # [B, N]
+        y[is_left] = left.repeat(is_left.sum(axis=1)).astype(y.dtype)
 
-    # Handle right edge.
-    if right is None:
-        right = fp[:, -1]  # [B]
-    is_right = x > xp[:, [-1]]  # [B, N]
-    y[is_right] = right.repeat(is_right.sum(axis=1)).astype(y.dtype)
+        # Handle right edge.
+        if right is None:
+            right = fp[:, -1]  # [B]
+        is_right = x > xp[:, [-1]]  # [B, N]
+        y[is_right] = right.repeat(is_right.sum(axis=1)).astype(y.dtype)
 
     return y
 
@@ -297,58 +445,101 @@ def interp_batched(
 
 
 def sample_unique_batched(
-    L_bs: npt.NDArray[np.integer], max_L_bs: int, num_samples: int
+    L_bs: npt.NDArray[np.integer], max_L_bs: int, padding_value: Any = None
 ) -> npt.NDArray[np.int64]:
-    """Sample unique indices i in [0, L_b-1] for each element in the batch.
-
-    Warning: If the number of valid values in an element is less than the
-    number of samples, then only the first L_b indices are unique. The
-    remaining indices are sampled with replacement.
+    """Sample unique indices i in [0, L_b) for each element in the batch.
 
     Args:
         L_bs: The number of valid values for each element in the batch.
             Shape: [B]
         max_L_bs: The maximum number of values of any element in the batch.
-        num_samples: The number of indices to sample for each element in the
-            batch.
+        padding_value: The value to use for padding the output indices. If None,
+            the output indices are padded with random values. This is faster
+            than padding with a specific value.
 
     Returns:
-        The sampled unique indices.
-            Shape: [B, num_samples]
+        The sampled unique indices. Padded with padding_value.
+            Shape: [B, max(L_bs)]
+
+    Examples:
+    >>> L_bs = np.array([5, 3, 0, 4])
+    >>> max_L_bs = 5
+    >>> unique_idcs = sample_unique_batched(L_bs, max_L_bs, padding_value=0)
+    >>> unique_idcs  # doctest: +SKIP
+    array([[4, 2, 3, 1, 0],
+           [2, 0, 1, 0, 0],
+           [0, 0, 0, 0, 0],
+           [1, 3, 2, 0, 0]])
     """
-    # Select unique elements for each sample in the batch.
-    # If the number of elements is less than the number of samples, we uniformly
-    # sample with replacement. To do this, the np.clip(min=num_samples) and
-    # % L_b operations are used.
-    weights = mask_padding(
-        L_bs.clip(min=num_samples), max_L_bs
-    ).astype(np.float64)  # [B, max(L_bs)]  # fmt: skip
-    weights = weights / weights.sum(axis=1, keepdims=True)  # [B, max(L_bs)]
+    B = len(L_bs)
     rng = np.random.default_rng()
-    return (
-        rng.multinomial(num_samples, weights)  # [B, num_samples]
-        % np.expand_dims(L_bs, 1)  # [B, num_samples]
-    )  # [B, num_samples]  # fmt: skip
+    idcs = np.broadcast_to(
+        np.expand_dims(np.arange(max_L_bs), 0), (B, max_L_bs)
+    )  # [B, max(L_bs)]
+    permuted_idcs = rng.permuted(idcs, axis=1)  # [B, max(L_bs)]
+    mask = permuted_idcs < np.expand_dims(L_bs, 1)  # [B, max(L_bs)]
+    random_idcs, _ = apply_mask(
+        permuted_idcs,
+        mask,
+        np.full((B,), max_L_bs),
+        padding_value=padding_value,
+    )  # [B, max(L_bs)]
+    return random_idcs
 
 
 def sample_unique_pairs_batched(
-    L_bs: npt.NDArray[np.integer], max_L_bs: int, num_samples: int
+    L_bs: npt.NDArray[np.integer], max_L_bs: int, padding_value: Any = None
 ) -> npt.NDArray[np.integer]:
-    """Sample unique pairs of indices (i, j), where i and j are in [0, L_b-1].
+    """Sample unique pairs of indices (i, j), where i and j are in [0, L_b).
 
-    Warning: If the number of valid values in an element is less than the
-    number of samples, then only the first L_b * (L_b - 1) // 2 pairs are
-    unique. The remaining pairs are sampled with replacement.
+    Note: The order of the indices in each pair is deemed irrelevant, so (i, j)
+    is considered the same as (j, i). Therefore, there are a total of
+    L_b * (L_b - 1) / 2 unique pairs for each element in the batch. For
+    consistency, we ensure that i > j.
 
     Args:
         L_bs: The number of valid values for each element in the batch.
             Shape: [B]
         max_L_bs: The maximum number of valid values.
-        num_samples: The number of pairs to sample.
+        padding_value: The value to use for padding the output indices. If None,
+            the output indices are padded with random values. This is faster
+            than padding with a specific value.
 
     Returns:
-        The sampled unique pairs of indices.
-            Shape: [B, num_samples, 2]
+        The sampled unique pairs of indices. Padded with padding_value.
+            Shape: [B, max(P_bs), 2]
+
+    Examples:
+    >>> L_bs = np.array([3, 1, 0, 4])
+    >>> max_L_bs = 4
+    >>> unique_pairs = sample_unique_pairs_batched(
+    ...     L_bs, max_L_bs, padding_value=0
+    ... )
+    >>> unique_pairs  # doctest: +SKIP
+    array([[[1, 0],
+            [2, 1],
+            [2, 0],
+            [0, 0],
+            [0, 0],
+            [0, 0]],
+           [[0, 0],
+            [0, 0],
+            [0, 0],
+            [0, 0],
+            [0, 0],
+            [0, 0]],
+           [[0, 0],
+            [0, 0],
+            [0, 0],
+            [0, 0],
+            [0, 0],
+            [0, 0]],
+           [[2, 0],
+            [3, 1],
+            [1, 0],
+            [2, 1],
+            [3, 0],
+            [3, 2]]])
     """
     # Compute the number of unique pairs of indices.
     P_bs = L_bs * (L_bs - 1) // 2  # [B]
@@ -356,35 +547,29 @@ def sample_unique_pairs_batched(
 
     # Select unique pairs of elements for each sample in the batch.
     idcs_pairs = sample_unique_batched(
-        P_bs, max_P_bs, num_samples
-    )  # [B, num_samples]
+        P_bs, max_P_bs, padding_value=0
+    )  # [B, max(P_bs)]
 
     # Convert the pair indices to element indices.
-    # np.triu_indices() returns the indices in the wrong order, e.g.:
-    #    0 1 2 3 4
-    # 0  x x x x x
-    # 1  0 x x x x
-    # 2  1 4 x x x
-    # 3  2 5 7 x x
-    # 4  3 6 8 9 x
-    # This order is not suitable for all elements in the batch, as the number
-    # of valid values L_b can change between elements. We need to change the
-    # order to:
-    #    0 1 2 3 4
-    # 0  x x x x x
-    # 1  0 x x x x
-    # 2  1 2 x x x
-    # 3  3 4 5 x x
-    # 4  6 7 8 9 x
-    # This is done using the max_P_bs - 1 - triu_idcs trick. However, the
-    # order of the elements is still in reverse, so when indexing, we index at
-    # -idcs_pairs - 1 instead of at idcs_pairs.
-    triu_idcs = np.stack(
-        np.triu_indices(max_L_bs, max_L_bs, 1)
-    )  # [2, max(P_bs)]
-    triu_idcs = max_L_bs - 1 - triu_idcs
-    idcs_elements = triu_idcs[:, -idcs_pairs - 1]  # [2, B, num_samples]
-    return np.transpose(idcs_elements, (1, 2, 0))  # [B, num_samples, 2]
+    # np.tril_indices(max_L_bs, k=-1) returns the indices as follows:
+    # i\j 0 1 2 3 4 ...
+    #  0  x x x x x
+    #  1  0 x x x x
+    #  2  1 2 x x x
+    #  3  3 4 5 x x
+    #  4  6 7 8 9 x
+    # ...
+    tril_idcs = np.stack(np.tril_indices(max_L_bs, k=-1))  # [2, max(P_bs)]
+    idcs_elements = tril_idcs[:, idcs_pairs]  # [2, B, max(P_bs)]
+    idcs_elements = np.moveaxis(idcs_elements, 0, 2)  # [B, max(P_bs), 2]
+
+    # Apply padding if requested.
+    if padding_value is not None:
+        replace_padding(
+            idcs_elements, P_bs, padding_value=padding_value, in_place=True
+        )
+
+    return idcs_elements
 
 
 # ########################## BASIC ARRAY MANIPULATION ##########################
@@ -421,6 +606,19 @@ def arange_batched(
             Shape: [B, max(L_bs)]
         - The number of values of the arange sequences in the batch.
             Shape: [B]
+
+    Examples:
+    >>> starts = np.array([0, 5, 2, 3])
+    >>> stops = np.array([3, 5, 8, -1])
+    >>> steps = np.array([1, 1, 3, -1])
+    >>> aranges, L_bs = arange_batched(starts, stops, steps, padding_value=-1)
+    >>> aranges
+    array([[ 0,  1,  2, -1],
+           [-1, -1, -1, -1],
+           [ 2,  5, -1, -1],
+           [ 3,  2,  1,  0]])
+    >>> L_bs
+    array([3, 0, 2, 4])
     """
     B = len(starts)
     inferred_dtype = np.promote_types(
@@ -487,6 +685,18 @@ def arange_batched_packed(
         - The number of values of the arange sequences in the batch.
             Shape: [B]
         - The maximum length of the arange sequences in the batch.
+
+    Examples:
+    >>> starts = np.array([0, 5, 2, 3])
+    >>> stops = np.array([3, 5, 8, -1])
+    >>> steps = np.array([1, 1, 3, -1])
+    >>> aranges, L_bs, max_L_bs = arange_batched_packed(starts, stops, steps)
+    >>> aranges
+    array([0, 1, 2, 2, 5, 3, 2, 1, 0])
+    >>> L_bs
+    array([3, 0, 2, 4])
+    >>> max_L_bs
+    4
     """
     B = len(starts)
     inferred_dtype = np.promote_types(
@@ -512,13 +722,14 @@ def arange_batched_packed(
 
     # Compute the offsets for each arange sequence in parallel.
     L_bs_without_last = L_bs[:-1]  # [B - 1]
+    transition_idcs = L_bs_without_last[L_bs_without_last != 0]  # [B']
     offsets_packed = np.ones_like(steps_repeated)  # [L]
     offsets_packed[0] = 0
-    offsets_packed[L_bs_without_last.cumsum()] -= L_bs_without_last  # [B - 1]
+    offsets_packed[transition_idcs.cumsum()] -= transition_idcs  # [B']
     offsets_packed = offsets_packed.cumsum()  # [L]
-    offsets_packed *= steps_repeated  # [L]
 
     # Compute the arange sequences in parallel.
+    offsets_packed *= steps_repeated  # [L]
     aranges = starts_repeated + offsets_packed  # [L]
 
     # Cast to the desired dtype.
@@ -558,6 +769,22 @@ def linspace_batched(
         - The number of values of the linspace sequences in the batch. This is
             the same as nums.
             Shape: [B]
+
+    Examples:
+    >>> starts = np.array([0.0, 5.0, 3.0, 2.0, 3.0])
+    >>> stops = np.array([1.0, 6.0, 5.0, 8.0, -3.0])
+    >>> nums = np.array([5, 1, 0, 3, 4])
+    >>> linspaces, L_bs = linspace_batched(
+    ...     starts, stops, nums, padding_value=-1.0
+    ... )
+    >>> linspaces
+    array([[ 0.  ,  0.25,  0.5 ,  0.75,  1.  ],
+           [ 5.  , -1.  , -1.  , -1.  , -1.  ],
+           [-1.  , -1.  , -1.  , -1.  , -1.  ],
+           [ 2.  ,  5.  ,  8.  , -1.  , -1.  ],
+           [ 3.  ,  1.  , -1.  , -3.  , -1.  ]])
+    >>> L_bs
+    array([5, 1, 0, 3, 4])
     """
     inferred_dtype = np.promote_types(
         starts.dtype, np.promote_types(stops.dtype, nums.dtype)
@@ -569,7 +796,7 @@ def linspace_batched(
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore", category=RuntimeWarning
-        )  # ignore division by zero since we already handle it in np.where
+        )  # ignore division by zero since we already handle it in np.where()
         steps = np.where(L_bs != 1, (stops - starts) / (L_bs - 1), 0)  # [B]
 
     # Compute the linspace sequences in parallel.
@@ -635,6 +862,19 @@ def linspace_batched_packed(
             the same as nums.
             Shape: [B]
         - The maximum length of the linspace sequences in the batch.
+
+    Examples:
+    >>> starts = np.array([0.0, 5.0, 3.0, 2.0, 3.0])
+    >>> stops = np.array([1.0, 6.0, 5.0, 8.0, -3.0])
+    >>> nums = np.array([5, 1, 0, 3, 4])
+    >>> linspaces, L_bs, max_L_bs = linspace_batched_packed(starts, stops, nums)
+    >>> linspaces
+    array([ 0.  ,  0.25,  0.5 ,  0.75,  1.  ,  5.  ,  2.  ,  5.  ,  8.  ,
+            3.  ,  1.  , -1.  , -3.  ])
+    >>> L_bs
+    array([5, 1, 0, 3, 4])
+    >>> max_L_bs
+    5
     """
     # Compute the steps of the linspace sequences in parallel.
     L_bs = nums.astype(np.intp)  # [B]
@@ -642,7 +882,7 @@ def linspace_batched_packed(
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore", category=RuntimeWarning
-        )  # ignore division by zero since we already handle it in np.where
+        )  # ignore division by zero since we already handle it in np.where()
         steps = np.where(L_bs != 1, (stops - starts) / (L_bs - 1), 0)  # [B]
 
     # Compute the starts and steps of the linspace sequences in parallel.
@@ -651,13 +891,14 @@ def linspace_batched_packed(
 
     # Compute the offsets for each linspace sequence in parallel.
     L_bs_without_last = L_bs[:-1]  # [B - 1]
+    transition_idcs = L_bs_without_last[L_bs_without_last != 0]  # [B']
     offsets_packed = np.ones_like(steps_repeated)  # [L]
     offsets_packed[0] = 0
-    offsets_packed[L_bs_without_last.cumsum()] -= L_bs_without_last  # [B - 1]
+    offsets_packed[transition_idcs.cumsum()] -= transition_idcs  # [B']
     offsets_packed = offsets_packed.cumsum()  # [L]
-    offsets_packed *= steps_repeated  # [L]
 
     # Compute the linspace sequences in parallel.
+    offsets_packed *= steps_repeated  # [L]
     linspaces = starts_repeated + offsets_packed  # [L]
 
     # Set the last element of each linspace to the stop value manually to avoid
@@ -665,7 +906,7 @@ def linspace_batched_packed(
     nonzero_idcs = np.nonzero(L_bs)[0]  # [B_nonzero]
     L_bs_nonzero = L_bs[nonzero_idcs]  # [B_nonzero]
     if len(nonzero_idcs) != 0:
-        stop_idcs = np.cumsum(L_bs_nonzero) - 1  # [B_nonzero]
+        stop_idcs = L_bs_nonzero.cumsum() - 1  # [B_nonzero]
 
         # Only set the stop values for sequences with at least two elements.
         is_atleasttwo = L_bs_nonzero != 1  # [B_nonzero]
@@ -681,139 +922,13 @@ def linspace_batched_packed(
     return linspaces, L_bs, max_L_bs
 
 
-def meshgrid_batched(
-    *xi: tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp], int],
-    indexing: str = "xy",
-    sparse: bool = False,
-    copy: bool = True,
-    padding_value: Any = None,
-) -> tuple[npt.NDArray[NpGeneric], ...]:
-    """Create a meshgrid from a batch of arrays.
-
-    This function is like np.meshgrid(), but supports batched inputs.
-
-    Args:
-        *xi: List of tuples containing:
-            - Padded input arrays representing the coordinates of a grid.
-                Padding could be arbitrary.
-                Shape: [B, max(X_bsd)]
-            - The lengths of the input arrays.
-                Shape: [B]
-            - The maximum length of the input arrays.
-            Length: D
-        indexing: The indexing convention used. 'ij' returns a meshgrid with
-            matrix indexing, while 'xy' returns a meshgrid with Cartesian
-            indexing.
-        sparse: If True, the shape of the returned coordinate array for
-            dimension d is reduced from [B, max(X_bs0), ..., max(X_bs{D-1})] to
-            [B, 1, ..., max(X_bsd), ..., 1]. This is useful for memory
-            conservation when the full grid is intended to be used with
-            broadcasting. When all coordinates are used in an expression,
-            broadcasting still leads to a fully-dimensional result array.
-            Warning: if sparse=True, the padding is only applied along the
-            dimension of the corresponding coordinate array, which means that
-            any broadcasts you perform on the meshgrids this function returns
-            may still contain arbitrary padding values in the other dimensions.
-            If you need to set a specific padding value for all dimensions,
-            you should use sparse=False instead.
-        copy: If False, a view into the original arrays are returned in order to
-            conserve memory. Default is True. Please note that sparse=False,
-            copy=False will likely return non-contiguous arrays. Furthermore,
-            more than one element of a broadcast array may refer to a single
-            memory location. If you need to write to the arrays, make copies
-            first.
-        padding_value: The value to pad the outputs with. If None, the outputs
-            are padded with random values. This is faster than padding with a
-            specific value.
-
-    Returns:
-        Tuple of [B, max(X_bs0), ..., max(X_bs{D-1})] shaped arrays if indexing
-        is 'ij' or tuple of [B, max(X_bs1), max(X_bs0), ..., max(X_bs{D-1})]
-        shaped arrays if indexing is 'xy'. If sparse=True, the shape of the d-th
-        output array is reduced to [B, 1, ..., max(X_bsd), ..., 1]. Each output
-        array contains the D-dimensional meshgrid formed by the input arrays.
-        Padded with padding_value.
-    """
-    x_arrs, X_bsds, max_X_bsds = map(
-        list, zip(*xi)
-    )  # D x [B, max(X_bsd)], D x [B], D
-    X_bsds = np.stack(X_bsds, axis=1)  # [B, D]
-    max_X_bsds = np.array(max_X_bsds)  # [D]
-
-    B, D = X_bsds.shape
-
-    # Prepare the shape of the output arrays.
-    expanded_shape = [B, *max_X_bsds]
-
-    # Swap the first two axes if indexing is 'xy'.
-    if indexing == "xy" and D >= 2:
-        expanded_shape[1], expanded_shape[2] = (
-            expanded_shape[2],
-            expanded_shape[1],
-        )
-
-    # Go through each input array and create the corresponding meshgrid.
-    meshgrids = []
-    for d in range(D):
-        # Prepare the shape of the sparse output arrays.
-        unsqueezed_shape = [B, *[1] * D]
-        unsqueezed_shape[d + 1] = max_X_bsds[d]
-
-        # Swap the first two axes if indexing is 'xy'.
-        if indexing == "xy" and D >= 2 and d <= 1:
-            unsqueezed_shape[1], unsqueezed_shape[2] = (
-                unsqueezed_shape[2],
-                unsqueezed_shape[1],
-            )
-
-        # Create the meshgrid.
-        meshgrid = x_arrs[d].reshape(
-            unsqueezed_shape
-        )  # [B, 1, ..., max(X_bsd), ..., 1]
-
-        if sparse:
-            # Pad the outputs with the padding value.
-            if padding_value is not None:
-                meshgrid = np.moveaxis(
-                    meshgrid, d + 1, 1
-                )  # [B, max(X_bsd), 1, ..., 1]
-                meshgrid = replace_padding(
-                    meshgrid, X_bsds[:, d], padding_value=padding_value
-                )
-                meshgrid = np.moveaxis(
-                    meshgrid, 1, d + 1
-                )  # [B, 1, ..., max(X_bsd), ..., 1]
-
-        else:
-            # Broadcast to the full shape if not sparse.
-            meshgrid = np.broadcast_to(
-                meshgrid, expanded_shape
-            )  # [B, max(X_bs1), ..., max(X_bs{D-1})]
-
-            # Pad the outputs with the padding value.
-            if padding_value is not None:
-                meshgrid = replace_padding_multidim(
-                    meshgrid, X_bsds, padding_value=padding_value
-                )
-
-        # Make a copy if requested (if padding was applied, a copy has already
-        # been made).
-        if copy and padding_value is None:
-            meshgrid = meshgrid.copy()
-
-        meshgrids.append(meshgrid)
-
-    return tuple(meshgrids)
-
-
 def take_batched(
     values: npt.NDArray[NpGeneric], axis: int, indices: npt.NDArray[np.integer]
 ) -> npt.NDArray[NpGeneric]:
     """Select values from a batch of arrays using the given indices.
 
     Note that axis refers to the index of the dimension to sort along AFTER the
-    batch dimension. So e.g. if x has shape [B, N_0, N_1, N_2], then axis=0
-    refers to N_0, axis=1 refers to N_1, etc.
+    batch dimension.
 
     Args:
         values: The values to select from.
@@ -825,49 +940,128 @@ def take_batched(
     Returns:
         The selected values.
             Shape: [B, N_0, ..., N_{axis-1}, N_select, N_{axis+1}, ..., N_{D-1}]
+
+    Examples:
+    >>> values = np.array([
+    ...     [
+    ...         [1, 2, 3],
+    ...         [4, 5, 6],
+    ...         [7, 8, 9],
+    ...         [10, 11, 12],
+    ...     ],
+    ...     [
+    ...         [13, 14, 15],
+    ...         [16, 17, 18],
+    ...         [19, 20, 21],
+    ...         [22, 23, 24],
+    ...     ],
+    ... ])
+    >>> indices = np.array([
+    ...     [2, 0],
+    ...     [1, 3],
+    ... ])
+    >>> selected_values = take_batched(values, 0, indices)
+    >>> selected_values
+    array([[[ 7,  8,  9],
+            [ 1,  2,  3]],
+           [[16, 17, 18],
+            [22, 23, 24]]])
     """
     unsqueezed_shape = [1] * values.ndim
     unsqueezed_shape[0] = indices.shape[0]
     unsqueezed_shape[axis + 1] = indices.shape[1]
     indices_unsqueezed = indices.reshape(unsqueezed_shape)
-    expanded_shape = list(values.shape)
-    expanded_shape[axis + 1] = indices.shape[1]
-    indices_expanded = np.broadcast_to(indices_unsqueezed, expanded_shape)
-    return np.take_along_axis(values, indices_expanded, axis + 1)
+    broadcasted_shape = list(values.shape)
+    broadcasted_shape[axis + 1] = indices.shape[1]
+    indices_broadcasted = np.broadcast_to(indices_unsqueezed, broadcasted_shape)
+    return np.take_along_axis(values, indices_broadcasted, axis + 1)
+
+
+def __duplicate_subarrays(
+    values: npt.NDArray[NpGeneric],
+    L_bs: npt.NDArray[np.integer],
+    reps_bs: npt.NDArray[np.integer],
+) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp]]:
+    """Duplicate subarrays according to the given reps.
+
+    Args:
+        values: Packed array with all subarrays concatenated.
+            Shape: [sum(L_bs)]
+        L_bs: Length of each subarray.
+            Shape: [B]
+        reps_bs: Number of times to duplicate each subarray.
+            Shape: [B]
+
+    Returns:
+        Tuple containing:
+        - Packed array with each subarray duplicated.
+            Shape: [sum(L_bs * reps_bs)]
+        - The lengths of each duplicated subarray.
+            Shape: [B]
+
+    Examples:
+    >>> values = np.array([1, 2, 3, 4, 5, 6])
+    >>> L_bs = np.array([2, 3, 1])
+    >>> reps_bs = np.array([2, 0, 3])
+    >>> values_duplicated, L_bs_duplicated = __duplicate_subarrays(
+    ...     values, L_bs, reps_bs
+    ... )
+    >>> values_duplicated
+    array([1, 2, 1, 2, 6, 6, 6])
+    >>> L_bs_duplicated
+    array([4, 0, 3])
+    """
+    # The key insight is to construct an index array that repeats the
+    # appropriate indices for each subarray.
+
+    # Compute the start and stop indices of each subarray.
+    stops = L_bs.cumsum(dtype=np.intp)  # [B]
+    starts = stops - L_bs  # [B]
+
+    # Repeat the start and stop indices according to reps.
+    starts = starts.repeat(reps_bs)  # [sum(reps_bs)]
+    stops = stops.repeat(reps_bs)  # [sum(reps_bs)]
+
+    # Create the index array for each subarray.
+    idcs, _, _ = arange_batched_packed(starts, stops)  # [sum(L_bs * reps_bs)]
+
+    # Gather the duplicated values.
+    values_duplicated = values[idcs]  # [sum(L_bs * reps_bs)]  # type: ignore
+    L_bs_duplicated = (L_bs * reps_bs).astype(np.intp)  # [B]
+
+    return values_duplicated, L_bs_duplicated
 
 
 def repeat_batched(
     values: npt.NDArray[NpGeneric],
+    L_bsds: npt.NDArray[np.integer],
     repeats: npt.NDArray[np.integer],
-    sum_repeats: npt.NDArray[np.integer],
-    max_sum_repeats: int,
     axis: int = 0,
     padding_value: Any = None,
-) -> npt.NDArray[NpGeneric]:
+) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp]]:
     """Repeat values from a batch of arrays using the given repeats.
 
     Note that axis refers to the index of the dimension to sort along AFTER the
-    batch dimension. So e.g. if x has shape [B, N_0, N_1, N_2], then axis=0
-    refers to N_0, axis=1 refers to N_1, etc.
+    batch dimension.
 
     Args:
         values: The values to repeat.
-            Shape: [B, N_0, ..., N_axis, ..., N_{D-1}]
-        repeats: The number of times to repeat each value.
-            Shape: [B, N_axis]
-        sum_repeats: The sum of repeats for each element in the batch.
-            Must be equal to sum(repeats, axis=1).
-            Shape: [B]
-        max_sum_repeats: The maximum sum of repeats for any element in the
-            batch. Must be equal to max(sum(repeats, axis=1)).
+            Shape: [B, max(L_bs0), ..., max(L_bs{axis}), ..., max(L_bs{D-1})]
+        L_bsds: Length of each sample along each dimension.
+            Shape: [B, D]
+        repeats: Number of times to repeat each value.
+            Shape: [B, max(L_bs{axis})]
         axis: The dimension to repeat along.
         padding_value: The value to pad the values with. If None, the values
             are padded with random values. This is faster than padding with
             a specific value.
 
     Returns:
-        The repeated values. Padded with padding_value.
-            Shape: [B, N_0, ..., max_sum_repeats, ..., N_{D-1}]
+        Tuple containing:
+        - The repeated values. Padded with padding_value.
+            Shape: [B, max(L_bs0), ..., max(sum(repeats)), ..., max(L_bs{D-1})]
+        - The lengths of each repeated sample along each dimension.
+            Shape: [B, D]
 
     Examples:
     >>> values = np.array([
@@ -882,57 +1076,708 @@ def repeat_batched(
     ...         [11, 12],
     ...     ],
     ... ])
-    >>> repeats = np.array([
-    ...     [1, 2, 3],
-    ...     [0, 1, 0],
+    >>> L_bsds = np.array([
+    ...     [2, 2],
+    ...     [3, 1],
     ... ])
-    >>> sum_repeats = np.array([6, 1])
-    >>> max_sum_repeats = 6
-    >>> repeat_batched(
-    ...     values,
-    ...     repeats,
-    ...     sum_repeats,
-    ...     max_sum_repeats,
-    ...     axis=0,
-    ...     padding_value=0,
+    >>> repeats = np.array([
+    ...     [1, 2, 0],
+    ...     [3, 2, 1],
+    ... ])
+    >>> values_repeated, L_bsds_repeated = repeat_batched(
+    ...     values, L_bsds, repeats, axis=0, padding_value=0
     ... )
+    >>> values_repeated
     array([[[ 1,  2],
             [ 3,  4],
             [ 3,  4],
-            [ 5,  6],
-            [ 5,  6],
-            [ 5,  6]],
-           [[ 9, 10],
             [ 0,  0],
             [ 0,  0],
-            [ 0,  0],
-            [ 0,  0],
-            [ 0,  0]]])
+            [ 0,  0]],
+           [[ 7,  0],
+            [ 7,  0],
+            [ 7,  0],
+            [ 9,  0],
+            [ 9,  0],
+            [11,  0]]])
+    >>> L_bsds_repeated
+    array([[3, 2],
+           [6, 1]])
     """
+    max_L_bsds = np.array(values.shape[1:])  # [D]
+
+    # Compute the new lengths after repeating.
+    L_bsds_repeated = L_bsds.astype(np.intp, copy=True)  # [B, D]
+    L_bsds_repeated[:, axis] = sum_padding_batched(repeats, L_bsds[:, axis])
+    max_L_bsds_repeated = max_L_bsds.copy()  # [D]
+    max_L_bsds_repeated[axis] = int(L_bsds_repeated[:, axis].max())
+
     # Move axis to the front and merge it with the batch dimension.
     # This allows us to use np.repeat() directly.
     values = np.moveaxis(
         values, axis + 1, 1
-    )  # [B, N_axis, N_0, ..., N_{axis-1}, N_{axis+1}, ..., N_{D-1}]
-    values = values.reshape(
-        -1, *values.shape[2:]
-    )  # [B * N_axis, N_0, ..., N_{axis-1}, N_{axis+1}, ..., N_{D-1}]
-    repeats_reshaped = repeats.reshape(-1)  # [B * N_axis]
+    )  # [B, max(L_bs{axis}), max(L_bs0), ..., max(L_bs{D-1})]
+    values = pack_padded(
+        values, L_bsds[:, axis]
+    )  # [sum(L_bs{axis}), max(L_bs0), ..., max(L_bs{D-1})]
+    repeats = pack_padded(repeats, L_bsds[:, axis])  # [sum(L_bs{axis})]
 
     # Repeat the values.
-    values = values.repeat(
-        repeats_reshaped, axis=0
-    )  # [B * sum(repeats), N_0, ..., N_{axis-1}, N_{axis+1}, ..., N_{D-1}]
+    values_repeated = values.repeat(
+        repeats, axis=0
+    )  # [sum(L_bs{axis}_repeated), max(L_bs0), ..., max(L_bs{D-1})]
 
     # Un-merge the batch and axis dimensions and move axis back to its original
     # position.
-    values = pad_packed(
-        values, sum_repeats, max_sum_repeats, padding_value=padding_value
-    )  # [B, max_sum_repeats, N_0, ..., N_{axis-1}, N_{axis+1}, ..., N_{D-1}]
-    values = np.moveaxis(
-        values, 1, axis + 1
-    )  # [B, N_0, ..., max_sum_repeats, ..., N_{D-1}]
+    values_repeated = pad_packed(
+        values_repeated,
+        L_bsds_repeated[:, axis],
+        int(max_L_bsds_repeated[axis]),
+    )  # [B, max(L_bs{axis}_repeated), max(L_bs0), ..., max(L_bs{D-1})]
+    values_repeated = np.moveaxis(
+        values_repeated, 1, axis + 1
+    )  # [B, max(L_bs0), ..., max(L_bs{axis}_repeated), ..., max(L_bs{D-1})]
+
+    # Apply padding if requested.
+    if padding_value is not None:
+        replace_padding_multidim(
+            values_repeated,
+            L_bsds_repeated,
+            padding_value=padding_value,
+            in_place=True,
+        )
+
+    return values_repeated, L_bsds_repeated
+
+
+def repeat_batched_packed(
+    values: npt.NDArray[NpGeneric],
+    L_bsds: npt.NDArray[np.integer],
+    repeats_bs: npt.NDArray[np.integer],
+    axis: int = 0,
+) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp]]:
+    """Repeat values from a batch of packed arrays using the given repeats.
+
+    Args:
+        values: Packed array of all samples concatenated.
+            Shape: [sum(L_bs0 * ... * L_bs{D-1})]
+        L_bsds: Length of each sample along each dimension.
+            Shape: [B, D]
+        repeats_bs: Number of times to repeat each value.
+            Shape: [B, max(L_bs{axis})]
+        axis: The dimension to repeat along.
+
+    Returns:
+        Tuple containing:
+        - Packed array with each sample repeated.
+            Shape: [sum(L_bs0 * ... * L_bs{axis}_repeated * ... * L_bs{D-1})]
+        - The lengths of each repeated sample along each dimension.
+            Shape: [B, D]
+
+    Examples:
+    >>> values = np.array([1, 2, 3, 4, 7, 9, 11])
+    >>> L_bsds = np.array([
+    ...     [2, 2],
+    ...     [3, 1],
+    ... ])
+    >>> repeats_bs = np.array([
+    ...     [1, 2, 0],
+    ...     [3, 2, 1],
+    ... ])
+    >>> values_repeated, L_bsds_repeated = repeat_batched_packed(
+    ...     values, L_bsds, repeats_bs, axis=0
+    ... )
+    >>> values_repeated
+    array([ 1,  2,  3,  4,  3,  4,  7,  7,  7,  9,  9, 11])
+    >>> L_bsds_repeated
+    array([[3, 2],
+           [6, 1]])
+    """
+    # Compute the new lengths after repeating.
+    L_bsds_repeated = L_bsds.astype(np.intp, copy=True)  # [B, D]
+    L_bsds_repeated[:, axis] = sum_padding_batched(repeats_bs, L_bsds[:, axis])
+
+    # Calculate product of all lengths for all dimensions except axis.
+    # We denote the product from dimension d0 (included) to d1 (excluded) as:
+    # _bs_d0_to_d1 = _bs{d0} * _bs{d0+1} * ... * _bs{d1-2} * _bs{d1-1}
+    L_bs_0_to_axisplus1 = L_bsds[:, : axis + 1].prod(axis=1)  # [B]
+    L_bs_0_to_axis = L_bs_0_to_axisplus1 // L_bsds[:, axis]  # [B]
+    L_bs_axisplus1_to_D = (
+        L_bsds[:, axis:].prod(axis=1) // L_bsds[:, axis]
+    )  # [B]
+
+    # Pretend we are working with 1D subarrays, and construct the corresponding
+    # L_bs and repeats_bs.
+    L_bs = L_bs_axisplus1_to_D.repeat(
+        L_bs_0_to_axisplus1
+    )  # [sum(L_bs_0_to_axisplus1)]
+    repeats_bs, _ = __duplicate_subarrays(
+        pack_padded(repeats_bs, L_bsds[:, axis]),
+        L_bsds[:, axis],
+        L_bs_0_to_axis,
+    )  # [sum(L_bs_0_to_axisplus1)], _
+
+    # Duplicate the subarrays.
+    values_repeated, _ = __duplicate_subarrays(
+        values, L_bs, repeats_bs
+    )  # [sum(L_bs0 * ... * L_bs{axis}_repeated * ... * L_bs{D-1})], _
+
+    return values_repeated, L_bsds_repeated
+
+
+def tile_batched(
+    values: npt.NDArray[NpGeneric],
+    L_bsds: npt.NDArray[np.integer],
+    reps_bsds: npt.NDArray[np.integer],
+    padding_value: Any = None,
+) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp]]:
+    """Tile values from a batch of arrays using the given reps.
+
+    Args:
+        values: The values to tile.
+            Shape: [B, max(L_bs0), ..., max(L_bs{D-1})]
+        L_bsds: Length of each sample along each dimension.
+            Shape: [B, D]
+        reps_bsds: Number of times to tile each sample along each dimension.
+            Shape: [B, D]
+        padding_value: The value to pad the values with. If None, the values
+            are padded with random values. This is faster than padding with
+            a specific value.
+
+    Returns:
+        Tuple containing:
+        - The tiled values. Padded with padding_value.
+            Shape: [
+                B, max(L_bs0 * reps_bs0), ..., max(L_bs{D-1} * reps_bs{D-1})
+            ]
+        - The lengths of each tiled sample along each dimension.
+            Shape: [B, D]
+
+    Examples:
+    >>> values = np.array([
+    ...     [
+    ...         [1, 2],
+    ...         [3, 4],
+    ...         [5, 6],
+    ...     ],
+    ...     [
+    ...         [7, 8],
+    ...         [9, 10],
+    ...         [11, 12],
+    ...     ],
+    ... ])
+    >>> L_bsds = np.array([
+    ...     [2, 2],
+    ...     [3, 1],
+    ... ])
+    >>> reps_bsds = np.array([
+    ...     [2, 3],
+    ...     [1, 4],
+    ... ])
+    >>> values_tiled, L_bsds_tiled = tile_batched(
+    ...     values, L_bsds, reps_bsds, padding_value=0
+    ... )
+    >>> values_tiled
+    array([[[ 1,  2,  1,  2,  1,  2],
+            [ 3,  4,  3,  4,  3,  4],
+            [ 1,  2,  1,  2,  1,  2],
+            [ 3,  4,  3,  4,  3,  4]],
+           [[ 7,  7,  7,  7,  0,  0],
+            [ 9,  9,  9,  9,  0,  0],
+            [11, 11, 11, 11,  0,  0],
+            [ 0,  0,  0,  0,  0,  0]]])
+    >>> L_bsds_tiled
+    array([[4, 6],
+           [3, 4]])
+    """
+    # TODO Optimize this function by using a native padded solution instead.
+    # Pack the values.
+    values_packed = pack_padded_multidim(
+        values, L_bsds
+    )  # [sum(L_bs0 * ... * L_bs{D-1})]
+
+    # Tile the values in their packed form.
+    values_tiled_packed, L_bsds_tiled = tile_batched_packed(
+        values_packed, L_bsds, reps_bsds
+    )  # [sum(prod(L_bsds * reps_bsds, axis=1))], [B, D]
+    max_L_bsds_tiled = L_bsds_tiled.max(axis=0)  # [D]
+
+    # Pad the tiled values.
+    values_tiled = pad_packed_multidim(
+        values_tiled_packed,
+        L_bsds_tiled,
+        max_L_bsds_tiled,
+        padding_value=padding_value,
+    )  # [B, max(L_bs0 * reps_bs0), ..., max(L_bs{D-1} * reps_bs{D-1})]
+
+    return values_tiled, L_bsds_tiled
+
+
+def tile_batched_packed(
+    values: npt.NDArray[NpGeneric],
+    L_bsds: npt.NDArray[np.integer],
+    reps_bsds: npt.NDArray[np.integer],
+) -> tuple[npt.NDArray[NpGeneric], npt.NDArray[np.intp]]:
+    """Tile values from a batch of packed arrays using the given reps.
+
+    Args:
+        values: Packed array of all samples concatenated.
+            Shape: [sum(L_bs0 * ... * L_bs{D-1})]
+        L_bsds: Length of each sample along each dimension.
+            Shape: [B, D]
+        reps_bsds: Number of times to tile each sample along each dimension.
+            Shape: [B, D]
+
+    Returns:
+        Tuple containing:
+        - Packed array with each sample tiled.
+            Shape: [sum(prod(L_bsds * reps_bsds, axis=1))]
+        - The lengths of each tiled sample along each dimension.
+            Shape: [B, D]
+
+    Examples:
+    >>> values = np.array([1, 2, 3, 4, 7, 9, 11])
+    >>> L_bsds = np.array([
+    ...     [2, 2],
+    ...     [3, 1],
+    ... ])
+    >>> reps_bsds = np.array([
+    ...     [2, 3],
+    ...     [1, 4],
+    ... ])
+    >>> values_tiled, L_bsds_tiled = tile_batched_packed(
+    ...     values, L_bsds, reps_bsds
+    ... )
+    >>> values_tiled
+    array([ 1,  2,  1,  2,  1,  2,  3,  4,  3,  4,  3,  4,  1,  2,  1,  2,  1,
+            2,  3,  4,  3,  4,  3,  4,  7,  7,  7,  7,  9,  9,  9,  9, 11, 11,
+           11, 11])
+    >>> L_bsds_tiled
+    array([[4, 6],
+           [3, 4]])
+    """
+    # Compute the new lengths along each dimension.
+    L_bsds_tiled = (L_bsds * reps_bsds).astype(np.intp)  # [B, D]
+
+    # Calculate products of all lengths from dimension d0 to dimension d1.
+    # We denote the product from dimension d0 (included) to d1 (excluded) as:
+    # _bs_d0_to_d1 = _bs{d0} * _bs{d0+1} * ... * _bs{d1-2} * _bs{d1-1}
+    L_bs_tiled_0_to_ds = L_bsds_tiled.cumprod(axis=1) // L_bsds_tiled  # [B, D]
+    L_bs_d_to_Ds = np.flip(
+        np.flip(L_bsds, axis=1).cumprod(axis=1), axis=1
+    )  # [B, D]
+
+    # Tile along each dimension iteratively. Only tile if the amount of reps
+    # along that dimension is greater than 1.
+    for d in np.nonzero(np.any(reps_bsds != 1, axis=0))[0]:
+        # Pretend we are working with 1D subarrays, and construct the
+        # corresponding L_bs and reps_bs.
+        L_bs = L_bs_d_to_Ds[:, d].repeat(
+            L_bs_tiled_0_to_ds[:, d]
+        )  # [sum(L_bs_tiled_0_to_d)]
+        reps_bs = reps_bsds[:, d].repeat(
+            L_bs_tiled_0_to_ds[:, d]
+        )  # [sum(L_bs_tiled_0_to_d)]
+
+        # Duplicate the subarrays.
+        values, _ = __duplicate_subarrays(
+            values, L_bs, reps_bs
+        )  # [sum(prod(L_bs_tiled_0_to_{d+1}s * L_bs_{d+1}_to_Ds))], _
+
+    return values, L_bsds_tiled
+
+
+def broadcast_to_batched(
+    values: npt.NDArray[NpGeneric],
+    L_bsds: npt.NDArray[np.integer],
+    shape_bsds: npt.NDArray[np.integer],
+    padding_value: Any = None,
+) -> npt.NDArray[NpGeneric]:
+    """Broadcast a batch of arrays to the given target shape.
+
+    Args:
+        values: The values to broadcast.
+            Shape: [B, max(L_bs0), ..., max(L_bs{D-1})]
+        L_bsds: Length of each sample along each dimension.
+            Shape: [B, D]
+        shape_bsds: The target shape to broadcast to for each sample.
+            Shape: [B, D]
+        padding_value: The value to pad the values with. If None, the values
+            are padded with random values. This is faster than padding with
+            a specific value.
+
+    Returns:
+        The broadcasted values.
+            Shape: [B, max(shape_bs0), ..., max(shape_bs{D-1})]
+
+    Examples:
+    >>> values = np.array([
+    ...     [
+    ...         [1, 2],
+    ...         [3, 4],
+    ...         [5, 6],
+    ...     ],
+    ...     [
+    ...         [7, 8],
+    ...         [9, 10],
+    ...         [11, 12],
+    ...     ],
+    ... ])
+    >>> L_bsds = np.array([
+    ...     [1, 2],
+    ...     [3, 1],
+    ... ])
+    >>> shape_bsds = np.array([
+    ...     [2, 2],
+    ...     [3, 4],
+    ... ])
+    >>> values_broadcasted = broadcast_to_batched(
+    ...     values, L_bsds, shape_bsds, padding_value=0
+    ... )
+    >>> values_broadcasted
+    array([[[ 1,  2,  0,  0],
+            [ 1,  2,  0,  0],
+            [ 0,  0,  0,  0]],
+           [[ 7,  7,  7,  7],
+            [ 9,  9,  9,  9],
+            [11, 11, 11, 11]]])
+    """
+    # TODO Optimize this function by using a native padded solution instead.
+    # Pack the values.
+    values_packed = pack_padded_multidim(
+        values, L_bsds
+    )  # [sum(L_bs0 * ... * L_bs{D-1})]
+
+    # Broadcast the values in their packed form.
+    values_broadcasted_packed = broadcast_to_batched_packed(
+        values_packed, L_bsds, shape_bsds
+    )  # [sum(prod(shape_bsds, axis=1))]
+    max_shape_bsds = shape_bsds.max(axis=0)  # [D]
+
+    # Pad the broadcasted values.
+    values_broadcasted = pad_packed_multidim(
+        values_broadcasted_packed,
+        shape_bsds,
+        max_shape_bsds,
+        padding_value=padding_value,
+    )  # [B, max(shape_bs0), ..., max(shape_bs{D-1})]
+
+    return values_broadcasted
+
+
+def broadcast_to_batched_packed(
+    values: npt.NDArray[NpGeneric],
+    L_bsds: npt.NDArray[np.integer],
+    shape_bsds: npt.NDArray[np.integer],
+) -> npt.NDArray[NpGeneric]:
+    """Broadcast a batch of packed arrays to the given target shape.
+
+    Warning: Unlike np.broadcast_to(), this function does not support adding
+    new dimensions of size 1 to the left of the shape. The number of dimensions
+    D must be the same in L_bsds and shape_bsds.
+
+    Args:
+        values: Packed array of all samples concatenated.
+            Shape: [sum(L_bs0 * ... * L_bs{D-1})]
+        L_bsds: Length of each sample along each dimension.
+            Shape: [B, D]
+        shape_bsds: The target shape to broadcast to for each sample.
+            Shape: [B, D]
+
+    Returns:
+        Packed array with each sample broadcasted to the target shape.
+            Shape: [sum(prod(shape_bsds, axis=1))]
+
+    Examples:
+    >>> values = np.array([1, 2, 7, 9, 11])
+    >>> L_bsds = np.array([
+    ...     [1, 2],
+    ...     [3, 1],
+    ... ])
+    >>> shape_bsds = np.array([
+    ...     [2, 2],
+    ...     [3, 4],
+    ... ])
+    >>> values_broadcasted = broadcast_to_batched_packed(
+    ...     values, L_bsds, shape_bsds
+    ... )
+    >>> values_broadcasted
+    array([ 1,  2,  1,  2,  7,  7,  7,  7,  9,  9,  9,  9, 11, 11, 11, 11])
+    """
+    # For the values to be broadcastable to the new shape, each dimension must
+    # either be equal or the original dimension must be 1.
+    if not np.all((L_bsds == shape_bsds) | (L_bsds == 1)):
+        raise ValueError(
+            "L_bsds and shape_bsds must be broadcastable. Each dimension must"
+            " either be equal or the original dimension must be 1."
+        )
+
+    # Compute the number of reps along each dimension.
+    reps_bsds = np.where(L_bsds != shape_bsds, shape_bsds, 1)  # [B, D]
+
+    # Calculate products of all lengths from dimension d0 to dimension d1.
+    # We denote the product from dimension d0 (included) to d1 (excluded) as:
+    # _bs_d0_to_d1 = _bs{d0} * _bs{d0+1} * ... * _bs{d1-2} * _bs{d1-1}
+    shape_bs_0_to_ds = shape_bsds.cumprod(axis=1) // shape_bsds  # [B, D]
+    L_bs_d_to_Ds = np.flip(
+        np.flip(L_bsds, axis=1).cumprod(axis=1), axis=1
+    )  # [B, D]
+
+    # Broadcast along each dimension iteratively. Only broadcast if the amount
+    # of reps along that dimension is greater than 1.
+    for d in np.nonzero(np.any(reps_bsds != 1, axis=0))[0]:
+        # Pretend we are working with 1D subarrays, and construct the
+        # corresponding L_bs and reps_bs.
+        L_bs = L_bs_d_to_Ds[:, d].repeat(
+            shape_bs_0_to_ds[:, d]
+        )  # [sum(shape_bs_0_to_d)]
+        reps_bs = reps_bsds[:, d].repeat(
+            shape_bs_0_to_ds[:, d]
+        )  # [sum(shape_bs_0_to_d)]
+
+        # Duplicate the subarrays.
+        values, _ = __duplicate_subarrays(
+            values, L_bs, reps_bs
+        )  # [sum(prod(shape_bs_0_to_{d+1}s * L_bs_{d+1}_to_Ds))], _
+
     return values
+
+
+def meshgrid_batched(
+    *xi: tuple[npt.NDArray[NpGeneric], npt.NDArray[np.integer]],
+    indexing: str = "xy",
+    padding_value: Any = None,
+) -> tuple[npt.NDArray[NpGeneric], ...]:
+    """Create a meshgrid from a batch of arrays.
+
+    Note: Compared to np.meshgrid(), this function does not support sparse
+    outputs, since padding can only be applied along the dimension of the
+    corresponding coordinate array. This would mean that any broadcasts you
+    perform on the meshgrids this function returns may still contain arbitrary
+    padding values in the other dimensions, which is undesirable. Thus, we have
+    decided not to support sparse outputs here. Furthermore, the copy option is
+    also not supported, since the meshgrid will always require a copy anyway
+    due to padding.
+
+    Args:
+        *xi: List of tuples containing:
+            - Padded input arrays representing the coordinates of a grid.
+                Padding could be arbitrary.
+                Shape: [B, max(L_bsd)]
+            - The lengths of the input arrays.
+                Shape: [B]
+            Length: D
+        indexing: The indexing convention used. 'ij' returns a meshgrid with
+            matrix indexing, while 'xy' returns a meshgrid with Cartesian
+            indexing.
+        padding_value: The value to pad the outputs with. If None, the outputs
+            are padded with random values. This is faster than padding with a
+            specific value.
+
+    Returns:
+        Tuple of [B, max(L_bs0), ..., max(L_bs{D-1})] shaped arrays if indexing
+        is 'ij' or tuple of [B, max(L_bs1), max(L_bs0), ..., max(L_bs{D-1})]
+        shaped arrays if indexing is 'xy'. Each output array contains the
+        D-dimensional meshgrid formed by the input arrays. Padded with
+        padding_value.
+
+    Examples:
+    >>> x0 = np.array([
+    ...     [1, 2],
+    ...     [3, 0],
+    ... ])
+    >>> L_b0 = np.array([2, 1])
+    >>> x1 = np.array([
+    ...     [10, 20, 30, 0],
+    ...     [50, 60, 70, 80],
+    ... ])
+    >>> L_b1 = np.array([3, 4])
+
+    >>> meshgrid_0, meshgrid_1 = meshgrid_batched(
+    ...     (x0, L_b0), (x1, L_b1), indexing="ij", padding_value=-1
+    ... )
+    >>> meshgrid_0
+    array([[[ 1,  1,  1, -1],
+            [ 2,  2,  2, -1]],
+           [[ 3,  3,  3,  3],
+            [-1, -1, -1, -1]]])
+    >>> meshgrid_1
+    array([[[10, 20, 30, -1],
+            [10, 20, 30, -1]],
+           [[50, 60, 70, 80],
+            [-1, -1, -1, -1]]])
+
+    >>> meshgrid_0, meshgrid_1 = meshgrid_batched(
+    ...     (x0, L_b0), (x1, L_b1), indexing="xy", padding_value=-1
+    ... )
+    >>> meshgrid_0
+    array([[[ 1,  2],
+            [ 1,  2],
+            [ 1,  2],
+            [-1, -1]],
+           [[ 3, -1],
+            [ 3, -1],
+            [ 3, -1],
+            [ 3, -1]]])
+    >>> meshgrid_1
+    array([[[10, 10],
+            [20, 20],
+            [30, 30],
+            [-1, -1]],
+           [[50, -1],
+            [60, -1],
+            [70, -1],
+            [80, -1]]])
+    """
+    xs, L_bsds = map(list, zip(*xi))  # D x [B, max(L_bsd)], D x [B]
+    L_bsds = np.stack(L_bsds, axis=1)  # [B, D]
+    max_L_bsds = np.array([x.shape[1] for x in xs])  # [D]
+
+    B, D = L_bsds.shape
+
+    # Prepare the shape of the output arrays.
+    broadcasted_shape = [B, *max_L_bsds]
+    broadcasted_bsds = L_bsds.copy()
+
+    # Swap the first two axes if indexing is 'xy'.
+    if indexing == "xy" and D >= 2:
+        broadcasted_shape[1], broadcasted_shape[2] = (
+            broadcasted_shape[2],
+            broadcasted_shape[1],
+        )
+        broadcasted_bsds[:, 0], broadcasted_bsds[:, 1] = (
+            broadcasted_bsds[:, 1],
+            broadcasted_bsds[:, 0].copy(),
+        )
+
+    # Go through each input array and create the corresponding meshgrid.
+    meshgrids = []
+    for d in range(D):
+        # Prepare the shape of the sparse output arrays.
+        unsqueezed_shape = [B, *[1] * D]
+        unsqueezed_shape[d + 1] = max_L_bsds[d]
+
+        # Swap the first two axes if indexing is 'xy'.
+        if indexing == "xy" and D >= 2 and d <= 1:
+            unsqueezed_shape[1], unsqueezed_shape[2] = (
+                unsqueezed_shape[2],
+                unsqueezed_shape[1],
+            )
+
+        # Create the meshgrid.
+        meshgrid = xs[d].reshape(
+            unsqueezed_shape
+        )  # [B, 1, ..., max(L_bsd), ..., 1]
+
+        # Broadcast the meshgrid to the full shape.
+        meshgrid = np.broadcast_to(
+            meshgrid, broadcasted_shape
+        ).copy()  # [B, max(L_bs0), ..., max(L_bs{D-1})]
+
+        # Pad the outputs with the padding value.
+        if padding_value is not None:
+            meshgrid = replace_padding_multidim(
+                meshgrid,
+                broadcasted_bsds,
+                padding_value=padding_value,
+                in_place=True,
+            )
+
+        meshgrids.append(meshgrid)
+
+    return tuple(meshgrids)
+
+
+def meshgrid_batched_packed(
+    *xi: tuple[npt.NDArray[NpGeneric], npt.NDArray[np.integer]],
+    indexing: str = "xy",
+) -> tuple[npt.NDArray[NpGeneric], ...]:
+    """Create a meshgrid from a batch of packed arrays.
+
+    Note: Compared to np.meshgrid(), this function does not support sparse
+    outputs, since the packed format can not make use of broadcasting.
+    Furthermore, the copy option is also not supported, since the packed output
+    format is already memory efficient.
+
+    Args:
+        *xi: List of tuples containing:
+            - Packed input arrays representing the coordinates of a grid.
+                Shape: [L_d]
+            - The lengths of the input arrays.
+                Shape: [B]
+            Length: D
+        indexing: The indexing convention used. 'ij' returns a meshgrid with
+            matrix indexing, while 'xy' returns a meshgrid with Cartesian
+            indexing.
+
+    Returns:
+        Tuple of [sum(L_bs0 * ... * L_bs{D-1})] shaped arrays if indexing is
+        'ij' or tuple of [sum(L_bs1 * L_bs0 * ... * L_bs{D-1})] shaped arrays
+        if indexing is 'xy'. Each output array contains the D-dimensional
+        meshgrid formed by the input arrays.
+
+    Examples:
+    >>> x0 = np.array([1, 2, 3])
+    >>> L_b0 = np.array([2, 1])
+    >>> x1 = np.array([10, 20, 30, 50, 60, 70, 80])
+    >>> L_b1 = np.array([3, 4])
+
+    >>> meshgrid_0, meshgrid_1 = meshgrid_batched_packed(
+    ...     (x0, L_b0), (x1, L_b1), indexing="ij",
+    ... )
+    >>> meshgrid_0
+    array([1, 1, 1, 2, 2, 2, 3, 3, 3, 3])
+    >>> meshgrid_1
+    array([10, 20, 30, 10, 20, 30, 50, 60, 70, 80])
+
+    >>> meshgrid_0, meshgrid_1 = meshgrid_batched_packed(
+    ...     (x0, L_b0), (x1, L_b1), indexing="xy",
+    ... )
+    >>> meshgrid_0
+    array([1, 2, 1, 2, 1, 2, 3, 3, 3, 3])
+    >>> meshgrid_1
+    array([10, 10, 20, 20, 30, 30, 50, 60, 70, 80])
+    """
+    xs, L_bsds = map(list, zip(*xi))  # D x [L_d], D x [B]
+    L_bsds = np.stack(L_bsds, axis=1)  # [B, D]
+
+    B, D = L_bsds.shape
+
+    # Prepare the shape of the output arrays.
+    broadcasted_bsds = L_bsds.copy()
+
+    # Swap the first two axes if indexing is 'xy'.
+    if indexing == "xy" and D >= 2:
+        broadcasted_bsds[:, 0], broadcasted_bsds[:, 1] = (
+            broadcasted_bsds[:, 1],
+            broadcasted_bsds[:, 0].copy(),
+        )
+
+    # Go through each input array and create the corresponding meshgrid.
+    meshgrids = []
+    for d in range(D):
+        # Prepare the shape of the sparse output arrays.
+        unsqueezed_bsds = np.ones((B, D), dtype=np.intp)
+        unsqueezed_bsds[:, d] = L_bsds[:, d]
+
+        # Swap the first two axes if indexing is 'xy'.
+        if indexing == "xy" and D >= 2 and d <= 1:
+            unsqueezed_bsds[:, 0], unsqueezed_bsds[:, 1] = (
+                unsqueezed_bsds[:, 1],
+                unsqueezed_bsds[:, 0].copy(),
+            )
+
+        # Create the meshgrid.
+        meshgrid = xs[d]  # [L_d] = [sum(1 * ... * L_bsd * ... * 1)]
+
+        # Broadcast the meshgrid to the full shape.
+        meshgrid = broadcast_to_batched_packed(
+            meshgrid, unsqueezed_bsds, broadcasted_bsds
+        )  # [sum(L_bs0 * ... * L_bs{D-1})]
+
+        meshgrids.append(meshgrid)
+
+    return tuple(meshgrids)
 
 
 # ######################## ADVANCED ARRAY MANIPULATION #########################
@@ -988,8 +1833,9 @@ def swap_idcs_vals_duplicates_batched(
     Each row in the output array will contain exactly all integers from 0 to
     len(x) - 1, in any order.
 
-    If the input doesn't contain duplicates, you should use swap_idcs_vals()
-    instead since it is faster (especially for large arrays).
+    If the input doesn't contain duplicates, you should use
+    swap_idcs_vals_batched() instead since it is faster (especially for large
+    arrays).
 
     Args:
         x: The array to swap.
@@ -1015,9 +1861,9 @@ def swap_idcs_vals_duplicates_batched(
 
     dtype = x.dtype
 
-    # Believe it or not, this O(n log n) algorithm is actually faster than a
+    # For some reason, this O(n log n) algorithm is actually faster than a
     # native implementation that uses a Python for loop with complexity O(n).
-    return x.argsort(axis=1, stable=stable).astype(dtype)  # type: ignore
+    return x.argsort(axis=1, stable=stable).astype(dtype)
 
 
 # ############################ CONSECUTIVE SEGMENTS ############################
@@ -1029,8 +1875,7 @@ def starts_segments_batched(
     """Find the start index of each consecutive segment in each batch array.
 
     Note that axis refers to the index of the dimension to sort along AFTER the
-    batch dimension. So e.g. if x has shape [B, N_0, N_1, N_2], then axis=0
-    refers to N_0, axis=1 refers to N_1, etc.
+    batch dimension.
 
     Args:
         x: The input array. Consecutive equal values will be grouped.
@@ -1053,13 +1898,10 @@ def starts_segments_batched(
     ...     [4, 4, 4, 2, 2, 8, 3, 3, 3, 3],
     ...     [1, 1, 0, 0, 0, 0, 0, 2, 2, 2],
     ... ])
-
     >>> starts, S_bs = starts_segments_batched(x, padding_value=0)
     >>> starts
-    array([
-        [0, 3, 5, 6],
-        [0, 2, 7, 0],
-    ])
+    array([[0, 3, 5, 6],
+           [0, 2, 7, 0]])
     >>> S_bs
     array([4, 3])
     """
@@ -1093,8 +1935,6 @@ def starts_segments_batched(
     batch_idcs, starts_idcs = is_change.nonzero()  # [S], [S]
 
     # Convert to padded representation.
-    batch_idcs = batch_idcs.astype(np.intp)
-    starts_idcs = starts_idcs.astype(np.intp)
     S_bs = counts_segments(batch_idcs)  # [B]
     max_S_bs = int(S_bs.max())
     starts = pad_packed(
@@ -1136,8 +1976,7 @@ def counts_segments_batched(
     """Count the length of each consecutive segment in each batch array.
 
     Note that axis refers to the index of the dimension to sort along AFTER the
-    batch dimension. So e.g. if x has shape [B, N_0, N_1, N_2], then axis=0
-    refers to N_0, axis=1 refers to N_1, etc.
+    batch dimension.
 
     Args:
         x: The input array. Consecutive equal values will be grouped.
@@ -1165,13 +2004,10 @@ def counts_segments_batched(
     ...     [4, 4, 4, 2, 2, 8, 3, 3, 3, 3],
     ...     [1, 1, 0, 0, 0, 0, 0, 2, 2, 2],
     ... ])
-
     >>> counts, S_bs = counts_segments_batched(x, padding_value=0)
     >>> counts
-    array([
-        [3, 2, 1, 4],
-        [2, 5, 3, 0],
-    ])
+    array([[3, 2, 1, 4],
+           [2, 5, 3, 0]])
     >>> S_bs
     array([4, 3])
     """
@@ -1281,6 +2117,9 @@ def outer_indices_segments_batched(
             segment.
         return_starts: Whether to also return the start indices of each
             consecutive segment.
+        padding_value: The value to pad the counts and/or starts with. If None,
+            the counts and/or starts are padded with random values. This is
+            faster than padding with a specific value.
 
     Returns:
         Tuple containing:
@@ -1289,10 +2128,10 @@ def outer_indices_segments_batched(
         - The number of consecutive segments in each array.
             Shape: [B]
         - (Optional) If return_counts is True, the counts for each consecutive
-            segment in x.
+            segment in x. Padded with padding_value.
             Shape: [B, max(S_bs)]
         - (Optional) If return_starts is True, the start indices for each
-            consecutive segment in x.
+            consecutive segment in x. Padded with padding_value.
             Shape: [B, max(S_bs)]
 
     Examples:
@@ -1300,18 +2139,13 @@ def outer_indices_segments_batched(
     ...     [4, 4, 4, 2, 2, 8, 3, 3, 3, 3],
     ...     [1, 1, 0, 0, 0, 0, 0, 2, 2, 2],
     ... ])
-
     >>> outer_idcs, S_bs = outer_indices_segments_batched(x)
     >>> outer_idcs
-    array([
-        [0, 0, 0, 1, 1, 2, 3, 3, 3, 3],
-        [0, 0, 1, 1, 1, 1, 1, 2, 2, 2],
-    ])
+    array([[0, 0, 0, 1, 1, 2, 3, 3, 3, 3],
+           [0, 0, 1, 1, 1, 1, 1, 2, 2, 2]])
     >>> S_bs
     array([4, 3])
     """
-    B, N_axis = x.shape[0], x.shape[axis + 1]
-
     # Find the start (optional) and count of each consecutive segment.
     if return_starts:
         counts, S_bs, starts = counts_segments_batched(
@@ -1322,22 +2156,16 @@ def outer_indices_segments_batched(
             x, axis=axis, padding_value=padding_value
         )  # [B, max(S_bs)], [B]
 
-    # Prepare counts for outer index calculation.
-    counts_with_zeros = replace_padding(counts, S_bs)
-    sum_counts = np.full((B,), N_axis, dtype=np.intp)  # [B]
-    max_sum_counts = N_axis
-
     # Calculate the outer indices.
-    outer_idcs = repeat_batched(
+    outer_idcs, _ = repeat_batched(
         np.broadcast_to(
             np.expand_dims(np.arange(counts.shape[1], dtype=np.intp), 0),
             counts.shape,
         ),  # [B, max(S_bs)]
-        counts_with_zeros,
-        sum_counts,
-        max_sum_counts,
+        np.expand_dims(S_bs, 1),  # [B, 1]
+        counts,
         axis=0,
-    )  # [B, N_axis]
+    )  # [B, N_axis], _
 
     if return_counts and return_starts:
         return outer_idcs, S_bs, counts, starts  # type: ignore
@@ -1416,8 +2244,7 @@ def inner_indices_segments_batched(
     """Get the inner indices for each consecutive segment in each batch array.
 
     Note that axis refers to the index of the dimension to sort along AFTER the
-    batch dimension. So e.g. if x has shape [B, N_0, N_1, N_2], then axis=0
-    refers to N_0, axis=1 refers to N_1, etc.
+    batch dimension.
 
     Args:
         x: The input array. Consecutive equal values will be grouped.
@@ -1427,13 +2254,13 @@ def inner_indices_segments_batched(
             segment.
         return_starts: Whether to also return the start indices of each
             consecutive segment.
-        padding_value: The value to pad the inner indices with. If None, the
-            inner indices are padded with random values. This is faster than
-            padding with a specific value.
+        padding_value: The value to pad the counts and/or starts with. If None,
+            the counts and/or starts are padded with random values. This is
+            faster than padding with a specific value.
 
     Returns:
         Tuple containing:
-        - The indices for each consecutive segment in x.
+        - The inner indices for each consecutive segment in x.
             Shape: [B, N_axis]
         - The number of consecutive segments in each array.
             Shape: [B]
@@ -1449,34 +2276,26 @@ def inner_indices_segments_batched(
     ...     [4, 4, 4, 2, 2, 8, 3, 3, 3, 3],
     ...     [1, 1, 0, 0, 0, 0, 0, 2, 2, 2],
     ... ])
-
     >>> inner_idcs, S_bs = inner_indices_segments_batched(x)
     >>> inner_idcs
-    array([
-        [0, 1, 2, 0, 1, 0, 0, 1, 2, 3],
-        [0, 1, 0, 1, 2, 3, 4, 0, 1, 2],
-    ])
+    array([[0, 1, 2, 0, 1, 0, 0, 1, 2, 3],
+           [0, 1, 0, 1, 2, 3, 4, 0, 1, 2]])
     >>> S_bs
     array([4, 3])
     """
-    B, N_axis = x.shape[0], x.shape[axis + 1]
+    N_axis = x.shape[axis + 1]
 
     # Find the start and count of each consecutive segment.
     counts, S_bs, starts = counts_segments_batched(
         x, axis=axis, return_starts=True, padding_value=padding_value
     )  # [B, max(S_bs)], [B], [B, max(S_bs)]
 
-    # Prepare counts for inner index calculation.
-    counts_with_zeros = replace_padding(counts, S_bs)
-    sum_counts = np.full((B,), N_axis, dtype=np.intp)  # [B]
-    max_sum_counts = N_axis
-
     # Calculate the inner indices.
     inner_idcs = (
         np.expand_dims(np.arange(N_axis, dtype=np.intp), 0)  # [1, N_axis]
         - repeat_batched(
-            starts, counts_with_zeros, sum_counts, max_sum_counts, axis=0
-        )  # [B, N_axis]
+            starts, np.expand_dims(S_bs, 1), counts, axis=0
+        )[0]  # [B, N_axis]
     )  # [B, N_axis]  # fmt: skip
 
     if return_counts and return_starts:
@@ -1497,22 +2316,21 @@ def lexsort_along_batched(
     """Sort a batched array along axis, taking all others as constant tuples.
 
     Note that axis refers to the index of the dimension to sort along AFTER the
-    batch dimension. So e.g. if x has shape [B, N_0, N_1, N_2], then axis=0
-    refers to N_0, axis=1 refers to N_1, etc.
+    batch dimension.
 
     This is like a batched version of np.sort(), but it doesn't sort along
     the other dimensions. As such, the other dimensions are treated as tuples.
     This function is roughly equivalent to the following Python code, but it
     is much faster.
-    >>> np.stack([
+    >>> np.stack([  # doctest: +SKIP
     ...     np.stack(
     ...         sorted(
-    ...             map(np.squeeze, np.split(x_b, x_b.shape[axis], axis=axis)),
+    ...             np.unstack(x_b, axis=axis),
     ...             key=tuple,
     ...         ),
     ...         axis=axis,
     ...     )
-    ...     for x_b in map(np.squeeze, np.split(x, x.shape[0], axis=0))
+    ...     for x_b in np.unstack(x, axis=0)
     ... ])
 
     Args:
@@ -1529,7 +2347,7 @@ def lexsort_along_batched(
         - The backmap array, which contains the indices of the sorted values
             in the original input.
             The sorted version of x can be retrieved as follows:
-            >>> x_sorted = take_batched(x, axis, backmap)
+            x_sorted = take_batched(x, axis, backmap)
             Shape: [B, N_axis]
 
     Examples:
@@ -1574,36 +2392,7 @@ def lexsort_along_batched(
             [2, 1],
             [3, 4]]])
     """
-    # We can use lexsort() to sort only the requested dimension.
-    # First, we prepare the array for lexsort(). The input to this function
-    # must be a tuple of array-like objects, that are evaluated from last to
-    # first. This is quite confusing, so I'll put an example here. If we have:
-    # >>> x = array([[[15, 13],
-    # ...             [11,  4],
-    # ...             [16,  2]],
-    # ...            [[ 7, 21],
-    # ...             [ 3, 20],
-    # ...             [ 8, 22]],
-    # ...            [[19, 14],
-    # ...             [ 5, 12],
-    # ...             [ 6,  0]],
-    # ...            [[23,  1],
-    # ...             [10, 17],
-    # ...             [ 9, 18]]])
-    # And axis=1, then the input to lexsort() must be:
-    # >>> lexsort(array([[ 1, 17, 18],
-    # ...                [23, 10,  9],
-    # ...                [14, 12,  0],
-    # ...                [19,  5,  6],
-    # ...                [21, 20, 22],
-    # ...                [ 7,  3,  8],
-    # ...                [13,  4,  2],
-    # ...                [15, 11, 16]]))
-    # Note that the first row is evaluated last and the last row is evaluated
-    # first. We can now see that the sorting order will be 11 < 15 < 16, so
-    # lexsort() will return array([1, 0, 2]). I thouroughly tested what the
-    # absolute fastest way is to perform this operation, and it turns out that
-    # the following is the best way to do it:
+    # See the non-batched version for an explanation of the algorithm.
     B, N_axis = x.shape[0], x.shape[axis + 1]
 
     if x.ndim == 2:
@@ -1703,8 +2492,7 @@ def unique_consecutive_batched(
     """A batched version of np.unique_consecutive(), but WAY more effiecient.
 
     Note that axis refers to the index of the dimension to sort along AFTER the
-    batch dimension. So e.g. if x has shape [B, N_0, N_1, N_2], then axis=0
-    refers to N_0, axis=1 refers to N_1, etc.
+    batch dimension.
 
     The returned unique elements are retrieved along the requested dimension,
     taking all the other dimensions apart from the batch dimension as constant
@@ -1719,10 +2507,10 @@ def unique_consecutive_batched(
             unique array.
         return_counts: Whether to also return the counts for each unique
             element.
-        axis: The dimension to operate on. If None, the unique of the
-            flattened input is returned. Otherwise, each of the arrays
-            indexed by the given dimension is treated as one of the elements
-            to apply the unique operation on. See examples for more details.
+        axis: The dimension to operate on. If None, the unique of the flattened
+            input is returned. Otherwise, each of the arrays indexed by the
+            given dimension is treated as one of the elements to apply the
+            unique operation on. See examples for more details.
         padding_value: The value to pad the unique elements with. If None, the
             unique elements are padded with random values. This is faster than
             padding with a specific value.
@@ -1738,7 +2526,7 @@ def unique_consecutive_batched(
         - (Optional) If return_inverse is True, the indices where elements
             in the original input ended up in the returned unique values.
             The original array can be reconstructed as follows:
-            >>> x_reconstructed = take_batched(uniques, axis, inverse)
+            x_reconstructed = take_batched(uniques, axis, inverse)
             Shape: [B, N_axis]
         - (Optional) If return_counts is True, the counts for each unique
             element. Padded with padding_value.
@@ -2038,8 +2826,7 @@ def unique_batched(
     """A batched version of np.unique(), but WAY more efficient.
 
     Note that axis refers to the index of the dimension to sort along AFTER the
-    batch dimension. So e.g. if x has shape [B, N_0, N_1, N_2], then axis=0
-    refers to N_0, axis=1 refers to N_1, etc.
+    batch dimension.
 
     The returned unique elements are retrieved along the requested dimension,
     taking all the other dimensions apart from the batch dimension as constant
@@ -2055,10 +2842,10 @@ def unique_batched(
             unique array.
         return_counts: Whether to also return the counts of each unique
             element.
-        axis: The dimension to operate on. If None, the unique of the
-            flattened input is returned. Otherwise, each of the arrays
-            indexed by the given dimension is treated as one of the elements
-            to apply the unique operation on. See examples for more details.
+        axis: The dimension to operate on. If None, the unique of the flattened
+            input is returned. Otherwise, each of the arrays indexed by the
+            given dimension is treated as one of the elements to apply the
+            unique operation on. See examples for more details.
         stable: Whether to preserve the relative order of equal elements. If
             False (default), an unstable sort is used, which is faster. Note
             that this only has an effect on the backmap array, so setting
@@ -2081,12 +2868,12 @@ def unique_batched(
         - (Optional) If return_backmap is True, the backmap array, which
             contains the indices of the unique values in the original input.
             The sorted version of x can be retrieved as follows:
-            >>> x_sorted = take_batched(x, axis, backmap)
+            x_sorted = take_batched(x, axis, backmap)
             Shape: [B, N_axis]
         - (Optional) If return_inverse is True, the indices where elements
             in the original input ended up in the returned unique values.
             The original array can be reconstructed as follows:
-            >>> x_reconstructed = take_batched(uniques, axis, inverse)
+            x_reconstructed = take_batched(uniques, axis, inverse)
             Shape: [B, N_axis]
         - (Optional) If return_counts is True, the counts for each unique
             element. Padded with padding_value.
@@ -2218,7 +3005,7 @@ def unique_batched(
 
     # Sort along the given dimension, taking all the other dimensions as
     # constant tuples. Torch's sort() doesn't work here since it will
-    # sort the other dimensions as well.
+    # sort the other dimensions independently.
     x_sorted, backmap = lexsort_along_batched(
         x, axis=axis, stable=stable
     )  # [B, N_0, ..., N_axis, ..., N_{D-1}], [B, N_axis]
@@ -2238,7 +3025,9 @@ def unique_batched(
         # The backmap wasn't taken into account by unique_consecutive(), so we
         # have to apply it to the inverse mapping here.
         backmap_inv = swap_idcs_vals_batched(backmap)  # [B, N_axis]
-        aux.append(np.take_along_axis(out[2], backmap_inv, 1))  # type: ignore
+        aux.append(
+            np.take_along_axis(out[2], backmap_inv, axis=1)  # type: ignore
+        )
     if return_counts:
         aux.append(out[-1])
 
@@ -2275,13 +3064,10 @@ def counts_segments_ints_batched(
     ...    [4, 4, 4, 2, 2, 8, 3, 3, 3, 3],
     ...    [1, 1, 0, 0, 0, 0, 0, 2, 2, 2],
     ... ])
-
     >>> freqs, U_bs = counts_segments_ints_batched(x, 10)
     >>> freqs
-    array([
-        [0, 0, 2, 4, 3, 0, 0, 0, 1, 0],
-        [5, 2, 3, 0, 0, 0, 0, 0, 0, 0],
-    ])
+    array([[0, 0, 2, 4, 3, 0, 0, 0, 1, 0],
+           [5, 2, 3, 0, 0, 0, 0, 0, 0, 0]])
     >>> U_bs
     array([4, 3])
     """
@@ -2366,7 +3152,7 @@ def groupby_batched(
         keys: The keys to group by.
             Shape: [B, N, *]
         vals: The values to group. If None, the values are set to the indices of
-            the keys (i.e. vals = arange_batched(N)).
+            the keys (i.e. vals = arange_batched(np.full((B,), N))[0]).
             Shape: [B, N, **]
         stable: Whether to preserve the order of vals that have the same key. If
             False (default), an unstable sort is used, which is faster.
@@ -2399,8 +3185,8 @@ def groupby_batched(
             - Array with the amount of unique keys per batch element.
                 Shape: [B]
             - Array of values stored a packed manner, grouped by key. Along
-                every batch element, the first N_key1 values correspond to the
-                first key, the next N_key2 values correspond to the second key,
+                every batch element, the first N_key0 values correspond to the
+                first key, the next N_key1 values correspond to the second key,
                 etc. Each group of values is sorted if stable is True. Padded
                 with padding_value.
                 Shape: [B, N, **]
@@ -2439,10 +3225,14 @@ def groupby_batched(
     ...     keys, vals, stable=True, as_sequence=True, padding_value=0
     ... )
     >>> for key, mask, vals_group, counts in grouped:
-    ...     print(f"Key:\\n{key}")
-    ...     print(f"Mask:\\n{mask}")
-    ...     print(f"Grouped Vals:\\n{vals_group}")
-    ...     print(f"Counts:\\n{counts}")
+    ...     print("Key:")
+    ...     print(key)
+    ...     print("Mask:")
+    ...     print(mask)
+    ...     print("Grouped Vals:")
+    ...     print(vals_group)
+    ...     print("Counts:")
+    ...     print(counts)
     ...     print()
     Key:
     [2 0]
@@ -2457,7 +3247,7 @@ def groupby_batched(
       [26 27]]]
     Counts:
     [2 3]
-
+    <BLANKLINE>
     Key:
     [3 1]
     Mask:
@@ -2465,13 +3255,13 @@ def groupby_batched(
     Grouped Vals:
     [[[ 6  7]
       [ 0  0]
-      [ 0  0]
+      [ 0  0]]
      [[14 15]
       [18 19]
       [24 25]]]
     Counts:
     [1 3]
-
+    <BLANKLINE>
     Key:
     [4 2]
     Mask:
@@ -2485,7 +3275,7 @@ def groupby_batched(
       [ 0  0]]]
     Counts:
     [3 1]
-
+    <BLANKLINE>
     Key:
     [8 0]
     Mask:
@@ -2534,34 +3324,29 @@ def groupby_batched(
         padding_value=padding_value,
     )  # [B, max(U_bs), *], [B], [B, N], [B, max(U_bs)]
 
-    # Rearrange values to match keys_unique.
     if vals is None:
+        # Use the backmap directly as values.
         vals_grouped = cast(npt.NDArray[NpGeneric2], backmap)  # [B, N]
     else:
+        # Rearrange values to match keys_unique.
         vals_grouped = take_batched(vals, 0, backmap)  # [B, N, **]
 
     # Return the results.
     if not as_sequence:
         return keys_unique, U_bs, vals_grouped, counts
 
-    B, N = keys.shape[:2]
-
-    # Prepare counts for outer index calculation.
-    counts_with_zeros = replace_padding(counts, U_bs)
-    sum_counts = np.full((B,), N, dtype=np.intp)  # [B]
-    max_sum_counts = N
+    B, N = keys.shape[0], keys.shape[1]
 
     # Calculate outer indices.
-    outer_idcs = repeat_batched(
+    outer_idcs, _ = repeat_batched(
         np.broadcast_to(
             np.expand_dims(np.arange(counts.shape[1], dtype=np.intp), 0),
             counts.shape,
         ),  # [B, max(U_bs)]
-        counts_with_zeros,
-        sum_counts,
-        max_sum_counts,
+        np.expand_dims(U_bs, 1),  # [B, 1]
+        counts,
         axis=0,
-    )  # [B, N]
+    )  # [B, N], _
 
     # Create masks for every batch of unique keys.
     masks = (
@@ -2579,7 +3364,7 @@ def groupby_batched(
             apply_mask(
                 vals_grouped,
                 masks[:, u],
-                sum_counts,
+                np.full((B,), N),
                 padding_value=padding_value,
             )[0],  # [B, max(N_key_bs), **]
             counts[:, u],  # [B]

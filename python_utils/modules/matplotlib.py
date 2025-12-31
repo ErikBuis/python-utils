@@ -44,6 +44,8 @@ def get_scalar_mappable(
     Returns:
         ScalarMappable color map for the coefficients.
         - Use scalar_mappable.cmap to get the color map.
+            To map a value in [0, 1] to an RGBA color, use
+                scalar_mappable.cmap(value).
         - Use scalar_mappable.norm to get the norm.
             The norm maps the range [vmin, vmax] to [0, 1].
             To get vmin and vmax, use scalar_mappable.norm.vmin and
@@ -62,11 +64,26 @@ def get_scalar_mappable(
     ... #  1              2              3               4               5
     ... # fully         orange        yellow           mostly         fully
     ... #  red          -ish          /green            green          blue
-    >>> get_scalar_mappable(
+    ... scalar_mappable = get_scalar_mappable(
     ...     [1, 2, 3, 4, 5],
     ...     ["red", "green", "blue"],
     ...     [0.7 * (5 - 1)],
     ... )
+    >>> scalar_mappable.cmap(0.0)
+    (np.float64(1.0), np.float64(0.0), np.float64(0.0), np.float64(1.0))
+    >>> scalar_mappable.cmap(0.7)
+    (np.float64(0.0),
+     np.float64(0.2720072699311453),
+     np.float64(0.4581105169340465),
+     np.float64(1.0))
+    >>> scalar_mappable.cmap(1.0)
+    (np.float64(0.0), np.float64(0.0), np.float64(1.0), np.float64(1.0))
+    >>> scalar_mappable.norm.vmin
+    1
+    >>> scalar_mappable.norm.vmax
+    5
+    >>> scalar_mappable.norm(3)
+    np.float64(0.5)
     """
     values = np.array(values)
     colors = np.array(colors)

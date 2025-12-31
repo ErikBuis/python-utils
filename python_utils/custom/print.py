@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import shutil
 import unicodedata
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, Literal, overload
 
 
@@ -41,8 +41,8 @@ def stringify(
             this at 0. It is used internally for recursive calls.
         max_line_len: The maximum line length before breaking. If set to 0,
             the terminal width will be used.
-        ignore: A list of types to ignore. If the object is of one of these
-            types, it will be stringified as "type(obj)".
+        ignore: A type or tuple of types to ignore. If the object is of one of
+            these types, it will be stringified as "type(obj)".
 
     Returns:
         The stringified object.
@@ -120,10 +120,6 @@ def stringify(
     return repr_obj
 
 
-# TODO Debug the stringify_fast_*() functions. They currently always end in a
-# TODO stack overflow error.
-
-
 def __stringify_fast_sequence_consecutive(
     obj: Sequence[Any],
     indent_level: int,
@@ -134,7 +130,7 @@ def __stringify_fast_sequence_consecutive(
 ) -> tuple[bool, list[str | int], int]:
     """Stringify the internal elements of a sequence.
 
-    This function is used internally by __stringify_fast to stringify the
+    This function is used internally by __stringify_fast() to stringify the
     internal elements of a sequence. It is used when the elements are
     concatenated on the same line. It will try to concatenate all elements
     on the same line, but if that's not possible, it will return early.
@@ -146,32 +142,35 @@ def __stringify_fast_sequence_consecutive(
         obj: The sequence to stringify.
         indent_level: The current indentation level.
         max_line_len: The maximum line length before breaking.
-        ignore: A list of types to ignore.
+        ignore: A type or tuple of types to ignore. If the object is of one of
+            these types, it will be stringified as "type(obj)".
         line_len_left: The number of characters that can still be added to the
             current line.
-        cached_strs: A list of cached strings that are no longer than the
-            given line_len_left, together with their lengths. Will be used to
-            avoid recomputing the same strings over and over again. Will be
-            updated in-place.
+        cached_strs: A list of tuples containing cached strings. Each tuple
+            represents one item in the sequence, and contains two things:
+            1. The stringified item as a list of strings.
+            2. The length of all strings in that list combined.
+            Together, the stringified items must be no longer than the given
+            line_len_left. This argument will be updated in-place.
 
     Returns:
         Tuple containing:
         - A boolean indicating whether the function managed to stringify all
             elements on the same line. If False, the function will return
-            early. In this case, it doesn't matter what the third and fourth
-            return values are, and thus they will be set to [] and the input
-            line_len_left respectively.
+            early. In this case, the second and third return values will be set
+            to [] and the input line_len_left respectively.
         - The object as a list of strings and integers. Strings are the
-            stringified objects, integers are indices to the cached strings.
-            To reconstruct the final string, the strings must be joined in the
-            order they appear in the list.
+            stringified objects, integers are indices into the list of cached
+            strings (that may have been updated in-place). To reconstruct the
+            final string, the strings must be joined in the order they appear
+            in this list.
         - The number of characters that can still be added to the current line
             after the function has finished.
 
     Examples:
     >>> cached_strs = []
     >>> plan_succeeded, strs, line_len_left = (
-    ...     __stringify_fast_concatenated(
+    ...     __stringify_fast_sequence_consecutive(
     ...         ["item 1", "item 2", "item 3", "item 4", "item 5"],
     ...         indent_level=0,
     ...         max_line_len=80,
@@ -181,8 +180,11 @@ def __stringify_fast_sequence_consecutive(
     ...     )
     ... )
     >>> "".join(
-    ...     cached_strs[s_or_i][0] if isinstance(s_or_i, int) else s_or_i
+    ...     s
     ...     for s_or_i in strs
+    ...     for s in (
+    ...         cached_strs[s_or_i][0] if isinstance(s_or_i, int) else [s_or_i]
+    ...     )
     ... )
     "'item 1', 'item 2', 'item 3', 'item 4', 'item 5'"
     """
@@ -213,7 +215,7 @@ def __stringify_fast_sequence_consecutive(
 
         strs.append(i)
         line_len_left -= curr_strs_len
-        if i < len(obj) - 1:
+        if i != len(obj) - 1:  # no comma after last item
             strs.append(", ")
             line_len_left -= 2
             if line_len_left < 0:
@@ -232,37 +234,35 @@ def __stringify_fast_sequence_separated(
 ) -> list[str]:
     """Stringify the internal elements of a sequence.
 
-    This function is used internally by __stringify_fast to stringify the
+    This function is used internally by __stringify_fast() to stringify the
     internal elements of a sequence. It is used when the elements are put on
     separate lines. It will always succeed, but if the elements are too long
-    to fit on a single line, note that the max_line_length will be exceeded.
+    to fit on a single line, the maximum line length WILL be exceeded.
 
     An example of what this function constructs is:
-    'item 1',
-    'item 2',
-    'item 3',
-    'item 4',
-    'item 5',
+    "'item 1',\\n'item 2',\\n'item 3',\\n'item 4',\\n'item 5',"
 
     Args:
         obj: The sequence to stringify.
         indent_level: The current indentation level.
         max_line_len: The maximum line length before breaking.
-        ignore: A list of types to ignore.
+        ignore: A type or tuple of types to ignore. If the object is of one of
+            these types, it will be stringified as "type(obj)".
         line_len_left: The number of characters that can still be added to the
             current line.
-        cached_strs: A list of cached strings that are no longer than the
-            given line_len_left, together with their lengths. Will be used to
-            avoid recomputing the same strings over and over again.
+        cached_strs: A list of tuples containing cached strings. Each tuple
+            represents one item in the sequence, and contains two things:
+            1. The stringified item as a list of strings.
+            2. The length of all strings in that list combined.
+            Together, the stringified items must be no longer than the given
+            line_len_left.
 
     Returns:
-        The object as a list of strings and integers. Strings are the
-        stringified objects, integers are indices to the cached strings. To
-        reconstruct the final string, the strings must be joined in the order
-        they appear in the list.
+        The object as a list of strings. To reconstruct the final string, the
+        strings must be joined in the order they appear in this list.
 
     Examples:
-    >>> strs = __stringify_fast_newlines(
+    >>> strs = __stringify_fast_sequence_separated(
     ...     ["item 1", "item 2", "item 3", "item 4", "item 5"],
     ...     indent_level=1,
     ...     max_line_len=80,
@@ -271,7 +271,7 @@ def __stringify_fast_sequence_separated(
     ...     cached_strs=[],
     ... )
     >>> "".join(strs)
-    "    'item 1',\n    'item 2',\n    'item 3',\n    'item 4',\n    'item 5',"
+    "'item 1',\\n    'item 2',\\n    'item 3',\\n    'item 4',\\n    'item 5',"
     """
     strs = []
     for i, item in enumerate(obj):
@@ -289,25 +289,25 @@ def __stringify_fast_sequence_separated(
 
         strs.extend(curr_strs)
         strs.append(",")
-        if i < len(obj) - 1:
+        if i != len(obj) - 1:  # no line break after last item
             strs.append("\n")
-            strs.append(" " * 4 * indent_level)
+            strs.append(" " * (4 * indent_level))
 
     return strs
 
 
-def __stringify_fast_dict_consecutive(
-    obj: dict[Any, Any],
+def __stringify_fast_mapping_consecutive(
+    obj: Mapping[Any, Any],
     indent_level: int,
     max_line_len: int,
     ignore: tuple[type, ...] | type | None,
     line_len_left: int,
     cached_strs: list[tuple[list[str], int]],
 ) -> tuple[bool, list[str | int], int]:
-    """Stringify the internal elements of a dictionary.
+    """Stringify the internal elements of a mapping.
 
-    This function is used internally by __stringify_fast to stringify the
-    internal elements of a dictionary. It is used when the elements are
+    This function is used internally by __stringify_fast() to stringify the
+    internal elements of a mapping. It is used when the elements are
     concatenated on the same line. It will try to concatenate all elements
     on the same line, but if that's not possible, it will return early.
 
@@ -315,35 +315,38 @@ def __stringify_fast_dict_consecutive(
     'key 1': 'value 1', 'key 2': 'value 2', 'key 3': 'value 3'
 
     Args:
-        obj: The dictionary to stringify.
+        obj: The mapping to stringify.
         indent_level: The current indentation level.
         max_line_len: The maximum line length before breaking.
-        ignore: A list of types to ignore.
+        ignore: A type or tuple of types to ignore. If the object is of one of
+            these types, it will be stringified as "type(obj)".
         line_len_left: The number of characters that can still be added to the
             current line.
-        cached_strs: A list of cached strings that are no longer than the
-            given line_len_left, together with their lengths. Will be used to
-            avoid recomputing the same strings over and over again. Will be
-            updated in-place.
+        cached_strs: A list of tuples containing cached strings. Each tuple
+            represents one key/value in the sequence, and contains two things:
+            1. The stringified key/value as a list of strings.
+            2. The length of all strings in that list combined.
+            Together, the stringified keys/values must be no longer than the
+            given line_len_left. This argument will be updated in-place.
 
     Returns:
         Tuple containing:
         - A boolean indicating whether the function managed to stringify all
             elements on the same line. If False, the function will return
-            early. In this case, it doesn't matter what the third and fourth
-            return values are, and thus they will be set to [] and the input
-            line_len_left respectively.
+            early. In this case, the second and third return values will be set
+            to [] and the input line_len_left respectively.
         - The object as a list of strings and integers. Strings are the
-            stringified objects, integers are indices to the cached strings.
-            To reconstruct the final string, the strings must be joined in the
-            order they appear in the list.
+            stringified objects, integers are indices into the list of cached
+            strings (that may have been updated in-place). To reconstruct the
+            final string, the strings must be joined in the order they appear
+            in this list.
         - The number of characters that can still be added to the current line
             after the function has finished.
 
     Examples:
     >>> cached_strs = []
     >>> plan_succeeded, strs, line_len_left = (
-    ...     __stringify_fast_dict_consecutively(
+    ...     __stringify_fast_mapping_consecutive(
     ...         {"key 1": "value 1", "key 2": "value 2", "key 3": "value 3"},
     ...         indent_level=0,
     ...         max_line_len=80,
@@ -353,8 +356,11 @@ def __stringify_fast_dict_consecutive(
     ...     )
     ... )
     >>> "".join(
-    ...     cached_strs[s_or_i][0] if isinstance(s_or_i, int) else s_or_i
+    ...     s
     ...     for s_or_i in strs
+    ...     for s in (
+    ...         cached_strs[s_or_i][0] if isinstance(s_or_i, int) else [s_or_i]
+    ...     )
     ... )
     "'key 1': 'value 1', 'key 2': 'value 2', 'key 3': 'value 3'"
     """
@@ -363,6 +369,8 @@ def __stringify_fast_dict_consecutive(
     strs = []
     for i, (key, value) in enumerate(obj.items()):
         key_i = i * 2
+        value_i = i * 2 + 1
+
         if key_i < len(cached_strs):
             curr_strs_len = cached_strs[key_i][1]
         else:
@@ -391,7 +399,6 @@ def __stringify_fast_dict_consecutive(
         if line_len_left < 0:
             return False, [], input_line_len_left
 
-        value_i = i * 2 + 1
         if value_i < len(cached_strs):
             curr_strs_len = cached_strs[value_i][1]
         else:
@@ -402,7 +409,7 @@ def __stringify_fast_dict_consecutive(
                 indent_level=indent_level,
                 max_line_len=max_line_len,
                 ignore=ignore,
-                line_len_left=line_len_left - curr_strs_len,
+                line_len_left=line_len_left,
                 breaking_allowed=False,
             ):
                 if s is None:
@@ -415,7 +422,7 @@ def __stringify_fast_dict_consecutive(
 
         strs.append(value_i)
         line_len_left -= curr_strs_len
-        if i < len(obj) - 1:
+        if i != len(obj) - 1:  # no comma after last item
             strs.append(", ")
             line_len_left -= 2
             if line_len_left < 0:
@@ -424,45 +431,45 @@ def __stringify_fast_dict_consecutive(
     return True, strs, line_len_left
 
 
-def __stringify_fast_dict_separated(
-    obj: dict[Any, Any],
+def __stringify_fast_mapping_separated(
+    obj: Mapping[Any, Any],
     indent_level: int,
     max_line_len: int,
     ignore: tuple[type, ...] | type | None,
     line_len_left: int,
     cached_strs: list[tuple[list[str], int]],
 ) -> list[str]:
-    """Stringify the internal elements of a dictionary.
+    """Stringify the internal elements of a mapping.
 
-    This function is used internally by __stringify_fast to stringify the
-    internal elements of a dictionary. It is used when the elements are put on
+    This function is used internally by __stringify_fast() to stringify the
+    internal elements of a mapping. It is used when the elements are put on
     separate lines. It will always succeed, but if the elements are too long
-    to fit on a single line, note that the max_line_length will be exceeded.
+    to fit on a single line, the maximum line length WILL be exceeded.
 
     An example of what this function constructs is:
-    'key 1': 'value 1',
-    'key 2': 'value 2',
-    'key 3': 'value 3',
+    "'key 1': 'value 1',\\n'key 2': 'value 2',\\n'key 3': 'value 3',"
 
     Args:
-        obj: The dictionary to stringify.
+        obj: The mapping to stringify.
         indent_level: The current indentation level.
         max_line_len: The maximum line length before breaking.
-        ignore: A list of types to ignore.
+        ignore: A type or tuple of types to ignore. If the object is of one of
+            these types, it will be stringified as "type(obj)".
         line_len_left: The number of characters that can still be added to the
             current line.
-        cached_strs: A list of cached strings that are no longer than the
-            given line_len_left, together with their lengths. Will be used to
-            avoid recomputing the same strings over and over again.
+        cached_strs: A list of tuples containing cached strings. Each tuple
+            represents one key/value in the sequence, and contains two things:
+            1. The stringified key/value as a list of strings.
+            2. The length of all strings in that list combined.
+            Together, the stringified keys/values must be no longer than the
+            given line_len_left.
 
     Returns:
-        The object as a list of strings and integers. Strings are the
-        stringified objects, integers are indices to the cached strings. To
-        reconstruct the final string, the strings must be joined in the order
-        they appear in the list.
+        The object as a list of strings. To reconstruct the final string, the
+        strings must be joined in the order they appear in this list.
 
     Examples:
-    >>> strs = __stringify_fast_dict_separated(
+    >>> strs = __stringify_fast_mapping_separated(
     ...     {"key 1": "value 1", "key 2": "value 2", "key 3": "value 3"},
     ...     indent_level=1,
     ...     max_line_len=80,
@@ -471,11 +478,13 @@ def __stringify_fast_dict_separated(
     ...     cached_strs=[],
     ... )
     >>> "".join(strs)
-    "    'key 1': 'value 1',\n    'key 2': 'value 2',\n    'key 3': 'value 3',"
+    "'key 1': 'value 1',\\n    'key 2': 'value 2',\\n    'key 3': 'value 3',"
     """
     strs = []
     for i, (key, value) in enumerate(obj.items()):
         key_i = i * 2
+        value_i = i * 2 + 1
+
         if key_i < len(cached_strs):
             curr_strs = cached_strs[key_i][0]
         else:
@@ -491,28 +500,29 @@ def __stringify_fast_dict_separated(
         strs.extend(curr_strs)
         strs.append(": ")
 
-        value_i = i * 2 + 1
         if value_i < len(cached_strs):
             curr_strs = cached_strs[value_i][0]
         else:
+            # Account for multi-line keys.
             for s in reversed(strs):
                 line_len_left -= (
                     len(s) if "\n" not in s else len(s.rpartition("\n")[2])
                 )
+
             curr_strs = __stringify_fast(
                 value,
                 indent_level=indent_level,
                 max_line_len=max_line_len,
                 ignore=ignore,
-                line_len_left=line_len_left,
+                line_len_left=line_len_left - 1,  # account for ","
                 breaking_allowed=True,
             )
 
         strs.extend(curr_strs)
         strs.append(",")
-        if i < len(obj) - 1:
+        if i != len(obj) - 1:  # no line break after last item
             strs.append("\n")
-            strs.append(" " * 4 * indent_level)
+            strs.append(" " * (4 * indent_level))
 
     return strs
 
@@ -554,12 +564,12 @@ def __stringify_fast(
     Args:
         obj: The object to stringify.
         indent_level: The current indentation level. The indentation itself
-            is displayed as 4 spaces per level. In most cases, you can leave
-            this at 0. It is used internally for recursive calls.
+            is displayed as 4 spaces per level. Used internally for recursive
+            calls.
         max_line_len: The maximum line length before breaking. If set to 0,
             the terminal width will be used.
-        ignore: A list of types to ignore. If the object is of one of these
-            types, it will be stringified as "type(obj)".
+        ignore: A type or tuple of types to ignore. If the object is of one of
+            these types, it will be stringified as "type(obj)".
         line_len_left: The number of characters that can still be added to the
             current line. Used internally for recursive calls.
         breaking_allowed: Whether breaking is allowed. If not allowed and a
@@ -578,13 +588,20 @@ def __stringify_fast(
         line_len_left = max_line_len - 4 * indent_level
 
     if ignore is not None and isinstance(obj, ignore):
-        obj_repr = type(obj).__name__
-        return obj_repr
+        yield type(obj).__name__
+        return
 
-    indent = " " * 4 * indent_level
-    indent_next = " " * 4 * (indent_level + 1)
+    if isinstance(
+        obj, (str, bytes, bytearray, int, float, complex, bool, type(None))
+    ):
+        yield repr(obj)
+        return
+
+    indent = " " * (4 * indent_level)
+    indent_next = " " * (4 * (indent_level + 1))
 
     if isinstance(obj, Sequence):
+        # Put the opening bracket on the current line.
         if type(obj) is list:
             start_char = "["
             end_char = "]"
@@ -595,19 +612,16 @@ def __stringify_fast(
             start_char = type(obj).__name__ + "("
             end_char = ")"
 
-        plan_succeeded = True
-        cached_strs = []
-
         yield start_char
         line_len_left -= len(start_char)
-        if line_len_left < 0:
-            # Here, we don't have enough space to even put the opening bracket
-            # on the current line. The best thing we can do is to (if allowed)
-            # just accept the situation and make the line longer anyway. Thus,
-            # we will continue to plan B.
-            plan_succeeded = False
 
-        if plan_succeeded is True:
+        # Initialize an object to cache stringified items in the sequence.
+        cached_strs = []
+
+        # PLAN A
+        plan_succeeded = True
+
+        if line_len_left >= 0:
             # First, we try plan A: try to stringify all elements by putting
             # them on the same line. Example:
             # ...bla... ["item 1", "item 2", "item 3", "item 4", "item 5"]
@@ -617,7 +631,7 @@ def __stringify_fast(
                     indent_level=indent_level + 1,
                     max_line_len=max_line_len,
                     ignore=ignore,
-                    line_len_left=line_len_left - 1,  # account for "]"
+                    line_len_left=line_len_left - len(end_char),
                     cached_strs=cached_strs,
                 )
             )
@@ -631,6 +645,10 @@ def __stringify_fast(
                         yield s_or_i
                 yield end_char
                 return
+        else:
+            # Here, we don't have enough space to even put the opening bracket
+            # on the current line. Thus, we will continue to plan B.
+            plan_succeeded = False
 
         # plan_succeeded is ALWAYS False here.
         if breaking_allowed is False:
@@ -639,20 +657,15 @@ def __stringify_fast(
             yield None
             return
 
-        yield "\n"
-        yield indent_next
-        new_line_len_left = max_line_len - 4 * (indent_level + 1)
-        if new_line_len_left <= line_len_left:
-            # If the new line doesn't even have more space than the current
-            # line, we know that plan B won't work because plan A also didn't
-            # work. Thus, we will continue to plan C.
-            plan_succeeded = False
-        line_len_left = new_line_len_left
+        # Add a line break and indent for the next line.
+        yield f"\n{indent_next}"
+        prev_line_len_left = line_len_left
+        line_len_left = max_line_len - len(indent_next)
 
-        # TODO Look into this: Condition will always evaluate to False since
-        # TODO the types "Literal[False]" and "Literal[True]" have no overlap.
-        # TODO Pylance (reportUnnecessaryComparison)
-        if plan_succeeded is True:
+        # PLAN B
+        plan_succeeded = True
+
+        if line_len_left > prev_line_len_left:
             # Second, we try plan B: try to stringify all elements by putting
             # them on a single new line. Example:
             # ...bla... [
@@ -680,8 +693,15 @@ def __stringify_fast(
                         yield s_or_i
                 yield f"\n{indent}{end_char}"
                 return
+        else:
+            # If the new line doesn't even have more space than the current
+            # line, we know that plan B won't work because plan A also didn't
+            # work. Thus, we will continue to plan C.
+            plan_succeeded = False
 
         # plan_succeeded is ALWAYS False here.
+
+        # PLAN C
         # Third, we try plan C: try to stringify all elements by putting them
         # on separate lines. Example:
         # ...bla... [
@@ -700,8 +720,10 @@ def __stringify_fast(
             cached_strs=cached_strs,
         )
         yield f"\n{indent}{end_char}"
+        return
 
-    if isinstance(obj, dict):
+    if isinstance(obj, Mapping):
+        # Put the opening bracket on the current line.
         if type(obj) is dict:
             start_char = "{"
             end_char = "}"
@@ -709,29 +731,26 @@ def __stringify_fast(
             start_char = type(obj).__name__ + "{"
             end_char = "}"
 
-        plan_succeeded = True
-        cached_strs = []
-
         yield start_char
         line_len_left -= len(start_char)
-        if line_len_left < 0:
-            # Here, we don't have enough space to even put the opening bracket
-            # on the current line. The best thing we can do is to (if allowed)
-            # just accept the situation and make the line longer anyway. Thus,
-            # we will continue to plan B.
-            plan_succeeded = False
 
-        if plan_succeeded is True:
+        # Initialize an object to cache stringified items in the mapping.
+        cached_strs = []
+
+        # PLAN A
+        plan_succeeded = True
+
+        if line_len_left >= 0:
             # First, we try plan A: try to stringify all elements by putting
             # them on the same line. Example:
             # ...bla... {"key 1": "value 1", "key 2": "value 2"}
             plan_succeeded, strs, line_len_left = (
-                __stringify_fast_dict_consecutive(
+                __stringify_fast_mapping_consecutive(
                     obj,
                     indent_level=indent_level + 1,
                     max_line_len=max_line_len,
                     ignore=ignore,
-                    line_len_left=line_len_left - 1,  # account for "}"
+                    line_len_left=line_len_left - len(end_char),
                     cached_strs=cached_strs,
                 )
             )
@@ -745,6 +764,10 @@ def __stringify_fast(
                         yield s_or_i
                 yield end_char
                 return
+        else:
+            # Here, we don't have enough space to even put the opening bracket
+            # on the current line. Thus, we will continue to plan B.
+            plan_succeeded = False
 
         # plan_succeeded is ALWAYS False here.
         if breaking_allowed is False:
@@ -753,17 +776,15 @@ def __stringify_fast(
             yield None
             return
 
-        yield "\n"
-        yield indent_next
-        new_line_len_left = max_line_len - 4 * (indent_level + 1)
-        if new_line_len_left <= line_len_left:
-            # If the new line doesn't even have more space than the current
-            # line, we know that plan B won't work because plan A also didn't
-            # work. Thus, we will continue to plan C.
-            plan_succeeded = False
-        line_len_left = new_line_len_left
+        # Add a line break and indent for the next line.
+        yield f"\n{indent_next}"
+        prev_line_len_left = line_len_left
+        line_len_left = max_line_len - len(indent_next)
 
-        if plan_succeeded is True:
+        # PLAN B
+        plan_succeeded = True
+
+        if line_len_left > prev_line_len_left:
             # Second, we try plan B: try to stringify all elements by putting
             # them on a single new line. Example:
             # ...bla... {
@@ -772,7 +793,7 @@ def __stringify_fast(
             # Since this is just plan A but with a longer line length, we can
             # reuse the cached strings from plan A.
             plan_succeeded, strs, line_len_left = (
-                __stringify_fast_dict_consecutive(
+                __stringify_fast_mapping_consecutive(
                     obj,
                     indent_level=indent_level + 1,
                     max_line_len=max_line_len,
@@ -791,15 +812,22 @@ def __stringify_fast(
                         yield s_or_i
                 yield f"\n{indent}{end_char}"
                 return
+        else:
+            # If the new line doesn't even have more space than the current
+            # line, we know that plan B won't work because plan A also didn't
+            # work. Thus, we will continue to plan C.
+            plan_succeeded = False
 
         # plan_succeeded is ALWAYS False here.
+
+        # PLAN C
         # Third, we try plan C: try to stringify all elements by putting them
         # on separate lines. Example:
         # ...bla... {
         #     "key 1": "value 1",
         #     "key 2": "value 2",
         # }
-        yield from __stringify_fast_dict_separated(
+        yield from __stringify_fast_mapping_separated(
             obj,
             indent_level=indent_level + 1,
             max_line_len=max_line_len,
@@ -808,6 +836,7 @@ def __stringify_fast(
             cached_strs=cached_strs,
         )
         yield f"\n{indent}{end_char}"
+        return
 
     yield repr(obj)
 
@@ -818,10 +847,19 @@ def stringify_fast(
     max_line_len: int = 0,
     ignore: tuple[type, ...] | type | None = None,
 ) -> str:
-    print("calling __stringify_fast() recursively...")
-    res = list(__stringify_fast(obj, indent_level, max_line_len, ignore))
-    print(f"recursion done, list contains {len(res)} elements")
-    print("joining results...")
-    res = "".join(res)
-    print("joining done")
-    return res
+    """Stringify an object with indentation and line breaks.
+
+    Args:
+        obj: The object to stringify.
+        indent_level: The current indentation level. The indentation itself
+            is displayed as 4 spaces per level. In most cases, you can leave
+            this at 0. It is used internally for recursive calls.
+        max_line_len: The maximum line length before breaking. If set to 0,
+            the terminal width will be used.
+        ignore: A type or tuple of types to ignore. If the object is of one of
+            these types, it will be stringified as "type(obj)".
+
+    Returns:
+        The stringified object.
+    """
+    return "".join(__stringify_fast(obj, indent_level, max_line_len, ignore))

@@ -43,7 +43,7 @@ class OnlySaveDirectHyperparameters(pl.LightningModule):
     Examples:
     >>> class MyParentModel(OnlySaveDirectHyperparameters):
     ...     def __init__(self, arg1: str, arg2: int, *args, **kwargs):
-    ...         super().__init__(*args, **kwargs)
+    ...         super().__init__()
     ...         self.save_hyperparameters("arg2")
     ...
     >>> class MyModel(MyParentModel):
@@ -59,7 +59,8 @@ class OnlySaveDirectHyperparameters(pl.LightningModule):
     ...     some_other_kwarg="ignored",
     ... )
     >>> my_model.hparams
-    {'arg2': '42', 'arg3': 3.14}
+    "arg2": 42
+    "arg3": 3.14
     """
 
     @override

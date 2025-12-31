@@ -48,13 +48,15 @@ class NDArrayGeneric(np.ndarray, Generic[T]):
 # These *_multidim() functions use the following naming conventions:
 # - L_bsds has shape [B, D] (batch x dimension)
 # - L_bsds[:, d]              : L_bsd
+# - L_bsds[:, d].sum()        : L_d
 # - L_bsds[b, :]              : L_bds
 # - L_bsds[b, d]              : L_bd
 # - L_bsds.prod(axis=1)       : L_bs
+# - L_bsds.prod(axis=1)[b]    : L_b
 # - L_bsds.prod(axis=1).sum() : L
+# - L_bsds.prod(axis=1).max() : max_L_bs or max(L_bs)
 # - L_bsds.max(axis=0)        : max_L_bsds or max(L_bsds)
 # - L_bsds.max(axis=0)[d]     : max_L_bsd or max(L_bsd)
-# - L_bsds.prod(axis=1).max() : max_L_bs or max(L_bs)
 # - L_bsds.max(axis=0).prod() : theory_max_L_bs or prod(max(L_bsds))
 #
 # Note on max_L_bs vs theory_max_L_bs:
@@ -82,6 +84,16 @@ def mask_padding(
         A mask that indicates which values are valid in each sample.
         mask[b, i] is True if i < L_bs[b] and False otherwise.
             Shape: [B, max(L_bs)]
+
+    Examples:
+    >>> L_bs = np.array([3, 1, 0, 4])
+    >>> max_L_bs = 4
+    >>> mask = mask_padding(L_bs, max_L_bs)
+    >>> mask
+    array([[ True,  True,  True, False],
+           [ True, False, False, False],
+           [False, False, False, False],
+           [ True,  True,  True,  True]])
     """
     dtype = L_bs.dtype
 
@@ -108,6 +120,23 @@ def mask_padding_multidim(
         mask[b, i_0, ..., i_{D+1}] is True if i_d < L_bd for all d in [0, D)
         and False otherwise.
             Shape: [B, max(L_bs0), ..., max(L_bs{D-1})]
+
+    Examples:
+    >>> L_bsds = np.array([
+    ...     [2, 3],
+    ...     [4, 1],
+    ... ])
+    >>> max_L_bsds = np.array([4, 3])
+    >>> mask = mask_padding_multidim(L_bsds, max_L_bsds)
+    >>> mask
+    array([[[ True,  True,  True],
+            [ True,  True,  True],
+            [False, False, False],
+            [False, False, False]],
+           [[ True, False, False],
+            [ True, False, False],
+            [ True, False, False],
+            [ True, False, False]]])
     """
     B, D = L_bsds.shape
     dtype = L_bsds.dtype
@@ -146,9 +175,20 @@ def pack_padded(
     Returns:
         The packed values.
             Shape: [L, *]
+
+    Examples:
+    >>> values = np.array([
+    ...     [1, 2, 3, 0],
+    ...     [5, 0, 0, 0],
+    ...     [0, 0, 0, 0],
+    ...     [13, 14, 15, 16],
+    ... ])
+    >>> L_bs = np.array([3, 1, 0, 4])
+    >>> packed = pack_padded(values, L_bs)
+    >>> packed
+    array([ 1,  2,  3,  5, 13, 14, 15, 16])
     """
     max_L_bs = values.shape[1]
-
     mask = mask_padding(L_bs, max_L_bs)  # [B, max(L_bs)]
     return values[mask]
 
@@ -167,10 +207,33 @@ def pack_padded_multidim(
     Returns:
         The packed values.
             Shape: [L, *]
+
+    Examples:
+    >>> values = np.array([
+    ...     [
+    ...         [1, 2, 3],
+    ...         [4, 5, 6],
+    ...         [0, 0, 0],
+    ...         [0, 0, 0],
+    ...     ],
+    ...     [
+    ...         [13, 0, 0],
+    ...         [16, 0, 0],
+    ...         [19, 0, 0],
+    ...         [22, 0, 0],
+    ...     ],
+    ... ])
+    >>> L_bsds = np.array([
+    ...     [2, 3],
+    ...     [4, 1],
+    ... ])
+    >>> packed = pack_padded_multidim(values, L_bsds)
+    >>> packed
+    array([ 1,  2,  3,  4,  5,  6, 13, 16, 19, 22])
     """
     D = L_bsds.shape[1]
 
-    max_L_bsds = np.array(values.shape[1 : 1 + D])  # [D]
+    max_L_bsds = np.array(values.shape[1 : D + 1])  # [D]
     mask = mask_padding_multidim(
         L_bsds, max_L_bsds
     )  # [B, max(L_bs0), ..., max(L_bs{D-1})]
@@ -193,6 +256,18 @@ def pack_sequence(
         The packed values. If the input is empty, returns an empty array with
         dtype float64.
             Shape: [L, *]
+
+    Examples:
+    >>> values = [
+    ...     np.array([1, 2, 3]),
+    ...     np.array([5]),
+    ...     np.array([], dtype=np.int64),
+    ...     np.array([13, 14, 15, 16]),
+    ... ]
+    >>> max_L_bs = 4
+    >>> packed = pack_sequence(values, max_L_bs)
+    >>> packed
+    array([ 1,  2,  3,  5, 13, 14, 15, 16])
     """
     B = len(values)
     if B == 0:
@@ -219,6 +294,24 @@ def pack_sequence_multidim(
         The packed values. If the input is empty, returns an empty array with
         dtype float64.
             Shape: [L, *]
+
+    Examples:
+    >>> values = [
+    ...     np.array([
+    ...         [1, 2, 3],
+    ...         [4, 5, 6],
+    ...     ]),
+    ...     np.array([
+    ...         [13],
+    ...         [16],
+    ...         [19],
+    ...         [22],
+    ...     ]),
+    ... ]
+    >>> max_L_bsds = np.array([4, 3])
+    >>> packed = pack_sequence_multidim(values, max_L_bsds)
+    >>> packed
+    array([ 1,  2,  3,  4,  5,  6, 13, 16, 19, 22])
     """
     B = len(values)
     D = len(max_L_bsds)
@@ -253,6 +346,17 @@ def pad_packed(
     Returns:
         The padded values. Padded with padding_value.
             Shape: [B, max(L_bs), *]
+
+    Examples:
+    >>> values = np.array([1, 2, 3, 5, 13, 14, 15, 16])
+    >>> L_bs = np.array([3, 1, 0, 4])
+    >>> max_L_bs = 4
+    >>> padded = pad_packed(values, L_bs, max_L_bs, padding_value=0)
+    >>> padded
+    array([[ 1,  2,  3,  0],
+           [ 5,  0,  0,  0],
+           [ 0,  0,  0,  0],
+           [13, 14, 15, 16]])
     """
     B = len(L_bs)
     star = values.shape[1:]
@@ -298,6 +402,26 @@ def pad_packed_multidim(
     Returns:
         The padded values. Padded with padding_value.
             Shape: [B, max(L_bs0), ..., max(L_bs{D-1}), *]
+
+    Examples:
+    >>> values = np.array([1, 2, 3, 4, 5, 6, 13, 16, 19, 22])
+    >>> L_bsds = np.array([
+    ...     [2, 3],
+    ...     [4, 1],
+    ... ])
+    >>> max_L_bsds = np.array([4, 3])
+    >>> padded = pad_packed_multidim(
+    ...     values, L_bsds, max_L_bsds, padding_value=0
+    ... )
+    >>> padded
+    array([[[ 1,  2,  3],
+            [ 4,  5,  6],
+            [ 0,  0,  0],
+            [ 0,  0,  0]],
+           [[13,  0,  0],
+            [16,  0,  0],
+            [19,  0,  0],
+            [22,  0,  0]]])
     """
     B = len(L_bsds)
     star = values.shape[1:]
@@ -354,6 +478,22 @@ def pad_sequence(
     Returns:
         The padded values. Padded with padding_value.
             Shape: [B, max(L_bs), *]
+
+    Examples:
+    >>> values = [
+    ...     np.array([1, 2, 3]),
+    ...     np.array([5]),
+    ...     np.array([], dtype=np.int64),
+    ...     np.array([13, 14, 15, 16]),
+    ... ]
+    >>> L_bs = np.array([3, 1, 0, 4])
+    >>> max_L_bs = 4
+    >>> padded = pad_sequence(values, L_bs, max_L_bs, padding_value=0)
+    >>> padded
+    array([[ 1,  2,  3,  0],
+           [ 5,  0,  0,  0],
+           [ 0,  0,  0,  0],
+           [13, 14, 15, 16]])
     """
     return pad_packed(
         pack_sequence(values, max_L_bs),
@@ -398,6 +538,37 @@ def pad_sequence_multidim(
     Returns:
         The padded values. Padded with padding_value.
             Shape: [B, max(L_bs0), ..., max(L_bs{D-1}), *]
+
+    Examples:
+    >>> values = [
+    ...     np.array([
+    ...         [1, 2, 3],
+    ...         [4, 5, 6],
+    ...     ]),
+    ...     np.array([
+    ...         [13],
+    ...         [16],
+    ...         [19],
+    ...         [22],
+    ...     ]),
+    ... ]
+    >>> L_bsds = np.array([
+    ...     [2, 3],
+    ...     [4, 1],
+    ... ])
+    >>> max_L_bsds = np.array([4, 3])
+    >>> padded = pad_sequence_multidim(
+    ...     values, L_bsds, max_L_bsds, padding_value=0
+    ... )
+    >>> padded
+    array([[[ 1,  2,  3],
+            [ 4,  5,  6],
+            [ 0,  0,  0],
+            [ 0,  0,  0]],
+           [[13,  0,  0],
+            [16,  0,  0],
+            [19,  0,  0],
+            [22,  0,  0]]])
     """
     return pad_packed_multidim(
         pack_sequence_multidim(values, max_L_bsds),
@@ -422,6 +593,16 @@ def sequentialize_packed(
         The values as a sequence.
             Length: B
             Shape of inner arrays: [L_b, *]
+
+    Examples:
+    >>> values = np.array([1, 2, 3, 5, 13, 14, 15, 16])
+    >>> L_bs = np.array([3, 1, 0, 4])
+    >>> sequentialized = sequentialize_packed(values, L_bs)
+    >>> sequentialized
+    [array([1, 2, 3]),
+     array([5]),
+     array([], dtype=int64),
+     array([13, 14, 15, 16])]
     """
     B = len(L_bs)
     if B == 0:
@@ -447,6 +628,21 @@ def sequentialize_packed_multidim(
         The values as a sequence.
             Length: B
             Shape of inner arrays: [L_b0, ..., L_b{D-1}, *]
+
+    Examples:
+    >>> values = np.array([1, 2, 3, 4, 5, 6, 13, 16, 19, 22])
+    >>> L_bsds = np.array([
+    ...     [2, 3],
+    ...     [4, 1],
+    ... ])
+    >>> sequentialized = sequentialize_packed_multidim(values, L_bsds)
+    >>> sequentialized
+    [array([[1, 2, 3],
+            [4, 5, 6]]),
+     array([[13],
+            [16],
+            [19],
+            [22]])]
     """
     B = len(L_bsds)
     if B == 0:
@@ -477,6 +673,21 @@ def sequentialize_padded(
         The values as a sequence.
             Length: B
             Shape of inner arrays: [L_b, *]
+
+    Examples:
+    >>> values = np.array([
+    ...     [1, 2, 3, 0],
+    ...     [5, 0, 0, 0],
+    ...     [0, 0, 0, 0],
+    ...     [13, 14, 15, 16],
+    ... ])
+    >>> L_bs = np.array([3, 1, 0, 4])
+    >>> sequentialized = sequentialize_padded(values, L_bs)
+    >>> sequentialized
+    [array([1, 2, 3]),
+     array([5]),
+     array([], dtype=int64),
+     array([13, 14, 15, 16])]
     """
     return sequentialize_packed(pack_padded(values, L_bs), L_bs)  # B x [L_b, *]
 
@@ -497,6 +708,34 @@ def sequentialize_padded_multidim(
         The values as a sequence.
             Length: B
             Shape of inner arrays: [L_b0, ..., L_b{D-1}, *]
+
+    Examples:
+    >>> values = np.array([
+    ...     [
+    ...         [1, 2, 3],
+    ...         [4, 5, 6],
+    ...         [0, 0, 0],
+    ...         [0, 0, 0],
+    ...     ],
+    ...     [
+    ...         [13, 0, 0],
+    ...         [16, 0, 0],
+    ...         [19, 0, 0],
+    ...         [22, 0, 0],
+    ...     ],
+    ... ])
+    >>> L_bsds = np.array([
+    ...     [2, 3],
+    ...     [4, 1],
+    ... ])
+    >>> sequentialized = sequentialize_padded_multidim(values, L_bsds)
+    >>> sequentialized
+    [array([[1, 2, 3],
+            [4, 5, 6]]),
+     array([[13],
+            [16],
+            [19],
+            [22]])]
     """
     return sequentialize_packed_multidim(
         pack_padded_multidim(values, L_bsds), L_bsds
@@ -534,6 +773,31 @@ def apply_mask(
             Shape: [B, max(L_bs_kept), *]
         - The number of kept values in each sample.
             Shape: [B]
+
+    Examples:
+    >>> values = np.array([
+    ...     [1, 2, 3, 0],
+    ...     [5, 0, 0, 0],
+    ...     [0, 0, 0, 0],
+    ...     [13, 14, 15, 16],
+    ... ])
+    >>> mask = np.array([
+    ...     [ True, False,  True, False],
+    ...     [False, False, False, False],
+    ...     [False, False, False, False],
+    ...     [ True,  True, False,  True],
+    ... ])
+    >>> L_bs = np.array([3, 1, 0, 4])
+    >>> values_masked, L_bs_kept = apply_mask(
+    ...     values, mask, L_bs, padding_value=0
+    ... )
+    >>> values_masked
+    array([[ 1,  3,  0],
+           [ 0,  0,  0],
+           [ 0,  0,  0],
+           [13, 14, 16]])
+    >>> L_bs_kept
+    array([2, 0, 0, 3])
     """
     max_L_bs = values.shape[1]
 
@@ -587,9 +851,51 @@ def apply_mask_multidim(
             Shape: [B, max(L_bs_kept), *]
         - The number of kept values in each sample.
             Shape: [B]
+
+    Examples:
+    >>> values = np.array([
+    ...     [
+    ...         [1, 2, 3],
+    ...         [4, 5, 6],
+    ...         [0, 0, 0],
+    ...         [0, 0, 0],
+    ...     ],
+    ...     [
+    ...         [13, 0, 0],
+    ...         [16, 0, 0],
+    ...         [19, 0, 0],
+    ...         [22, 0, 0],
+    ...     ],
+    ... ])
+    >>> mask = np.array([
+    ...     [
+    ...         [ True, False,  True],
+    ...         [False,  True,  True],
+    ...         [False, False, False],
+    ...         [False, False, False],
+    ...     ],
+    ...     [
+    ...         [ True, False, False],
+    ...         [False, False, False],
+    ...         [ True, False, False],
+    ...         [ True, False, False],
+    ...     ],
+    ... ])
+    >>> L_bsds = np.array([
+    ...     [2, 3],
+    ...     [4, 1],
+    ... ])
+    >>> values_masked, L_bs_kept = apply_mask_multidim(
+    ...     values, mask, L_bsds, padding_value=0
+    ... )
+    >>> values_masked
+    array([[ 1,  3,  5,  6],
+           [13, 19, 22,  0]])
+    >>> L_bs_kept
+    array([4, 3])
     """
     D = L_bsds.shape[1]
-    max_L_bsds = np.array(values.shape[1 : 1 + D])  # [D]
+    max_L_bsds = np.array(values.shape[1 : D + 1])  # [D]
 
     # Create a mask that indicates which values should be kept in each sample.
     mask = mask & mask_padding_multidim(
@@ -634,6 +940,67 @@ def replace_padding(
     Returns:
         The padded values. Padded with padding_value.
             Shape: [B, max(L_bs), *]
+
+    Examples:
+    >>> values = np.array([
+    ...     [1, 2, 3, 0],
+    ...     [5, 0, 0, 0],
+    ...     [0, 0, 0, 0],
+    ...     [13, 14, 15, 16],
+    ... ])
+    >>> L_bs = np.array([3, 1, 0, 4])
+
+    >>> padding_value = -1
+    >>> replaced = replace_padding(values, L_bs, padding_value=padding_value)
+    >>> replaced
+    array([[ 1,  2,  3, -1],
+           [ 5, -1, -1, -1],
+           [-1, -1, -1, -1],
+           [13, 14, 15, 16]])
+
+    >>> padding_value = np.array([
+    ...     [-1, -2, -3, -4],
+    ...     [-5, -6, -7, -8],
+    ...     [-9, -10, -11, -12],
+    ...     [-13, -14, -15, -16],
+    ... ])
+    >>> replaced = replace_padding(values, L_bs, padding_value=padding_value)
+    >>> replaced
+    array([[  1,   2,   3,  -4],
+           [  5,  -6,  -7,  -8],
+           [ -9, -10, -11, -12],
+           [ 13,  14,  15,  16]])
+
+    >>> padding_value = np.array([
+    ...     [-1],
+    ...     [-2],
+    ...     [-3],
+    ...     [-4],
+    ... ])
+    >>> replaced = replace_padding(values, L_bs, padding_value=padding_value)
+    >>> replaced
+    array([[ 1,  2,  3, -1],
+           [ 5, -2, -2, -2],
+           [-3, -3, -3, -3],
+           [13, 14, 15, 16]])
+
+    >>> padding_value = np.array([
+    ...     [-1, -2, -3, -4],
+    ... ])
+    >>> replaced = replace_padding(values, L_bs, padding_value=padding_value)
+    >>> replaced
+    array([[ 1,  2,  3, -4],
+           [ 5, -2, -3, -4],
+           [-1, -2, -3, -4],
+           [13, 14, 15, 16]])
+
+    >>> padding_value = np.array([-1, -2, -3, -4, -5, -6, -7, -8])
+    >>> replaced = replace_padding(values, L_bs, padding_value=padding_value)
+    >>> replaced
+    array([[ 1,  2,  3, -1],
+           [ 5, -2, -3, -4],
+           [-5, -6, -7, -8],
+           [13, 14, 15, 16]])
     """
     B, max_L_bs, *star = values.shape
     L = L_bs.sum()
@@ -688,7 +1055,8 @@ def replace_padding(
             f" Got {list(padding_value.shape)}, but expected one of: [],"
             f" {star}, {[B, max_L_bs]}, {[B, max_L_bs, *star]}, {[B, 1]},"
             f" {[B, 1, *star]}, {[1, max_L_bs]},  {[1, max_L_bs, *star]},"
-            f" {[B * max_L_bs - L]}, or {[B * max_L_bs - L, *star]}"
+            f" {[B * max_L_bs - L.item()]}, or"
+            f" {[B * max_L_bs - L.item(), *star]}"
         )
 
     return values_padded
@@ -727,11 +1095,130 @@ def replace_padding_multidim(
     Returns:
         The padded values. Padded with padding_value.
             Shape: [B, max(L_bs0), ..., max(L_bs{D-1}), *]
+
+    Examples:
+    >>> values = np.array([
+    ...     [
+    ...         [1, 2, 3],
+    ...         [4, 5, 6],
+    ...         [0, 0, 0],
+    ...         [0, 0, 0],
+    ...     ],
+    ...     [
+    ...         [13, 0, 0],
+    ...         [16, 0, 0],
+    ...         [19, 0, 0],
+    ...         [22, 0, 0],
+    ...     ],
+    ... ])
+    >>> L_bsds = np.array([
+    ...     [2, 3],
+    ...     [4, 1],
+    ... ])
+
+    >>> padding_value = -1
+    >>> replaced = replace_padding_multidim(
+    ...     values, L_bsds, padding_value=padding_value
+    ... )
+    >>> replaced
+    array([[[ 1,  2,  3],
+            [ 4,  5,  6],
+            [-1, -1, -1],
+            [-1, -1, -1]],
+           [[13, -1, -1],
+            [16, -1, -1],
+            [19, -1, -1],
+            [22, -1, -1]]])
+
+    >>> padding_value = np.array([
+    ...     [
+    ...         [-1, -2, -3],
+    ...         [-4, -5, -6],
+    ...         [-7, -8, -9],
+    ...         [-10, -11, -12],
+    ...     ],
+    ...     [
+    ...         [-13, -14, -15],
+    ...         [-16, -17, -18],
+    ...         [-19, -20, -21],
+    ...         [-22, -23, -24],
+    ...     ],
+    ... ])
+    >>> replaced = replace_padding_multidim(
+    ...     values, L_bsds, padding_value=padding_value
+    ... )
+    >>> replaced
+    array([[[  1,   2,   3],
+            [  4,   5,   6],
+            [ -7,  -8,  -9],
+            [-10, -11, -12]],
+           [[ 13, -14, -15],
+            [ 16, -17, -18],
+            [ 19, -20, -21],
+            [ 22, -23, -24]]])
+
+    >>> padding_value = np.array([
+    ...     [
+    ...         [-1],
+    ...     ],
+    ...     [
+    ...         [-2],
+    ...     ],
+    ... ])
+    >>> replaced = replace_padding_multidim(
+    ...     values, L_bsds, padding_value=padding_value
+    ... )
+    >>> replaced
+    array([[[ 1,  2,  3],
+            [ 4,  5,  6],
+            [-1, -1, -1],
+            [-1, -1, -1]],
+           [[13, -2, -2],
+            [16, -2, -2],
+            [19, -2, -2],
+            [22, -2, -2]]])
+
+    >>> padding_value = np.array([
+    ...     [
+    ...         [-1, -2, -3],
+    ...         [-4, -5, -6],
+    ...         [-7, -8, -9],
+    ...         [-10, -11, -12],
+    ...     ],
+    ... ])
+    >>> replaced = replace_padding_multidim(
+    ...     values, L_bsds, padding_value=padding_value
+    ... )
+    >>> replaced
+    array([[[  1,   2,   3],
+            [  4,   5,   6],
+            [ -7,  -8,  -9],
+            [-10, -11, -12]],
+           [[ 13,  -2,  -3],
+            [ 16,  -5,  -6],
+            [ 19,  -8,  -9],
+            [ 22, -11, -12]]])
+
+    >>> padding_value = np.array([
+    ...     -1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14
+    ... ])
+    >>> replaced = replace_padding_multidim(
+    ...     values, L_bsds, padding_value=padding_value
+    ... )
+    >>> replaced
+    array([[[  1,   2,   3],
+            [  4,   5,   6],
+            [ -1,  -2,  -3],
+            [ -4,  -5,  -6]],
+           [[ 13,  -7,  -8],
+            [ 16,  -9, -10],
+            [ 19, -11, -12],
+            [ 22, -13, -14]]])
     """
     B, D = L_bsds.shape
     dtype = values.dtype
-    max_L_bsds = np.array(values.shape[1 : 1 + D])  # [D]
-    star = list(values.shape[1 + D :])
+    max_L_bsds = np.array(values.shape[1 : D + 1])  # [D]
+    star = list(values.shape[D + 1 :])
     L_bs = L_bsds.prod(axis=1)  # [B]
     L = L_bs.sum()
     theory_max_L_bs = max_L_bsds.prod()
@@ -785,10 +1272,12 @@ def replace_padding_multidim(
         raise ValueError(
             "Shape of padding_value did not match any of the expected shapes."
             f" Got {list(padding_value.shape)}, but expected one of: [],"
-            f" {star}, {[B, *max_L_bsds]}, {[B, *max_L_bsds, *star]},"
-            f" {[B, *[1] * D]}, {[B, *[1] * D, *star]}, {[1, *max_L_bsds]},"
-            f" {[1, *max_L_bsds, *star]}, {[B * theory_max_L_bs - L]}, or"
-            f" {[B * theory_max_L_bs - L, *star]}"
+            f" {star}, {[B, *max_L_bsds.tolist()]},"
+            f" {[B, *max_L_bsds.tolist(), *star]}, {[B, *[1] * D]},"
+            f" {[B, *[1] * D, *star]}, {[1, *max_L_bsds.tolist()]},"
+            f" {[1, *max_L_bsds.tolist(), *star]},"
+            f" {[B * theory_max_L_bs.item() - L.item()]}, or"
+            f" {[B * theory_max_L_bs.item() - L.item(), *star]}"
         )
 
     return values_padded
@@ -817,6 +1306,24 @@ def last_valid_value_padding(
     Returns:
         The padded values. Padded with the last valid value.
             Shape: [B, max(L_bs), *]
+
+    Examples:
+    >>> values = np.array([
+    ...     [1, 2, 3, 0],
+    ...     [5, 0, 0, 0],
+    ...     [0, 0, 0, 0],
+    ...     [13, 14, 15, 16],
+    ... ])
+    >>> L_bs = np.array([3, 1, 0, 4])
+    >>> padding_value_empty_rows = -1
+    >>> padded = last_valid_value_padding(
+    ...     values, L_bs, padding_value_empty_rows=padding_value_empty_rows
+    ... )
+    >>> padded
+    array([[ 1,  2,  3,  3],
+           [ 5,  5,  5,  5],
+           [-1, -1, -1, -1],
+           [13, 14, 15, 16]])
     """
     B, max_L_bs, *star = values.shape
     dtype = values.dtype
@@ -868,18 +1375,51 @@ def last_valid_value_padding_multidim(
     Returns:
         The padded values. Padded with the last valid value.
             Shape: [B, max(L_bs0), ..., max(L_bs{D-1}), *]
+
+    Examples:
+    >>> values = np.array([
+    ...     [
+    ...         [1, 2, 3],
+    ...         [4, 5, 6],
+    ...         [0, 0, 0],
+    ...         [0, 0, 0],
+    ...     ],
+    ...     [
+    ...         [13, 0, 0],
+    ...         [16, 0, 0],
+    ...         [19, 0, 0],
+    ...         [22, 0, 0],
+    ...     ],
+    ... ])
+    >>> L_bsds = np.array([
+    ...     [2, 3],
+    ...     [4, 1],
+    ... ])
+    >>> padding_value_empty_rows = -1
+    >>> padded = last_valid_value_padding_multidim(
+    ...     values, L_bsds, padding_value_empty_rows=padding_value_empty_rows
+    ... )
+    >>> padded
+    array([[[ 1,  2,  3],
+            [ 4,  5,  6],
+            [ 6,  6,  6],
+            [ 6,  6,  6]],
+           [[13, 22, 22],
+            [16, 22, 22],
+            [19, 22, 22],
+            [22, 22, 22]]])
     """
     B, D = L_bsds.shape
     dtype = values.dtype
-    max_L_bsds = np.array(values.shape[1 : 1 + D])  # [D]
-    star = list(values.shape[1 + D :])
+    max_L_bsds = np.array(values.shape[1 : D + 1])  # [D]
+    star = list(values.shape[D + 1 :])
     L_bs = L_bsds.prod(axis=1)  # [B]
     theory_max_L_bs = max_L_bsds.prod()
 
     # Determine the padding value for each sample.
     arange_B = np.arange(B)
     padding_value = (
-        values[(arange_B, *np.split(L_bsds - 1, D, axis=1))]
+        values[(arange_B, *np.unstack(L_bsds - 1, axis=1))]
         if theory_max_L_bs != 0
         else np.empty((B, *star), dtype=dtype)
     )  # [B, *]
@@ -888,7 +1428,8 @@ def last_valid_value_padding_multidim(
         padding_value[L_bs == 0] = padding_value_empty_rows
 
     # Replace the padding values using per row replacement.
-    padding_value = np.expand_dims(padding_value, 1)  # [B, 1, *]
+    padding_shape = (B, *[1] * D, *star)
+    padding_value = padding_value.reshape(padding_shape)  # [B, 1, ..., 1, *]
     values = replace_padding_multidim(
         values, L_bsds, padding_value=padding_value, in_place=in_place
     )  # [B, max(L_bs0), ..., max(L_bs{D-1}), *]
@@ -896,29 +1437,115 @@ def last_valid_value_padding_multidim(
     return values
 
 
-# #################################### MATHS ###################################
+# ################################### MATHS ####################################
 
 
-def unequal_seqs_add(
-    a: npt.NDArray[np.number], b: npt.NDArray[np.number]
+def interp(
+    x: npt.NDArray[np.number],
+    xp: npt.NDArray[np.number],
+    fp: npt.NDArray[np.number],
+    left: float | None = None,
+    right: float | None = None,
+    period: float | None = None,
 ) -> npt.NDArray[np.number]:
-    """Add two arrays, and adjust the size of the result if necessary.
+    """Same as numpy.interp().
+
+    This function is provided for symmetry with the torch version of this
+    function, and as a base case for the batched version of this function (both
+    present in this library). It is not faster than numpy.interp(), and should
+    thus not be used in practice.
 
     Args:
-        a: The first array.
+        x: The x-coordinates at which to evaluate the interpolated values.
             Shape: [N]
-        b: The second array.
+        xp: The x-coordinates of the data points, must be increasing.
             Shape: [M]
+        fp: The y-coordinates of the data points, same shape as xp.
+            Shape: [M]
+        left: Value to return for x < xp[0], default is fp[0].
+        right: Value to return for x > xp[-1], default is fp[-1].
+        period: A period for the x-coordinates. This parameter allows the
+            proper interpolation of angular x-coordinates. Parameters left and
+            right are ignored if period is specified.
 
     Returns:
-        The sum of the two arrays.
-            Shape: [max(N, M)]
+        The interpolated values for each batch.
+            Shape: [N]
+
+    Examples:
+    >>> x = np.array([10.5, 200.0, 40.0, 56.0])
+    >>> xp = np.array([0.0, 1.0, 20.0, 100.0])
+    >>> fp = np.array([0.0, 100.0, 200.0, 300.0])
+    >>> interp(x, xp, fp)
+    array([150., 300., 225., 245.])
     """
-    if len(a) < len(b):
-        a = np.pad(a, (0, len(b) - len(a)))
-    elif len(a) > len(b):
-        b = np.pad(b, (0, len(a) - len(b)))
-    return a + b
+    # Handle periodic interpolation.
+    if period is not None:
+        if period <= 0:
+            raise ValueError("period must be positive.")
+
+        # Normalize x and xp to [0, period).
+        x %= period  # [N]  # type: ignore
+        xp %= period  # [M]  # type: ignore
+
+        # Re-sort xp and fp after the modulo operation.
+        sorted_idcs = xp.argsort()  # [M]
+        xp = xp[sorted_idcs]  # [M]
+        fp = fp[sorted_idcs]  # [M]
+
+        # Extend xp and fp arrays to handle wrap-around interpolation. Add the
+        # last point before the first, and the first point after the last.
+        xp = np.concat([[xp[-1] - period], xp, [xp[0] + period]])  # [M + 2]
+        fp = np.concat([[fp[-1]], fp, [fp[0]]])  # [M + 2]
+
+    M = len(xp)
+
+    # Check if xp is strictly increasing.
+    if not (np.diff(xp) > 0).all():
+        raise ValueError(
+            "xp must be strictly increasing along the last dimension."
+        )
+
+    # Find indices of neighbours in xp.
+    right_idx = np.searchsorted(xp, x)  # [N]
+    left_idx = right_idx - 1  # [N]
+
+    # Clamp indices to valid range (we will handle the edges later).
+    left_idx = left_idx.clip(min=0, max=M - 1)  # [N]
+    right_idx = right_idx.clip(min=0, max=M - 1)  # [N]
+
+    # Gather neighbour values.
+    x_left = xp[left_idx]  # [N]
+    x_right = xp[right_idx]  # [N]
+    y_left = fp[left_idx]  # [N]
+    y_right = fp[right_idx]  # [N]
+
+    # Avoid division by zero for x_left == x_right.
+    denom = x_right - x_left  # [N]
+    denom[denom == 0] = 1
+    p = (x - x_left) / denom  # [N]
+
+    # Perform interpolation.
+    y = y_left + p * (y_right - y_left)  # [N]
+
+    # Handle edges only if period is not specified.
+    if period is None:
+        # Handle left edge.
+        if left is None:
+            left = fp[0].item()
+        is_left = x < xp[[0]]  # [N]
+        y[is_left] = left  # type: ignore
+
+        # Handle right edge.
+        if right is None:
+            right = fp[-1].item()
+        is_right = x > xp[[-1]]  # [N]
+        y[is_right] = right  # type: ignore
+
+    return y
+
+
+# ########################### NORMALIZED HISTOGRAMS ############################
 
 
 def init_normalized_histogram(
@@ -991,12 +1618,12 @@ def update_normalized_histogram(
 def swap_idcs_vals(x: npt.NDArray[NpInteger]) -> npt.NDArray[NpInteger]:
     """Swap the indices and values of a 1D array.
 
-    The input array is assumed to contain exactly all integers from 0 to
-    x.shape[0] - 1, in any order.
+    The input array is assumed to contain exactly all integers from 0 to N - 1,
+    in any order.
 
     Warning: This function does not explicitly check if the input array
-    contains no duplicates. If x contains duplicates, no error will be raised
-    and undefined behaviour will occur!
+    contains no duplicates. If x contains duplicates, the behavior is
+    non-deterministic (one of the values from x will be picked arbitrarily).
 
     Args:
         x: The array to swap.
@@ -1054,9 +1681,9 @@ def swap_idcs_vals_duplicates(
 
     dtype = x.dtype
 
-    # Believe it or not, this O(n log n) algorithm is actually faster than a
+    # For some reason, this O(n log n) algorithm is actually faster than a
     # native implementation that uses a Python for loop with complexity O(n).
-    return x.argsort(stable=stable).astype(dtype)  # type: ignore
+    return x.argsort(stable=stable).astype(dtype)
 
 
 # ############################ CONSECUTIVE SEGMENTS ############################
@@ -1078,7 +1705,6 @@ def starts_segments(
 
     Examples:
     >>> x = np.array([4, 4, 4, 2, 2, 8, 3, 3, 3, 3])
-
     >>> starts = starts_segments(x)
     >>> starts
     array([0, 3, 5, 6])
@@ -1151,7 +1777,6 @@ def counts_segments(
 
     Examples:
     >>> x = np.array([4, 4, 4, 2, 2, 8, 3, 3, 3, 3])
-
     >>> counts = counts_segments(x)
     >>> counts
     array([3, 2, 1, 4])
@@ -1252,7 +1877,6 @@ def outer_indices_segments(
 
     Examples:
     >>> x = np.array([4, 4, 4, 2, 2, 8, 3, 3, 3, 3])
-
     >>> outer_idcs = outer_indices_segments(x)
     >>> outer_idcs
     array([0, 0, 0, 1, 1, 2, 3, 3, 3, 3])
@@ -1353,7 +1977,6 @@ def inner_indices_segments(
 
     Examples:
     >>> x = np.array([4, 4, 4, 2, 2, 8, 3, 3, 3, 3])
-
     >>> inner_idcs = inner_indices_segments(x)
     >>> inner_idcs
     array([0, 1, 2, 0, 1, 0, 0, 1, 2, 3])
@@ -1388,7 +2011,7 @@ def lexsort(
     axis: int = -1,
     stable: bool = False,
 ) -> npt.NDArray[np.intp]:
-    """Like np.lexsort(), but MUCH faster.
+    """Like np.lexsort(), but MUCH faster for integer keys.
 
     Perform an indirect sort using a sequence of keys.
 
@@ -1413,19 +2036,25 @@ def lexsort(
             Shape: [N_axis]
 
     Examples:
-    >>> lexsort((np.array([ 1, 17, 18]),
-    ...          np.array([23, 10,  9]),
-    ...          np.array([14, 12,  0]),
-    ...          np.array([19,  5,  6]),
-    ...          np.array([21, 20, 22]),
-    ...          np.array([ 7,  3,  8]),
-    ...          np.array([13,  4,  2]),
-    ...          np.array([15, 11, 16])))
+    >>> lexsort((
+    ...     np.array([ 1, 17, 18]),
+    ...     np.array([23, 10,  9]),
+    ...     np.array([14, 12,  0]),
+    ...     np.array([19,  5,  6]),
+    ...     np.array([21, 20, 22]),
+    ...     np.array([ 7,  3,  8]),
+    ...     np.array([13,  4,  2]),
+    ...     np.array([15, 11, 16]),
+    ... ))
     array([1, 0, 2])
 
-    >>> lexsort(np.array([[4, 8, 2, 8, 3, 7, 3],
-    ...                   [9, 4, 0, 4, 0, 4, 1],
-    ...                   [1, 5, 1, 4, 3, 4, 4]]))
+    >>> lexsort(
+    ...     np.array([
+    ...         [4, 8, 2, 8, 3, 7, 3],
+    ...         [9, 4, 0, 4, 0, 4, 1],
+    ...         [1, 5, 1, 4, 3, 4, 4],
+    ...     ])
+    ... )
     array([2, 0, 4, 6, 5, 3, 1])
     """
     if isinstance(keys, tuple):
@@ -1469,9 +2098,9 @@ def lexsort_along(
     This is like np.sort(), but the other dimensions are treated as tuples.
     This function is roughly equivalent to the following Python code, but it is
     much faster.
-    >>> np.stack(
+    >>> np.stack(  # doctest: +SKIP
     ...     sorted(
-    ...         map(np.unsqueeze, np.split(x, x.shape[axis], axis=axis)),
+    ...         np.unstack(x, axis=axis),
     ...         key=tuple,
     ...     ),
     ...     axis=axis,
@@ -1491,7 +2120,7 @@ def lexsort_along(
         - The backmap array, which contains the indices of the sorted values
             in the original input.
             The sorted version of x can be retrieved as follows:
-            >>> x_sorted = x.take(backmap, axis)
+            x_sorted = x.take(backmap, axis)
             Shape: [N_axis]
 
     Examples:
@@ -1510,7 +2139,7 @@ def lexsort_along(
            [2, 1],
            [3, 0]])
     >>> backmap
-    array([2, 3, 0, 1]))
+    array([2, 3, 0, 1])
 
     >>> # Get the lexicographically sorted version of x:
     >>> x.take(backmap, axis)
@@ -1519,36 +2148,48 @@ def lexsort_along(
            [2, 1],
            [3, 0]])
     """
-    # We can use np.lexsort() to sort only the requested dimension.
-    # First, we prepare the array for np.lexsort(). The input to this function
+    # We can use lexsort() to sort only the requested dimension.
+    # First, we prepare the array for lexsort(). The input to this function
     # must be a tuple of array-like objects, that are evaluated from last to
     # first. This is quite confusing, so I'll put an example here. If we have:
-    # >>> x = array([[[15, 13],
-    # ...             [11,  4],
-    # ...             [16,  2]],
-    # ...            [[ 7, 21],
-    # ...             [ 3, 20],
-    # ...             [ 8, 22]],
-    # ...            [[19, 14],
-    # ...             [ 5, 12],
-    # ...             [ 6,  0]],
-    # ...            [[23,  1],
-    # ...             [10, 17],
-    # ...             [ 9, 18]]])
-    # And axis=1, then the input to np.lexsort() must be:
-    # >>> np.lexsort(array([[ 1, 17, 18],
-    # ...                   [23, 10,  9],
-    # ...                   [14, 12,  0],
-    # ...                   [19,  5,  6],
-    # ...                   [21, 20, 22],
-    # ...                   [ 7,  3,  8],
-    # ...                   [13,  4,  2],
-    # ...                   [15, 11, 16]]))
+    # >>> x = array([
+    # ...     [
+    # ...         [15, 13],
+    # ...         [11,  4],
+    # ...         [16,  2],
+    # ...     ],
+    # ...     [
+    # ...         [ 7, 21],
+    # ...         [ 3, 20],
+    # ...         [ 8, 22],
+    # ...     ],
+    # ...     [
+    # ...         [19, 14],
+    # ...         [ 5, 12],
+    # ...         [ 6,  0],
+    # ...     ],
+    # ...     [
+    # ...         [23,  1],
+    # ...         [10, 17],
+    # ...         [ 9, 18],
+    # ...     ],
+    # ... ])
+    # And axis=1, then the input to lexsort() must be:
+    # >>> lexsort(array([
+    # ...     [ 1, 17, 18],
+    # ...     [23, 10,  9],
+    # ...     [14, 12,  0],
+    # ...     [19,  5,  6],
+    # ...     [21, 20, 22],
+    # ...     [ 7,  3,  8],
+    # ...     [13,  4,  2],
+    # ...     [15, 11, 16],
+    # ... ]))
     # Note that the first row is evaluated last and the last row is evaluated
     # first. We can now see that the sorting order will be 11 < 15 < 16, so
-    # np.lexsort() will return array([1, 0, 2]). I thouroughly tested what the
+    # lexsort() will return array([1, 0, 2]). I thouroughly tested what the
     # absolute fastest way is to perform this operation, and it turns out that
-    # the following is the best way to do it:
+    # the following is the best way to do it.
     N_axis = x.shape[axis]
 
     if x.ndim == 1:
@@ -1639,19 +2280,19 @@ def unique_consecutive(
             array.
         return_counts: Whether to also return the number of times each unique
             element occurred in the original array.
-        axis: The dimension to operate on. If None, the unique of the
-            flattened input is returned. Otherwise, each of the arrays indexed
-            by the given dimension is treated as one of the elements to apply
-            the unique operation on. See examples for more details.
+        axis: The dimension to operate on. If None, the unique of the flattened
+            input is returned. Otherwise, each of the arrays indexed by the
+            given dimension is treated as one of the elements to apply the
+            unique operation on. See examples for more details.
 
     Returns:
         Tuple containing:
         - The unique elements.
             Shape: [N_0, ..., N_{axis-1}, U, N_{axis+1}, ..., N_{D-1}]
         - (Optional) If return_inverse is True, the indices where elements
-            in the original array ended up in the returned unique values.
+            in the original input ended up in the returned unique values.
             The original array can be reconstructed as follows:
-            >>> x_reconstructed = uniques.take(inverse, axis)
+            x_reconstructed = uniques.take(inverse, axis)
             Shape: [N_axis]
         - (Optional) If return_counts is True, the counts for each unique
             element.
@@ -1666,7 +2307,7 @@ def unique_consecutive(
     ...     x, return_inverse=True, return_counts=True, axis=axis
     ... )
     >>> uniques
-    array([9, 10])
+    array([ 9, 10])
     >>> inverse
     array([0, 0, 0, 0, 1, 1])
     >>> counts
@@ -1689,12 +2330,12 @@ def unique_consecutive(
     ...     x, return_inverse=True, return_counts=True, axis=axis
     ... )
     >>> uniques
-    array([[7, 9, 10],
-           [8, 10, 9],
-           [9, 8, 7],
-           [9, 7, 7]])
+    array([[ 7,  9, 10],
+           [ 8, 10,  9],
+           [ 9,  8,  7],
+           [ 9,  7,  7]])
     >>> inverse
-    array([1, 2, 0, 1])
+    array([0, 1, 1, 2])
     >>> counts
     array([1, 2, 1])
 
@@ -1920,10 +2561,10 @@ def unique(
             array.
         return_counts: Whether to also return the counts of each unique
             element.
-        axis: The dimension to operate on. If None, the unique of the
-            flattened input is returned. Otherwise, each of the arrays
-            indexed by the given dimension is treated as one of the elements
-            to apply the unique operation on. See examples for more details.
+        axis: The dimension to operate on. If None, the unique of the flattened
+            input is returned. Otherwise, each of the arrays indexed by the
+            given dimension is treated as one of the elements to apply the
+            unique operation on. See examples for more details.
         stable: Whether to preserve the relative order of equal elements. If
             False (default), an unstable sort is used, which is faster. Note
             that this only has an effect on the backmap array, so setting
@@ -1939,12 +2580,12 @@ def unique(
         - (Optional) If return_backmap is True, the backmap array, which
             contains the indices of the unique values in the original input.
             The sorted version of x can be retrieved as follows:
-            >>> x_sorted = x.take(backmap, axis)
+            x_sorted = x.take(backmap, axis)
             Shape: [N_axis]
         - (Optional) If return_inverse is True, the indices where elements
             in the original input ended up in the returned unique values.
             The original array can be reconstructed as follows:
-            >>> x_reconstructed = uniques.take(inverse, axis)
+            x_reconstructed = uniques.take(inverse, axis)
             Shape: [N_axis]
         - (Optional) If return_counts is True, the counts for each unique
             element.
@@ -2076,7 +2717,7 @@ def unique(
             [9, 7, 8, 7]],
            [[4, 8, 2, 8],
             [3, 7, 3, 7],
-            [0, 1, 2, 1]])
+            [0, 1, 2, 1]]])
     """
     if axis is None:
         raise NotImplementedError(
@@ -2093,7 +2734,7 @@ def unique(
 
     # Sort along the given dimension, taking all the other dimensions as
     # constant tuples. NumPy's sort() doesn't work here since it will sort the
-    # other dimensions as well.
+    # other dimensions independently.
     x_sorted, backmap = lexsort_along(
         x, axis=axis, stable=stable
     )  # [N_0, ..., N_axis, ..., N_{D-1}], [N_axis]
@@ -2145,7 +2786,6 @@ def counts_segments_ints(
 
     Examples:
     >>> x = np.array([4, 4, 4, 2, 2, 8, 3, 3, 3, 3])
-
     >>> freqs = counts_segments_ints(x, 10)
     >>> freqs
     array([0, 0, 2, 4, 3, 0, 0, 0, 1, 0])
@@ -2220,7 +2860,7 @@ def groupby(
             - Array of unique keys, sorted.
                 Shape: [U, *]
             - Array of values stored a packed manner, grouped by key. The first
-                N_key1 values correspond to the first key, the next N_key2
+                N_key0 values correspond to the first key, the next N_key1
                 values correspond to the second key, etc. Each group of values
                 is sorted if stable is True.
                 Shape: [N, **]
@@ -2242,27 +2882,29 @@ def groupby(
     >>> # Return as sequence of (key, vals) tuples:
     >>> grouped = groupby(keys, vals, stable=True, as_sequence=True)
     >>> for key, vals_group in grouped:
-    ...     print(f"Key:\\n{key}")
-    ...     print(f"Grouped vals:\\n{vals_group}")
+    ...     print("Key:")
+    ...     print(key)
+    ...     print("Grouped vals:")
+    ...     print(vals_group)
     ...     print()
     Key:
     2
     Grouped vals:
     [[2 3]
      [8 9]]
-
+    <BLANKLINE>
     Key:
     3
     Grouped vals:
     [[6 7]]
-
+    <BLANKLINE>
     Key:
     4
     Grouped vals:
     [[ 0  1]
      [ 4  5]
      [12 13]]
-
+    <BLANKLINE>
     Key:
     8
     Grouped vals:
@@ -2290,14 +2932,16 @@ def groupby(
         keys, return_backmap=True, return_counts=True, axis=0, stable=stable
     )  # [U, *], [N], [U]
 
-    # Rearrange values to match keys_unique.
     if vals is None:
+        # Use the backmap directly as values.
         vals_grouped = cast(npt.NDArray[NpGeneric2], backmap)  # [N]
     else:
+        # Rearrange values to match keys_unique.
         vals_grouped = vals.take(backmap, axis=0)  # [N, **]
 
     # Return the results.
     if not as_sequence:
         return keys_unique, vals_grouped, counts
 
+    # Create the sequences of (key, vals_group) tuples.
     return list(zip(keys_unique, sequentialize_packed(vals_grouped, counts)))
