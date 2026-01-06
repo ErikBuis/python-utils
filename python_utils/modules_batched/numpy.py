@@ -26,7 +26,7 @@ from ..modules.numpy import (
 # ################################### MATHS ####################################
 
 
-def sum_padding_batched(
+def sum_batched(
     values: npt.NDArray[NpNumber],
     L_bs: npt.NDArray[np.integer],
     is_padding_zero: bool = False,
@@ -55,7 +55,7 @@ def sum_padding_batched(
     ...     [13, 14, 15, 16],
     ... ])
     >>> L_bs = np.array([3, 1, 0, 4])
-    >>> sum_padding_batched(values, L_bs)
+    >>> sum_batched(values, L_bs)
     array([ 6,  5,  0, 58])
     """
     if not is_padding_zero:
@@ -64,7 +64,7 @@ def sum_padding_batched(
     return values.sum(axis=1)  # [B, *]
 
 
-def sum_padding_batched_packed(
+def sum_batched_packed(
     values: npt.NDArray[NpNumber], L_bs: npt.NDArray[np.integer]
 ) -> npt.NDArray[NpNumber]:
     """Calculate the sum for each sample in the batch.
@@ -82,7 +82,7 @@ def sum_padding_batched_packed(
     Examples:
     >>> values = np.array([1, 2, 3, 5, 13, 14, 15, 16])
     >>> L_bs = np.array([3, 1, 0, 4])
-    >>> sum_padding_batched_packed(values, L_bs)
+    >>> sum_batched_packed(values, L_bs)
     array([ 6,  5,  0, 58])
     """
     start_idcs = L_bs.cumsum() - L_bs  # [B]
@@ -95,7 +95,7 @@ def sum_padding_batched_packed(
     return values_summed
 
 
-def mean_padding_batched(
+def mean_batched(
     values: npt.NDArray[np.number],
     L_bs: npt.NDArray[np.integer],
     is_padding_zero: bool = False,
@@ -126,17 +126,17 @@ def mean_padding_batched(
     >>> L_bs = np.array([3, 1, 0, 4])
     >>> with warnings.catch_warnings():
     ...     warnings.filterwarnings("ignore", category=RuntimeWarning)
-    ...     mean_padding_batched(values, L_bs)
+    ...     mean_batched(values, L_bs)
     array([ 2. ,  5. ,  nan, 14.5])
     """
-    return sum_padding_batched(
+    return sum_batched(
         values, L_bs, is_padding_zero=is_padding_zero
     ) / L_bs.reshape(
         -1, *[1] * (values.ndim - 2)
     )  # [B, *]  # type: ignore
 
 
-def mean_padding_batched_packed(
+def mean_batched_packed(
     values: npt.NDArray[np.number], L_bs: npt.NDArray[np.integer]
 ) -> npt.NDArray[np.floating]:
     """Calculate the mean for each sample in the batch.
@@ -156,15 +156,15 @@ def mean_padding_batched_packed(
     >>> L_bs = np.array([3, 1, 0, 4])
     >>> with warnings.catch_warnings():
     ...     warnings.filterwarnings("ignore", category=RuntimeWarning)
-    ...     mean_padding_batched_packed(values, L_bs)
+    ...     mean_batched_packed(values, L_bs)
     array([ 2. ,  5. ,  nan, 14.5])
     """
-    return sum_padding_batched_packed(values, L_bs) / L_bs.reshape(
+    return sum_batched_packed(values, L_bs) / L_bs.reshape(
         -1, *[1] * (values.ndim - 2)
     )  # [B, *]  # type: ignore
 
 
-def stddev_padding_batched(
+def stddev_batched(
     values: npt.NDArray[np.number],
     L_bs: npt.NDArray[np.integer],
     is_padding_zero: bool = False,
@@ -199,19 +199,17 @@ def stddev_padding_batched(
     >>> L_bs = np.array([3, 1, 0, 4])
     >>> with warnings.catch_warnings():
     ...     warnings.filterwarnings("ignore", category=RuntimeWarning)
-    ...     stddev_padding_batched(values, L_bs)
+    ...     stddev_batched(values, L_bs)
     array([0.81649658, 0.        ,        nan, 1.11803399])
     """
-    means = mean_padding_batched(
+    means = mean_batched(
         values, L_bs, is_padding_zero=is_padding_zero
     )  # [B, *]
     values_centered = values - np.expand_dims(means, 1)  # [B, max(L_bs), *]
-    return np.sqrt(
-        mean_padding_batched(np.square(values_centered), L_bs)
-    )  # [B, *]
+    return np.sqrt(mean_batched(np.square(values_centered), L_bs))  # [B, *]
 
 
-def stddev_padding_batched_packed(
+def stddev_batched_packed(
     values: npt.NDArray[np.number], L_bs: npt.NDArray[np.integer]
 ) -> npt.NDArray[np.floating]:
     """Calculate the standard dev. for each sample in the batch.
@@ -234,18 +232,18 @@ def stddev_padding_batched_packed(
     >>> L_bs = np.array([3, 1, 0, 4])
     >>> with warnings.catch_warnings():
     ...     warnings.filterwarnings("ignore", category=RuntimeWarning)
-    ...     stddev_padding_batched_packed(values, L_bs)
+    ...     stddev_batched_packed(values, L_bs)
     array([0.81649658, 0.        ,        nan, 1.11803399])
     """
-    means = mean_padding_batched_packed(values, L_bs)  # [B, *]
+    means = mean_batched_packed(values, L_bs)  # [B, *]
     means_repeated = means.repeat(L_bs, axis=0)  # [sum(L_bs), *]
     values_centered = values - means_repeated  # [sum(L_bs), *]
     return np.sqrt(
-        mean_padding_batched_packed(np.square(values_centered), L_bs)
+        mean_batched_packed(np.square(values_centered), L_bs)
     )  # [B, *]
 
 
-def min_padding_batched(
+def min_batched(
     values: npt.NDArray[np.number],
     L_bs: npt.NDArray[np.integer],
     is_padding_inf: bool = False,
@@ -277,7 +275,7 @@ def min_padding_batched(
     ...     dtype=np.float64,
     ... )
     >>> L_bs = np.array([3, 1, 0, 4])
-    >>> min_padding_batched(values, L_bs)
+    >>> min_batched(values, L_bs)
     array([ 1.,  5., inf, 13.])
     """
     if not np.issubdtype(values.dtype, np.floating):
@@ -294,7 +292,7 @@ def min_padding_batched(
     return np.amin(values, axis=1)  # [B, *]
 
 
-def min_padding_batched_packed(
+def min_batched_packed(
     values: npt.NDArray[np.number], L_bs: npt.NDArray[np.integer]
 ) -> npt.NDArray[np.float64]:
     """Calculate the minimum for each sample in the batch.
@@ -312,7 +310,7 @@ def min_padding_batched_packed(
     Examples:
     >>> values = np.array([1, 2, 3, 5, 13, 14, 15, 16], dtype=np.float64)
     >>> L_bs = np.array([3, 1, 0, 4])
-    >>> min_padding_batched_packed(values, L_bs)
+    >>> min_batched_packed(values, L_bs)
     array([ 1.,  5., inf, 13.])
     """
     if not np.issubdtype(values.dtype, np.floating):
@@ -333,7 +331,7 @@ def min_padding_batched_packed(
     return values_minimized
 
 
-def max_padding_batched(
+def max_batched(
     values: npt.NDArray[np.number],
     L_bs: npt.NDArray[np.integer],
     is_padding_minus_inf: bool = False,
@@ -366,7 +364,7 @@ def max_padding_batched(
     ...     dtype=np.float64,
     ... )
     >>> L_bs = np.array([3, 1, 0, 4])
-    >>> max_padding_batched(values, L_bs)
+    >>> max_batched(values, L_bs)
     array([ 3.,  5., -inf, 16.])
     """
     if not np.issubdtype(values.dtype, np.floating):
@@ -383,7 +381,7 @@ def max_padding_batched(
     return np.amax(values, axis=1)  # [B, *]
 
 
-def max_padding_batched_packed(
+def max_batched_packed(
     values: npt.NDArray[np.number], L_bs: npt.NDArray[np.integer]
 ) -> npt.NDArray[np.float64]:
     """Calculate the maximum for each sample in the batch.
@@ -401,7 +399,7 @@ def max_padding_batched_packed(
     Examples:
     >>> values = np.array([1, 2, 3, 5, 13, 14, 15, 16], dtype=np.float64)
     >>> L_bs = np.array([3, 1, 0, 4])
-    >>> max_padding_batched_packed(values, L_bs)
+    >>> max_batched_packed(values, L_bs)
     array([ 3.,  5., -inf, 16.])
     """
     if not np.issubdtype(values.dtype, np.floating):
@@ -422,7 +420,7 @@ def max_padding_batched_packed(
     return values_maximized
 
 
-def any_padding_batched(
+def any_batched(
     values: npt.NDArray[np.bool_],
     L_bs: npt.NDArray[np.integer],
     is_padding_false: bool = False,
@@ -451,7 +449,7 @@ def any_padding_batched(
     ...     [True, True, True, True],
     ... ])
     >>> L_bs = np.array([3, 1, 0, 4])
-    >>> any_padding_batched(values, L_bs)
+    >>> any_batched(values, L_bs)
     array([ True, False, False,  True])
     """
     if not is_padding_false:
@@ -460,7 +458,7 @@ def any_padding_batched(
     return values.any(axis=1)  # [B, *]  # type: ignore
 
 
-def any_padding_batched_packed(
+def any_batched_packed(
     values: npt.NDArray[np.bool_], L_bs: npt.NDArray[np.integer]
 ) -> npt.NDArray[np.bool_]:
     """Determine whether any value is True for each sample in the batch.
@@ -478,7 +476,7 @@ def any_padding_batched_packed(
     Examples:
     >>> values = np.array([False, False, True, False, True, True, True, True])
     >>> L_bs = np.array([3, 1, 0, 4])
-    >>> any_padding_batched_packed(values, L_bs)
+    >>> any_batched_packed(values, L_bs)
     array([ True, False, False,  True])
     """
     start_idcs = L_bs.cumsum() - L_bs  # [B]
@@ -491,7 +489,7 @@ def any_padding_batched_packed(
     return values_anyd
 
 
-def all_padding_batched(
+def all_batched(
     values: npt.NDArray[np.bool_],
     L_bs: npt.NDArray[np.integer],
     is_padding_true: bool = False,
@@ -520,7 +518,7 @@ def all_padding_batched(
     ...     [False, True, True, True],
     ... ])
     >>> L_bs = np.array([3, 1, 0, 4])
-    >>> all_padding_batched(values, L_bs)
+    >>> all_batched(values, L_bs)
     array([ True,  True,  True, False])
     """
     if not is_padding_true:
@@ -529,7 +527,7 @@ def all_padding_batched(
     return values.all(axis=1)  # [B, *]  # type: ignore
 
 
-def all_padding_batched_packed(
+def all_batched_packed(
     values: npt.NDArray[np.bool_], L_bs: npt.NDArray[np.integer]
 ) -> npt.NDArray[np.bool_]:
     """Determine whether all values are True for each sample in the batch.
@@ -547,7 +545,7 @@ def all_padding_batched_packed(
     Examples:
     >>> values = np.array([True, True, True, True, False, True, True, True])
     >>> L_bs = np.array([3, 1, 0, 4])
-    >>> all_padding_batched_packed(values, L_bs)
+    >>> all_batched_packed(values, L_bs)
     array([ True,  True,  True, False])
     """
     start_idcs = L_bs.cumsum() - L_bs  # [B]
@@ -1359,7 +1357,7 @@ def repeat_batched(
 
     # Compute the new lengths after repeating.
     L_bsds_repeated = L_bsds.astype(np.intp, copy=True)  # [B, D]
-    L_bsds_repeated[:, axis] = sum_padding_batched(repeats, L_bsds[:, axis])
+    L_bsds_repeated[:, axis] = sum_batched(repeats, L_bsds[:, axis])
     max_L_bsds_repeated = max_L_bsds.copy()  # [D]
     max_L_bsds_repeated[axis] = int(L_bsds_repeated[:, axis].max())
 
@@ -1446,7 +1444,7 @@ def repeat_batched_packed(
     """
     # Compute the new lengths after repeating.
     L_bsds_repeated = L_bsds.astype(np.intp, copy=True)  # [B, D]
-    L_bsds_repeated[:, axis] = sum_padding_batched(repeats_bs, L_bsds[:, axis])
+    L_bsds_repeated[:, axis] = sum_batched(repeats_bs, L_bsds[:, axis])
 
     # Calculate product of all lengths for all dimensions except axis.
     # We denote the product from dimension d0 (included) to d1 (excluded) as:
