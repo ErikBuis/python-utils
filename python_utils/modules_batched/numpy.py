@@ -64,6 +64,37 @@ def sum_padding_batched(
     return values.sum(axis=1)  # [B, *]
 
 
+def sum_padding_batched_packed(
+    values: npt.NDArray[NpNumber], L_bs: npt.NDArray[np.integer]
+) -> npt.NDArray[NpNumber]:
+    """Calculate the sum for each sample in the batch.
+
+    Args:
+        values: The values to calculate the sum for.
+            Shape: [sum(L_bs), *]
+        L_bs: The number of valid values in each sample.
+            Shape: [B]
+
+    Returns:
+        The sum value for each sample.
+            Shape: [B, *]
+
+    Examples:
+    >>> values = np.array([1, 2, 3, 5, 13, 14, 15, 16])
+    >>> L_bs = np.array([3, 1, 0, 4])
+    >>> sum_padding_batched_packed(values, L_bs)
+    array([ 6,  5,  0, 58])
+    """
+    start_idcs = L_bs.cumsum() - L_bs  # [B]
+    values_summed = np.add.reduceat(values, start_idcs, axis=0)  # [B, *]
+
+    # Handle empty segments (where L_b == 0). reduceat() returns values[idx] for
+    # empty segments, but we want 0.
+    values_summed[L_bs == 0] = 0
+
+    return values_summed
+
+
 def mean_padding_batched(
     values: npt.NDArray[np.number],
     L_bs: npt.NDArray[np.integer],
@@ -102,7 +133,35 @@ def mean_padding_batched(
         values, L_bs, is_padding_zero=is_padding_zero
     ) / L_bs.reshape(
         -1, *[1] * (values.ndim - 2)
-    )  # [B, *]  # [B, *]  # type: ignore
+    )  # [B, *]  # type: ignore
+
+
+def mean_padding_batched_packed(
+    values: npt.NDArray[np.number], L_bs: npt.NDArray[np.integer]
+) -> npt.NDArray[np.floating]:
+    """Calculate the mean for each sample in the batch.
+
+    Args:
+        values: The values to calculate the mean for.
+            Shape: [sum(L_bs), *]
+        L_bs: The number of valid values in each sample.
+            Shape: [B]
+
+    Returns:
+        The mean value for each sample.
+            Shape: [B, *]
+
+    Examples:
+    >>> values = np.array([1, 2, 3, 5, 13, 14, 15, 16])
+    >>> L_bs = np.array([3, 1, 0, 4])
+    >>> with warnings.catch_warnings():
+    ...     warnings.filterwarnings("ignore", category=RuntimeWarning)
+    ...     mean_padding_batched_packed(values, L_bs)
+    array([ 2. ,  5. ,  nan, 14.5])
+    """
+    return sum_padding_batched_packed(values, L_bs) / L_bs.reshape(
+        -1, *[1] * (values.ndim - 2)
+    )  # [B, *]  # type: ignore
 
 
 def stddev_padding_batched(
@@ -152,11 +211,45 @@ def stddev_padding_batched(
     )  # [B, *]
 
 
+def stddev_padding_batched_packed(
+    values: npt.NDArray[np.number], L_bs: npt.NDArray[np.integer]
+) -> npt.NDArray[np.floating]:
+    """Calculate the standard dev. for each sample in the batch.
+
+    For a set of values x_1, ..., x_n, the standard deviation is defined as:
+        sqrt(sum((x_i - mean(x))^2) / n)
+
+    Args:
+        values: The values to calculate the standard deviation for.
+            Shape: [sum(L_bs), *]
+        L_bs: The number of valid values in each sample.
+            Shape: [B]
+
+    Returns:
+        The standard deviation for each sample.
+            Shape: [B, *]
+
+    Examples:
+    >>> values = np.array([1, 2, 3, 5, 13, 14, 15, 16])
+    >>> L_bs = np.array([3, 1, 0, 4])
+    >>> with warnings.catch_warnings():
+    ...     warnings.filterwarnings("ignore", category=RuntimeWarning)
+    ...     stddev_padding_batched_packed(values, L_bs)
+    array([0.81649658, 0.        ,        nan, 1.11803399])
+    """
+    means = mean_padding_batched_packed(values, L_bs)  # [B, *]
+    means_repeated = means.repeat(L_bs, axis=0)  # [sum(L_bs), *]
+    values_centered = values - means_repeated  # [sum(L_bs), *]
+    return np.sqrt(
+        mean_padding_batched_packed(np.square(values_centered), L_bs)
+    )  # [B, *]
+
+
 def min_padding_batched(
     values: npt.NDArray[np.number],
     L_bs: npt.NDArray[np.integer],
     is_padding_inf: bool = False,
-) -> npt.NDArray[np.floating]:
+) -> npt.NDArray[np.float64]:
     """Calculate the minimum for each sample in the batch.
 
     Args:
@@ -174,29 +267,77 @@ def min_padding_batched(
             Shape: [B, *]
 
     Examples:
-    >>> values = np.array([
-    ...     [1, 2, 3, -1],
-    ...     [5, -1, -1, -1],
-    ...     [-1, -1, -1, -1],
-    ...     [13, 14, 15, 16],
-    ... ])
+    >>> values = np.array(
+    ...     [
+    ...         [1, 2, 3, -1],
+    ...         [5, -1, -1, -1],
+    ...         [-1, -1, -1, -1],
+    ...         [13, 14, 15, 16],
+    ...     ],
+    ...     dtype=np.float64,
+    ... )
     >>> L_bs = np.array([3, 1, 0, 4])
     >>> min_padding_batched(values, L_bs)
     array([ 1.,  5., inf, 13.])
     """
-    if not is_padding_inf:
-        values = replace_padding(
-            values.astype(np.float64), L_bs, padding_value=float("inf")
+    if not np.issubdtype(values.dtype, np.floating):
+        warnings.warn(
+            "Converting input values to float for proper handling of inf"
+            " padding values.",
+            RuntimeWarning,
         )
+        values = values.astype(np.float64)
+
+    if not is_padding_inf:
+        values = replace_padding(values, L_bs, padding_value=float("inf"))
 
     return np.amin(values, axis=1)  # [B, *]
+
+
+def min_padding_batched_packed(
+    values: npt.NDArray[np.number], L_bs: npt.NDArray[np.integer]
+) -> npt.NDArray[np.float64]:
+    """Calculate the minimum for each sample in the batch.
+
+    Args:
+        values: The values to calculate the minimum for.
+            Shape: [sum(L_bs), *]
+        L_bs: The number of valid values in each sample.
+            Shape: [B]
+
+    Returns:
+        The minimum value for each sample.
+            Shape: [B, *]
+
+    Examples:
+    >>> values = np.array([1, 2, 3, 5, 13, 14, 15, 16], dtype=np.float64)
+    >>> L_bs = np.array([3, 1, 0, 4])
+    >>> min_padding_batched_packed(values, L_bs)
+    array([ 1.,  5., inf, 13.])
+    """
+    if not np.issubdtype(values.dtype, np.floating):
+        warnings.warn(
+            "Converting input values to float for proper handling of inf"
+            " padding values.",
+            RuntimeWarning,
+        )
+        values = values.astype(np.float64)
+
+    start_idcs = L_bs.cumsum() - L_bs  # [B]
+    values_minimized = np.minimum.reduceat(values, start_idcs, axis=0)  # [B, *]
+
+    # Handle empty segments (where L_b == 0). reduceat() returns values[idx] for
+    # empty segments, but we want inf.
+    values_minimized[L_bs == 0] = float("inf")
+
+    return values_minimized
 
 
 def max_padding_batched(
     values: npt.NDArray[np.number],
     L_bs: npt.NDArray[np.integer],
     is_padding_minus_inf: bool = False,
-) -> npt.NDArray[np.floating]:
+) -> npt.NDArray[np.float64]:
     """Calculate the maximum for each sample in the batch.
 
     Args:
@@ -215,22 +356,70 @@ def max_padding_batched(
             Shape: [B, *]
 
     Examples:
-    >>> values = np.array([
-    ...     [1, 2, 3, -1],
-    ...     [5, -1, -1, -1],
-    ...     [-1, -1, -1, -1],
-    ...     [13, 14, 15, 16],
-    ... ])
+    >>> values = np.array(
+    ...     [
+    ...         [1, 2, 3, -1],
+    ...         [5, -1, -1, -1],
+    ...         [-1, -1, -1, -1],
+    ...         [13, 14, 15, 16],
+    ...     ],
+    ...     dtype=np.float64,
+    ... )
     >>> L_bs = np.array([3, 1, 0, 4])
     >>> max_padding_batched(values, L_bs)
     array([ 3.,  5., -inf, 16.])
     """
-    if not is_padding_minus_inf:
-        values = replace_padding(
-            values.astype(np.float64), L_bs, padding_value=float("-inf")
+    if not np.issubdtype(values.dtype, np.floating):
+        warnings.warn(
+            "Converting input values to float for proper handling of inf"
+            " padding values.",
+            RuntimeWarning,
         )
+        values = values.astype(np.float64)
+
+    if not is_padding_minus_inf:
+        values = replace_padding(values, L_bs, padding_value=float("-inf"))
 
     return np.amax(values, axis=1)  # [B, *]
+
+
+def max_padding_batched_packed(
+    values: npt.NDArray[np.number], L_bs: npt.NDArray[np.integer]
+) -> npt.NDArray[np.float64]:
+    """Calculate the maximum for each sample in the batch.
+
+    Args:
+        values: The values to calculate the maximum for.
+            Shape: [sum(L_bs), *]
+        L_bs: The number of valid values in each sample.
+            Shape: [B]
+
+    Returns:
+        The maximum value for each sample.
+            Shape: [B, *]
+
+    Examples:
+    >>> values = np.array([1, 2, 3, 5, 13, 14, 15, 16], dtype=np.float64)
+    >>> L_bs = np.array([3, 1, 0, 4])
+    >>> max_padding_batched_packed(values, L_bs)
+    array([ 3.,  5., -inf, 16.])
+    """
+    if not np.issubdtype(values.dtype, np.floating):
+        warnings.warn(
+            "Converting input values to float for proper handling of inf"
+            " padding values.",
+            RuntimeWarning,
+        )
+        values = values.astype(np.float64)
+
+    start_idcs = L_bs.cumsum() - L_bs  # [B]
+    values_maximized = np.maximum.reduceat(values, start_idcs, axis=0)  # [B, *]
+
+    # Handle empty segments (where L_b == 0). reduceat() returns values[idx] for
+    # empty segments, but we want -inf.
+    values_maximized[L_bs == 0] = float("-inf")
+
+    return values_maximized
 
 
 def any_padding_batched(
@@ -256,12 +445,12 @@ def any_padding_batched(
 
     Examples:
     >>> values = np.array([
-    ...     [False, False, True, False],
-    ...     [False, False, False, False],
-    ...     [False, False, False, False],
+    ...     [False, False, True, True],
+    ...     [False, True, True, True],
+    ...     [True, True, True, True],
     ...     [True, True, True, True],
     ... ])
-    >>> L_bs = np.array([3, 2, 0, 4])
+    >>> L_bs = np.array([3, 1, 0, 4])
     >>> any_padding_batched(values, L_bs)
     array([ True, False, False,  True])
     """
@@ -269,6 +458,37 @@ def any_padding_batched(
         values = replace_padding(values, L_bs, padding_value=False)
 
     return values.any(axis=1)  # [B, *]  # type: ignore
+
+
+def any_padding_batched_packed(
+    values: npt.NDArray[np.bool_], L_bs: npt.NDArray[np.integer]
+) -> npt.NDArray[np.bool_]:
+    """Determine whether any value is True for each sample in the batch.
+
+    Args:
+        values: The values to check.
+            Shape: [sum(L_bs)]
+        L_bs: The number of valid values in each sample.
+            Shape: [B]
+
+    Returns:
+        Whether any value is True for each sample.
+            Shape: [B]
+
+    Examples:
+    >>> values = np.array([False, False, True, False, True, True, True, True])
+    >>> L_bs = np.array([3, 1, 0, 4])
+    >>> any_padding_batched_packed(values, L_bs)
+    array([ True, False, False,  True])
+    """
+    start_idcs = L_bs.cumsum() - L_bs  # [B]
+    values_anyd = np.logical_or.reduceat(values, start_idcs, axis=0)  # [B]
+
+    # Handle empty segments (where L_b == 0). reduceat() returns values[idx] for
+    # empty segments, but we want False.
+    values_anyd[L_bs == 0] = False
+
+    return values_anyd
 
 
 def all_padding_batched(
@@ -295,11 +515,11 @@ def all_padding_batched(
     Examples:
     >>> values = np.array([
     ...     [True, True, True, False],
-    ...     [True, True, False, False],
-    ...     [True, True, False, True],
+    ...     [True, False, False, False],
+    ...     [False, False, False, False],
     ...     [False, True, True, True],
     ... ])
-    >>> L_bs = np.array([3, 2, 0, 4])
+    >>> L_bs = np.array([3, 1, 0, 4])
     >>> all_padding_batched(values, L_bs)
     array([ True,  True,  True, False])
     """
@@ -307,6 +527,37 @@ def all_padding_batched(
         values = replace_padding(values, L_bs, padding_value=True)
 
     return values.all(axis=1)  # [B, *]  # type: ignore
+
+
+def all_padding_batched_packed(
+    values: npt.NDArray[np.bool_], L_bs: npt.NDArray[np.integer]
+) -> npt.NDArray[np.bool_]:
+    """Determine whether all values are True for each sample in the batch.
+
+    Args:
+        values: The values to check.
+            Shape: [sum(L_bs)]
+        L_bs: The number of valid values in each sample.
+            Shape: [B]
+
+    Returns:
+        Whether all values are True for each sample.
+            Shape: [B]
+
+    Examples:
+    >>> values = np.array([True, True, True, True, False, True, True, True])
+    >>> L_bs = np.array([3, 1, 0, 4])
+    >>> all_padding_batched_packed(values, L_bs)
+    array([ True,  True,  True, False])
+    """
+    start_idcs = L_bs.cumsum() - L_bs  # [B]
+    values_alld = np.logical_and.reduceat(values, start_idcs, axis=0)  # [B]
+
+    # Handle empty segments (where L_b == 0). reduceat() returns values[idx] for
+    # empty segments, but we want True.
+    values_alld[L_bs == 0] = True
+
+    return values_alld
 
 
 def interp_batched(
