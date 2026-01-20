@@ -19,7 +19,7 @@ NpInteger = TypeVar("NpInteger", bound=np.integer)
 
 
 class NDArrayGeneric(np.ndarray, Generic[T]):
-    """np.ndarray that allows for static type hinting of generics."""
+    """Allows non-generic types to be used in static type hinting."""
 
     @override
     def __getitem__(self, key: Any) -> T:

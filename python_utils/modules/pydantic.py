@@ -129,8 +129,9 @@ try:
             core_schema.no_info_plain_validator_function(_validate_ndarray),
         ])
 
+    NpGeneric = TypeVar("NpGeneric", bound=np.generic)
     NDArrayAnn = Annotated[
-        npt.NDArray,
+        npt.NDArray[NpGeneric],
         GetPydanticSchema(_ndarray_schema),
         PlainSerializer(lambda x: x.tolist(), return_type=list),
     ]
