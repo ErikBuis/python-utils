@@ -6,7 +6,7 @@ from abc import ABC
 from collections.abc import Callable
 from typing import Annotated, Any, TypeVar, get_args
 
-from pydantic import BaseModel, GetPydanticSchema, PlainSerializer
+from pydantic import BaseModel, GetPydanticSchema
 from pydantic_core import core_schema
 
 try:
@@ -17,16 +17,10 @@ try:
         tp: type[npt.NDArray[Any]],
         handler: Callable[[Any], core_schema.CoreSchema],
     ) -> core_schema.CoreSchema:
-        """Schema for typed numpy arrays with deserialization support.
+        """Schema for typed numpy arrays.
 
         Validates both that the value is an np.ndarray and that its dtype
         matches the type parameter (if specified).
-
-        Notes:
-        - Uses np.issubdtype() to check dtype compatibility at runtime.
-        - For NDArrayAnnTyped without type args, only validates np.ndarray.
-        - Deserialization is handled via the
-          core_schema.with_info_before_validator_function().
 
         Args:
             tp: The annotated type (e.g. npt.NDArray[np.float64]).
@@ -52,7 +46,7 @@ try:
         >>> model = M(  # doctest: +IGNORE_EXCEPTION_DETAIL
         ...     attribute1=np.array([1, 2, 3], dtype=np.int32),
         ...     attribute2=np.array([1, 2, 3])
-        ... )  # fails validation for attribute1
+        ... )  # should fail validation for attribute1
         Traceback (most recent call last):
             ...
         pydantic_core._pydantic_core.ValidationError: 1 validation error for M
@@ -66,19 +60,6 @@ try:
         dtype_args = get_args(dtype_arg)
         assert len(dtype_args) == 1, "Unexpected dtype structure"
         type_arg = dtype_args[0]
-
-        def _deserialize_ndarray(value: Any) -> np.ndarray:
-            """Deserialize input to a numpy ndarray.
-
-            Args:
-                value: The input value to deserialize.
-
-            Returns:
-                The deserialized numpy ndarray.
-            """
-            if isinstance(value, np.ndarray):
-                return value
-            return np.array(value)
 
         def _validate_ndarray(value: Any) -> np.ndarray:
             """Validate that value is an ndarray with a correct dtype.
@@ -105,13 +86,7 @@ try:
         # the user did not specify a type argument). If so, we fall through to
         # the basic ndarray check.
         if isinstance(type_arg, TypeVar):
-            # Deserialization + basic instance check.
-            return core_schema.chain_schema([
-                core_schema.no_info_plain_validator_function(
-                    _deserialize_ndarray
-                ),
-                core_schema.is_instance_schema(np.ndarray),
-            ])
+            return core_schema.is_instance_schema(np.ndarray)
 
         # Check if it's an actual numpy dtype (not an unrelated class such as
         # str or dict).
@@ -123,17 +98,12 @@ try:
                 " subclass of np.generic"
             )
 
-        # Deserialization + dtype validation.
-        return core_schema.chain_schema([
-            core_schema.no_info_plain_validator_function(_deserialize_ndarray),
-            core_schema.no_info_plain_validator_function(_validate_ndarray),
-        ])
+        # Perform ndarray and inner dtype validation.
+        return core_schema.no_info_plain_validator_function(_validate_ndarray)
 
     NpGeneric = TypeVar("NpGeneric", bound=np.generic)
     NDArrayAnn = Annotated[
-        npt.NDArray[NpGeneric],
-        GetPydanticSchema(_ndarray_schema),
-        PlainSerializer(lambda x: x.tolist(), return_type=list),
+        npt.NDArray[NpGeneric], GetPydanticSchema(_ndarray_schema)
     ]
 except ImportError:
     pass
