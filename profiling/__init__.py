@@ -5,12 +5,15 @@ import logging
 import sys
 
 from loguru import logger
+from loguru._handler import Message
+from tqdm import tqdm
 from typing_extensions import override
 
 
 # Intercept standard logging messages (also from external libraries) toward
 # Loguru sinks. Source:
-# https://github.com/Delgan/loguru?tab=readme-ov-file#entirely-compatible-with-standard-logging
+# https://github.com/Delgan/loguru?
+# tab=readme-ov-file#entirely-compatible-with-standard-logging
 class InterceptHandler(logging.Handler):
     @override
     def emit(self, record: logging.LogRecord) -> None:
@@ -41,6 +44,18 @@ def configure_root_logger(
     filter: dict[str | None, str | int | bool] = {},
     worker_id: int | None = None,
 ) -> None:
+    # Create a sink that uses tqdm.write() when inside a tqdm progress bar.
+    # This prevents overlap between the progress bar and the log messages. Note
+    # that you MUST use logger.bind(tqdm=True).info(), .warning(), .error(),
+    # # etc. when logging inside a tqdm progress bar for this sink to correctly
+    # handle it! Source:
+    # https://github.com/Delgan/loguru/issues/135#issuecomment-2028299310
+    def sink(msg: Message) -> None:
+        if "tqdm" in msg.record["extra"]:
+            tqdm.write(msg, end="")
+        else:
+            sys.stderr.write(msg)
+
     # Remove all existing handlers to avoid duplicate messages.
     for name in logging.root.manager.loggerDict.keys():
         logging.getLogger(name).handlers = []
@@ -49,7 +64,7 @@ def configure_root_logger(
 
     # Configure the root logger.
     logger.add(
-        sys.stderr,
+        sink,  # type: ignore
         level=logging_level,
         format=(
             "<green>{time:HH:mm:ss}</green>"
@@ -62,11 +77,12 @@ def configure_root_logger(
             + " | <level>{message}</level>"
         ),
         filter={
-            "": "INFO",  # Default level for external libraries.
-            "__main__": "TRACE",  # All levels for the main file.
-            __package__: "TRACE",  # All levels for internal modules.
+            "": "INFO",  # default level for external libraries
+            "__main__": "TRACE",  # all levels for the main file
+            __package__: "TRACE",  # all levels for internal modules
             **filter,
         },
+        colorize=True,
         enqueue=True,
     )
 
