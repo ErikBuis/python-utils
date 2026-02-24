@@ -30,8 +30,9 @@ try:
             CoreSchema for validating the typed numpy array.
 
         Examples:
+        >>> NpGeneric = TypeVar("NpGeneric", bound=np.generic)
         >>> NDArrayAnnTyped = Annotated[
-        ...     npt.NDArray[T], GetPydanticSchema(_ndarray_schema)
+        ...     npt.NDArray[NpGeneric], GetPydanticSchema(_ndarray_schema)
         ... ]
 
         >>> class M(BaseModel):
