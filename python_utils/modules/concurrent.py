@@ -2,8 +2,16 @@ import logging
 import multiprocessing as mp
 import multiprocessing.queues
 import multiprocessing.synchronize
+import queue
+import threading
 from collections.abc import Callable, Iterator, Sequence
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import (
+    FIRST_COMPLETED,
+    ProcessPoolExecutor,
+    ThreadPoolExecutor,
+    as_completed,
+    wait,
+)
 from typing import Any, TypeVar
 
 from typing_extensions import overload
@@ -15,7 +23,7 @@ _worker_cancel_event: multiprocessing.synchronize.Event | None = None
 
 
 @overload
-def __init_worker(
+def __init_process(
     cancel_event: multiprocessing.synchronize.Event,
     worker_init_fn: Callable[[int], None],
     worker_id_queue: multiprocessing.queues.Queue,
@@ -24,7 +32,7 @@ def __init_worker(
 
 
 @overload
-def __init_worker(
+def __init_process(
     cancel_event: multiprocessing.synchronize.Event,
     worker_init_fn: None = None,
     worker_id_queue: None = None,
@@ -32,7 +40,7 @@ def __init_worker(
     pass
 
 
-def __init_worker(
+def __init_process(
     cancel_event: multiprocessing.synchronize.Event,
     worker_init_fn: Callable[[int], None] | None = None,
     worker_id_queue: multiprocessing.queues.Queue | None = None,
@@ -53,8 +61,8 @@ def __init_worker(
         worker_init_fn(worker_id_queue.get())
 
 
-def __run_wrapper(
-    fn: Callable[..., T], args: list[Any], kwargs: dict[str, Any]
+def __process_wrapper(
+    fn: Callable[..., T], args: list[Any] = [], kwargs: dict[str, Any] = {}
 ) -> T:
     """Run fn(*args, **kwargs) only if the cancellation event has not been set.
 
@@ -91,7 +99,7 @@ def __run_wrapper(
         raise
 
 
-def run_parallel(
+def parallelize_processes(
     tasks: Sequence[
         tuple[Callable[..., T]]
         | tuple[Callable[..., T], list[Any]]
@@ -125,31 +133,153 @@ def run_parallel(
     if worker_init_fn is None:
         executor = ProcessPoolExecutor(
             max_workers=max_workers,
-            initializer=__init_worker,
+            initializer=__init_process,
             initargs=(cancel_event,),
         )
     else:
         worker_id_queue = mp.Queue()
-        executor = ProcessPoolExecutor(
-            max_workers=max_workers,
-            initializer=__init_worker,
-            initargs=(cancel_event, worker_init_fn, worker_id_queue),
-        )
         for i in range(max_workers):
             worker_id_queue.put(i)
+        executor = ProcessPoolExecutor(
+            max_workers=max_workers,
+            initializer=__init_process,
+            initargs=(cancel_event, worker_init_fn, worker_id_queue),
+        )
 
     try:
-        # Submit all tasks, wrapping in __run_wrapper() to handle cancellation.
+        # Submit all tasks, handling cancellation in __process_wrapper().
         futures = []
         for task in tasks:
-            fn = task[0]
-            args = task[1] if len(task) > 1 else []
-            kwargs = task[2] if len(task) > 2 else {}
-            futures.append(executor.submit(__run_wrapper, fn, args, kwargs))
+            futures.append(
+                executor.submit(__process_wrapper, *task)  # type: ignore
+            )
 
         # Yield results as they complete.
         for future in as_completed(futures):
             yield future.result()
+    except (KeyboardInterrupt, GeneratorExit):
+        logging.warning(
+            "KeyboardInterrupt received, trying to cancel pending tasks"
+            " gracefully..."
+        )
+        cancel_event.set()
+        raise
+    except Exception:
+        cancel_event.set()
+        raise
+    finally:
+        executor.shutdown(wait=True, cancel_futures=True)
+
+
+def __init_thread(
+    worker_init_fn: Callable[[int], None], worker_id_queue: queue.Queue
+) -> None:
+    """Initialize each worker thread by calling worker_init_fn with a worker id.
+
+    Args:
+        worker_init_fn: A function to call on each worker thread with the worker
+            id as its only argument.
+        worker_id_queue: A thread-safe queue used to distribute worker ids.
+    """
+    worker_init_fn(worker_id_queue.get())
+
+
+def __thread_wrapper(
+    cancel_event: threading.Event,
+    fn: Callable[..., T],
+    args: list[Any] = [],
+    kwargs: dict[str, Any] = {},
+) -> T:
+    """Run fn(*args, **kwargs) only if the cancellation event has not been set.
+
+    Args:
+        cancel_event: A threading event used to signal cancellation.
+        fn: The function to call.
+        args: Positional arguments passed to fn.
+        kwargs: Keyword arguments passed to fn.
+
+    Returns:
+        The return value of fn(*args, **kwargs) if the cancellation event is
+        not set.
+    """
+    if cancel_event.is_set():
+        raise KeyboardInterrupt
+
+    return fn(*args, **kwargs)
+
+
+def parallelize_threads(
+    tasks: Sequence[
+        tuple[Callable[..., T]]
+        | tuple[Callable[..., T], list[Any]]
+        | tuple[Callable[..., T], list[Any], dict[str, Any]]
+    ],
+    max_workers: int | None = None,
+    worker_init_fn: Callable[[int], None] | None = None,
+) -> Iterator[T]:
+    """Submit tasks to a thread pool and yield results as they complete.
+
+    Unlike parallelize_processes, threads cannot be forcibly interrupted
+    mid-execution. Cancellation only prevents tasks that have not yet started
+    from running; tasks that are already running will complete normally even
+    after a KeyboardInterrupt is received.
+
+    Args:
+        tasks: List of tuples containing:
+            - A callable to execute.
+            - An optional list of positional arguments to pass to the callable.
+            - An optional dict of keyword arguments to pass to the callable.
+        max_workers: Maximum number of worker threads. Defaults to len(tasks).
+        worker_init_fn: If not None, this will be called on each worker thread
+            with the worker id as its only argument (an int in
+            [0, max_workers - 1]).
+
+    Yields:
+        The return value of each completed task, in completion order.
+    """
+    max_workers = max_workers or len(tasks)
+
+    # ThreadPoolExecutor doesn't have a built-in way to signal cancellation to
+    # worker threads, so we use a shared threading.Event() that each thread
+    # checks before starting a new task.
+    cancel_event = threading.Event()
+    if worker_init_fn is None:
+        executor = ThreadPoolExecutor(max_workers=max_workers)
+    else:
+        worker_id_queue = queue.Queue()
+        for i in range(max_workers):
+            worker_id_queue.put(i)
+        executor = ThreadPoolExecutor(
+            max_workers=max_workers,
+            initializer=__init_thread,
+            initargs=(worker_init_fn, worker_id_queue),
+        )
+
+    try:
+        # Submit all tasks, handling cancellation in __thread_wrapper().
+        futures = []
+        for task in tasks:
+            futures.append(
+                executor.submit(
+                    __thread_wrapper, cancel_event, *task  # type: ignore
+                )
+            )
+
+        # Yield results as they complete. We use wait() with a timeout instead
+        # of as_completed() here because with as_completed(), the main thread
+        # would wait for a thread to finish before waking up, which would create
+        # a race condition where a new thread starts before the main thread has
+        # a chance to set the cancel event, leading to more tasks running after
+        # a KeyboardInterrupt has already been received. With wait() and
+        # timeout=1, the main thread wakes up every second to check for a
+        # KeyboardInterrupt, so it has a higher chance to catch it before extra
+        # tasks start.
+        while futures:
+            done, futures = wait(
+                futures, timeout=1, return_when=FIRST_COMPLETED
+            )
+            for future in done:
+                yield future.result()
     except (KeyboardInterrupt, GeneratorExit):
         logging.warning(
             "KeyboardInterrupt received, trying to cancel pending tasks"
