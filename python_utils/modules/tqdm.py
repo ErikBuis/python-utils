@@ -123,6 +123,13 @@ if __name__ == "__main__":
 ```
 """
 
+# TODO Make the interface more minimal by removing the need for worker
+# TODO initializer callbacks, and instead automatically detecting worker
+# TODO processes and threads when they call tqdm_concurrent() and routing
+# TODO messages to the listener accordingly. This would be a much nicer
+# TODO interface, but it is more complex to implement and may have edge cases
+# TODO that are tricky to handle.
+
 import atexit
 import multiprocessing as mp
 import queue as _queue_module
