@@ -10,18 +10,22 @@ in a coordinated way. New bars will be added at the bottom of the tqdm block,
 and finished ones will automatically move up and become permanent lines, so the
 block never has empty rows and the display is stable without reordering.
 
-Notes:
+Requirements and usage notes:
 - The module assumes the project uses loguru with a configure_root_logger()
   helper. Worker log lines are routed through a custom sink so the main process
   listener can print them above the bars without interference.
+- You MUST route all print statements through loguru, and can NOT use the native
+  tqdm.tqdm() function any more when you are using this module.
 - In order for the module to work, you have to insert callbacks at several
   points in your code:
   1. The main process must call setup_listener_queue() to initialize the shared
      queue and start the listener thread.
-  2. You must acquire the main process's queue using get_listener_queue() and
-     pass it to your worker initializer function.
+- If you are using single-processing, you are done! Otherwise, also follow the
+  next steps:
+  2. For each worker process, you must acquire the main process's queue using
+     get_listener_queue() and pass it to your worker initializer function.
   3. Each worker process's initializer function must call setup_listener_queue()
-     with the main process's queue to initialize the queue in that process.
+     with that queue to set it up within that process.
   4. Each worker process must configure loguru to use the custom sink created
      by create_listener_sink() so log lines are routed to the listener.
 
@@ -29,12 +33,12 @@ Notes:
 Example usage:
 ```
 from functools import partial
-from multiprocessing.queue import Queue
+from multiprocessing.queues import Queue
 
 from loguru import logger
 from python_utils.modules.concurrent import (
     parallelize_processes, parallelize_threads
-)  # optional to make worker management easier, not required for tqdm_concurrent
+)  # optional to make worker management easier, not required for this module
 from python_utils.modules.tqdm import (
     create_listener_sink,
     get_listener_queue,
@@ -121,6 +125,10 @@ if __name__ == "__main__":
 
 import atexit
 import multiprocessing as mp
+import queue as _queue_module
+import re
+import shutil
+import sys
 import threading
 import uuid
 from collections.abc import Callable, Iterable, Iterator
@@ -136,69 +144,217 @@ T = TypeVar("T")
 _queue: Queue | None = None
 _listener: threading.Thread | None = None
 
+_ANSI_RE = re.compile(r"\x1b\[[\d;]*[a-zA-Z]")
+
+
+def _visual_len(s: str) -> int:
+    """Calculate the visual length of a string, ignoring ANSI escape sequences.
+
+    Args:
+        s: The input string, which may contain ANSI escape sequences for
+            coloring or formatting.
+
+    Returns:
+        The visual length of the string, ignoring ANSI escape sequences.
+    """
+    return len(_ANSI_RE.sub("", s))
+
+
+def _visual_rows(ss: list[str], ncols: int) -> int:
+    """Calculate the number of visual rows taken up by several strings.
+
+    Args:
+        ss: Strings to calculate the visual rows for.
+        ncols: Number of columns in the terminal.
+
+    Returns:
+        The number of visual rows taken up by the log lines, accounting for
+        line wrapping based on the terminal width.
+    """
+    rows = 0
+    for log_msg in ss:
+        lines = log_msg.split("\n")
+        for line in lines:
+            rows += (_visual_len(line) - 1) // ncols + 1
+    return rows
+
+
+class _NullSink:
+    """File-like object that discards writes but reports stderr terminal info.
+
+    Used as the `file` argument for tqdm bars so they track state and format
+    correctly without writing anything to the terminal.
+
+    The fileno() method is implemented to return the real stderr file
+    descriptor, so that tqdm's `dynamic_ncols` can still detect the real
+    terminal width.
+
+    The `encoding` attribute is set to "utf-8" so that tqdm's internal
+    _is_utf() check passes and Unicode block-fill characters are used
+    instead of falling back to the ASCII `123456789#` set.
+    """
+
+    encoding: str = "utf-8"
+
+    def write(self, s: str) -> int:
+        return len(s)
+
+    def flush(self) -> None:
+        pass
+
+    def isatty(self) -> bool:
+        return sys.stderr.isatty()
+
+    def fileno(self) -> int:
+        return sys.stderr.fileno()
+
 
 def _run_listener(queue: Queue) -> None:
     """Consume messages from all processes and render them in the main process.
 
-    Runs as a daemon thread in the main process. All tqdm bar objects live
-    exclusively in this thread, so no external locking is needed for the active
-    dict itself. However, tqdm's own class lock (an RLock) is still acquired
-    when adjusting bar positions to prevent concurrent renders.
+    Instead of delegating to tqdm.write() (which causes flickering), this
+    listener redirects all log messages and bar updates to a single render
+    function. All actual terminal output is produced manually with ANSI escape
+    sequences. For details on these helpers, see:
+    https://en.wikipedia.org/wiki/ANSI_escape_code
+
+    The listener drains the queue in batches, to merge multiple updates into a
+    single render pass, which improves efficiency.
+
+    We always reserve the bottom row for an empty line.
 
     Message types:
-    - ("log", message: str): Print log message above the bars via tqdm.write().
-    - ("bar_enter", bar_id: str, tqdm_kwargs: dict): Create a new bar, shifting
-      existing bars up.
+    - ("log", message: str): Print log message above the bars.
+    - ("bar_enter", bar_id: str, tqdm_kwargs: dict): Create a new bar.
     - ("bar_update", bar_id: str, n: int): Advance bar by n steps.
-    - ("bar_exit", bar_id: str): Close bar, shift remaining bars down, and
-      print a permanent line.
-    - ("shutdown",): Exit the listener loop and allow the thread to finish.
+    - ("bar_exit", bar_id: str, leave: bool): Close bar, optionally leaving a
+      permanent line.
+    - ("shutdown",): Exit the listener loop.
 
     Args:
         queue: Queue that all processes send messages to.
     """
+    sink: _NullSink = _NullSink()
     active: dict[str, tqdm] = {}
+    bar_order: list[str] = []
+    prev_bar_rows = 0
 
+    def render(log_msgs: list[str]) -> None:
+        """Write log_msgs above the bars and redraw all active bars.
+
+        Args:
+            log_msgs: Log lines to print above the bar block.
+        """
+        nonlocal active, bar_order, prev_bar_rows
+
+        if not log_msgs and not bar_order:
+            return
+
+        ncols, nrows = shutil.get_terminal_size()
+
+        # Calculate how many rows the bars currently take up.
+        curr_bar_rows = min(len(bar_order), nrows - 1)
+
+        buf = []
+
+        # Start atomic update.
+        buf.append("\x1b[?2026h")
+
+        # Pre-scroll as many rows up as needed to fit the new content.
+        # This mitigates flickering due to autoscrolling (mostly).
+        # I spent a lot of time on trying to find a solution that works without
+        # any flickering at all, but it seems to be basically impossible due to
+        # the way terminal rendering and autoscrolling works. A solution that
+        # fully prevents flickering is "\x1b[{scroll}S", but this has the
+        # downside of not preserving the scrollback buffer, so you lose the
+        # ability to scroll up to see previous logs. The current solution of
+        # pre-scrolling with newlines and then moving the cursor back up seems
+        # to be the best compromise, as it preserves the scrollback buffer and
+        # only causes slight flickering.
+        scroll = curr_bar_rows + _visual_rows(log_msgs, ncols) - prev_bar_rows
+        if scroll > 0:
+            buf.append("\n" * scroll)
+            buf.append(f"\x1b[{scroll}A")
+
+        # Move cursor up to top of the bar block and clear to end of the screen.
+        if prev_bar_rows > 0:
+            buf.append(f"\x1b[{prev_bar_rows}A")
+            buf.append("\x1b[J")
+
+        # Print log messages.
+        for log_msg in log_msgs:
+            buf.append(log_msg)
+
+        # Redraw bars.
+        for bar_id in bar_order:
+            active[bar_id].ncols = ncols
+            bar_str = str(active[bar_id]) + "\n"
+            buf.append(bar_str)
+
+        # End atomic update.
+        buf.append("\x1b[?2026l")
+
+        sys.stderr.buffer.write("".join(buf).encode())
+        sys.stderr.buffer.flush()
+
+        prev_bar_rows = curr_bar_rows
+
+    # Main loop.
     while True:
-        match queue.get():
-            case ("log", message):
-                tqdm.write(message, end="")
+        # Block until at least one message arrives.
+        batch = [queue.get()]
 
-            case ("bar_enter", bar_id, tqdm_kwargs):
-                active[bar_id] = tqdm(
-                    position=len(active), leave=False, **tqdm_kwargs
-                )
+        # Drain all remaining pending messages without blocking.
+        while True:
+            try:
+                batch.append(queue.get_nowait())
+            except _queue_module.Empty:
+                break
 
-            case ("bar_update", bar_id, n) if bar_id in active:
-                active[bar_id].update(n)
+        # Accumulate log lines and state changes, then render once.
+        log_msgs = []
+        shutdown = False
 
-            case ("bar_exit", bar_id, leave) if bar_id in active:
-                bar = active[bar_id]
+        for msg in batch:
+            match msg:
+                case ("log", message):
+                    log_msgs.append(message)
 
-                # Snapshot the display string at 100% before touching any state.
-                final_str = str(bar)
+                case ("bar_enter", bar_id, tqdm_kwargs):
+                    bar = tqdm(
+                        leave=False,
+                        file=sink,
+                        dynamic_ncols=True,
+                        position=0,
+                        **tqdm_kwargs,
+                    )
+                    active[bar_id] = bar
+                    bar_order.append(bar_id)
 
-                with tqdm.get_lock():
-                    closing_pos = bar.pos  # negative int, e.g. -2 for pos=2
-                    bar.close()  # erases the row
+                case ("bar_update", bar_id, n) if bar_id in active:
+                    active[bar_id].update(n)
+
+                case ("bar_exit", bar_id, leave) if bar_id in active:
+                    if leave:
+                        active[bar_id].ncols = (
+                            shutil.get_terminal_size().columns
+                        )
+                        log_msgs.append(str(active[bar_id]) + "\n")
+                    active[bar_id].close()
                     del active[bar_id]
+                    bar_order.remove(bar_id)
 
-                    # Increase the pos attribute for every bar that was below
-                    # the closed one by one. tqdm's internal logic ensures that
-                    # the bar with the most negative pos is always rendered at
-                    # the bottom.
-                    for other in active.values():
-                        if other.pos < closing_pos:  # more negative = lower
-                            other.pos += 1
+                case ("shutdown",):
+                    shutdown = True
+                    break
 
-                if leave:
-                    tqdm.write(final_str)
+                case _:
+                    pass
 
-            case ("shutdown",):
-                return
+        render(log_msgs)
 
-            case _:
-                pass  # ignore malformed messages
+        if shutdown:
+            break
 
 
 def _teardown_listener() -> None:
@@ -317,9 +473,22 @@ class tqdm_concurrent(Generic[T]):
         iterable: Optional iterable to wrap. If not provided, the bar must be
             manually updated by calling update(). If provided, the bar will
             automatically update on each iteration.
-        **kwargs: Keyword arguments forwarded to tqdm.tqdm(). Note that the
-            position argument is managed internally and will be silently ignored
-            if supplied.
+        **kwargs: Keyword arguments forwarded to tqdm.tqdm(). The following
+            arguments are reserved and will be managed internally:
+            - leave: This argument is supported but will be managed internally
+              to ensure correct behavior. Defaults to True. You can set this to
+              False to have the bar not leave a permanent line when it finishes,
+              but the listener will manage the actual terminal output to ensure
+              the display remains stable and correctly ordered.
+            - position: Silently ignored if supplied.
+            - ncols: Silently ignored if supplied. The listener will handle
+              dynamic column resizing automatically.
+            - dynamic_ncols: Silently ignored if supplied. The listener will
+              handle dynamic column resizing automatically.
+            - file: Silently ignored if supplied. The output is always written
+              to sys.stderr through a custom sink that the listener manages. If
+              you need this feature, please submit a feature request with your
+              use case.
     """
 
     def __init__(
@@ -336,9 +505,13 @@ class tqdm_concurrent(Generic[T]):
                 " setup_listener_queue() first."
             )
 
-        # Strip position and leave, the listener manages it internally.
-        kwargs.pop("position", None)
+        # Strip out reserved kwargs that are managed internally, and save the
+        # leave value.
         self._leave = kwargs.pop("leave", True)
+        kwargs.pop("file", None)
+        kwargs.pop("ncols", None)
+        kwargs.pop("dynamic_ncols", None)
+        kwargs.pop("position", None)
 
         # Infer total from the iterable when not explicitly provided.
         if "total" not in kwargs and iterable is not None:
