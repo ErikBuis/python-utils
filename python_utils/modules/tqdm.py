@@ -143,6 +143,7 @@ from multiprocessing.queues import Queue
 from types import TracebackType
 from typing import Any, Generic, TypeVar
 
+from loguru import logger
 from loguru._handler import Message
 from tqdm import tqdm
 
@@ -377,6 +378,14 @@ def _teardown_listener() -> None:
     if _queue is None or _listener is None:
         return
 
+    # If we would immediately send the shutdown sentinel, a bug would occur
+    # where the listener shuts down while the loguru enqueue thread is still
+    # running, which would cause the remaining messages to be lost and never
+    # printed. The remove() call prevents this by calling join() on the enqueue
+    # thread, ensuring all pending messages are processed before we send the
+    # shutdown signal to the listener.
+    logger.remove()
+
     _queue.put(("shutdown",))
     _listener.join()
     _queue = None
@@ -417,6 +426,18 @@ def setup_listener_queue(queue: Queue | None = None) -> None:
         _queue = mp.Queue()
 
         # Start the listener thread.
+        # Python's shutdown sequence is as follows:
+        # 1. The main thread reaches the end of its code.
+        # 2. The interpreter automatically performs a join() on all remaining
+        #    non-daemon threads. It will block here until they exit.
+        # 3. Only after all non-daemon threads have completed does Python call
+        #    the functions registered via the atexit module.
+        # 4. Any threads marked as daemon=True are then abruptly terminated
+        #    without cleanup.
+        # This means that if we would make the listener thread a non-daemon
+        # thread, the atexit handler would never run because the interpreter is
+        # still waiting for that thread to exit, causing a deadlock. Thus, we
+        # have to make it a daemon thread!
         _listener = threading.Thread(
             target=_run_listener, args=(_queue,), daemon=True
         )
