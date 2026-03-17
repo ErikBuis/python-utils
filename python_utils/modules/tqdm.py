@@ -1,137 +1,79 @@
 """Tqdm-compatible progress bars that work across multiple concurrent processes.
 
-This module provides a drop-in replacement for tqdm progress bars that work
+This module provides a drop-in replacement for tqdm progress bars that works
 correctly when multiple tqdm bars are active at the same time, even across
-multiple processes.
+multiple processes. If multiple bars are active at a time, they will be
+"stacked" on top of each other in the terminal, and log messages will be
+printed above the bars. New bars will be added at the bottom of the bar block,
+while finished ones will automatically move up and become permanent lines, so
+the block never has empty rows.
 
-It achieves this by running a single listener thread in the main process that
-consumes messages from all worker processes and renders the bars and log lines
-in a coordinated way. New bars will be added at the bottom of the tqdm block,
-and finished ones will automatically move up and become permanent lines, so the
-block never has empty rows and the display is stable without reordering.
+Requirements:
+- You must call logger.add() at least once in the main process and every worker
+  process after importing this module.
 
-Requirements and usage notes:
-- The module assumes the project uses loguru with a configure_root_logger()
-  helper. Worker log lines are routed through a custom sink so the main process
-  listener can print them above the bars without interference.
-- You MUST route all print statements through loguru, and can NOT use the native
-  tqdm.tqdm() function any more when you are using this module.
-- In order for the module to work, you have to insert callbacks at several
-  points in your code:
-  1. The main process must call setup_listener_queue() to initialize the shared
-     queue and start the listener thread.
-- If you are using single-processing, you are done! Otherwise, also follow the
-  next steps:
-  2. For each worker process, you must acquire the main process's queue using
-     get_listener_queue() and pass it to your worker initializer function.
-  3. Each worker process's initializer function must call setup_listener_queue()
-     with that queue to set it up within that process.
-  4. Each worker process must configure loguru to use the custom sink created
-     by create_listener_sink() so log lines are routed to the listener.
+...that's it! Just call tqdm_concurrent() instead of tqdm.tqdm() and everything
+should "magically" work in both the main process and worker processes. See the
+example usage below for details.
 
+---
+
+Additional usage notes:
+- You must route all print statements through the logger and all progress bars
+  through tqdm_concurrent(). Do NOT use print() and the native tqdm.tqdm(), as
+  those would bypass the module's listener and cause corrupted terminal output.
+- This module monkey-patches logger.add() by replacing the user-supplied sink
+  with our custom sink that forwards all log messages to the listener queue.
+  This applies to the main process and all worker processes. Do NOT import this
+  module after registering any sinks with logger.add(), as those sinks would
+  bypass the listener and cause corrupted terminal output.
+
+---
 
 Example usage:
 ```
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from functools import partial
-from multiprocessing.queues import Queue
 
 from loguru import logger
-from python_utils.modules.concurrent import (
-    parallelize_processes, parallelize_threads
-)  # optional to make worker management easier, not required for this module
-from python_utils.modules.tqdm import (
-    create_listener_sink,
-    get_listener_queue,
-    setup_listener_queue,
-    tqdm_concurrent,
-)
-
-from . import configure_root_logger
+from python_utils.modules.tqdm import tqdm_concurrent
 
 
-def your_worker_init_fn(
-    worker_id: int,
-    listener_queue: Queue,
-    logging_level: str | int,
-    **kwargs: Any,
-) -> None:
-    ...  # any worker setup
-
-    setup_listener_queue(listener_queue)
-    configure_root_logger(
-        logging_level, worker_id=worker_id, custom_sink=create_listener_sink()
-    )
+def your_worker_init_fn(logging_level: str | int) -> None:
+    logger.add(sys.stderr, level=logging_level)
 
 
 def your_thread_fn(...) -> ...:
-    ...  # do work
-
     for item in tqdm_concurrent(...):
-        ...  # do work on item
-
-    ...  # do work
+        ...
 
     return thread_result
 
 
 def your_process_fn(...) -> ...:
-    ...  # do work
-
-    your_thread_tasks = [
-        (
-            your_thread_fn,
-            [...]  # args to pass to your_thread_fn
-            {...}  # kwargs to pass to your_thread_fn
-        ),
-        ...  # more thread tasks
-    ]
-
-    for thread_result in parallelize_threads(your_thread_tasks):
-        ...  # do work with thread_result
-
-    ... # do work
+    with ThreadPoolExecutor() as executor:
+        futures = [executor.submit(your_thread_fn, ...) for ...]
+        thread_results = [f.result() for f in futures]
 
     return process_result
 
 
 def main(...) -> None:
-    your_process_tasks = [
-        (
-            your_process_fn,
-            [...]  # args to pass to your_process_fn
-            {...}  # kwargs to pass to your_process_fn
-        ),
-        ...  # more process tasks
-    ]
-
-    for process_result in parallelize_processes(
-        your_process_tasks,
-        worker_init_fn=partial(
-            your_worker_init_fn,
-            logging_level=...,
-            listener_queue=get_listener_queue(),
-        ),
-    ):
-        ...  # do work with process_result
+    worker_init_fn = partial(your_worker_init_fn, logging_level)
+    with ProcessPoolExecutor(initializer=worker_init_fn) as executor:
+        futures = [executor.submit(your_process_fn, ...) for ...]
+        process_results = [f.result() for f in futures]
 
 
 if __name__ == "__main__":
-    setup_listener_queue()
-    configure_root_logger(custom_sink=create_listener_sink())
-
+    logger.add(sys.stderr, level=logging_level)
     main(...)
 ```
 """
 
-# TODO Make the interface more minimal by removing the need for worker
-# TODO initializer callbacks, and instead automatically detecting worker
-# TODO processes and threads when they call tqdm_concurrent() and routing
-# TODO messages to the listener accordingly. This would be a much nicer
-# TODO interface, but it is more complex to implement and may have edge cases
-# TODO that are tricky to handle.
-
 import atexit
 import multiprocessing as mp
+import os
 import queue as _queue_module
 import re
 import shutil
@@ -139,6 +81,7 @@ import sys
 import threading
 import uuid
 from collections.abc import Callable, Iterable, Iterator
+from multiprocessing.managers import BaseManager
 from multiprocessing.queues import Queue
 from types import TracebackType
 from typing import Any, Generic, TypeVar
@@ -149,23 +92,27 @@ from tqdm import tqdm
 
 T = TypeVar("T")
 
+# Global state for the message queue and listener thread.
 _queue: Queue | None = None
 _listener: threading.Thread | None = None
 
+# Lock to prevent multiple threads in the same worker process from
+# simultaneously trying to connect to the listener server.
+_auto_connect_lock = threading.Lock()
+
+# Environment variable names used to advertise the manager's address and
+# authkey so that worker processes can auto-connect to it.
+_ENV_ADDR = "_TQDM_CONCURRENT_ADDR"
+_ENV_AUTHKEY = "_TQDM_CONCURRENT_AUTHKEY"
+
+# Pre-compile a regex to match ANSI escape sequences, which are used for e.g.
+# coloring and formatting log messages.
 _ANSI_RE = re.compile(r"\x1b\[[\d;]*[a-zA-Z]")
 
 
-def _visual_len(s: str) -> int:
-    """Calculate the visual length of a string, ignoring ANSI escape sequences.
-
-    Args:
-        s: The input string, which may contain ANSI escape sequences for
-            coloring or formatting.
-
-    Returns:
-        The visual length of the string, ignoring ANSI escape sequences.
-    """
-    return len(_ANSI_RE.sub("", s))
+# ------------------------------------------------------------------------------
+# Listener thread implementation
+# ------------------------------------------------------------------------------
 
 
 def _visual_rows(ss: list[str], ncols: int) -> int:
@@ -179,12 +126,13 @@ def _visual_rows(ss: list[str], ncols: int) -> int:
         The number of visual rows taken up by the log lines, accounting for
         line wrapping based on the terminal width.
     """
-    rows = 0
-    for log_msg in ss:
-        lines = log_msg.split("\n")
-        for line in lines:
-            rows += (_visual_len(line) - 1) // ncols + 1
-    return rows
+    return sum(
+        sum(
+            (len(line) - 1) // ncols + 1
+            for line in _ANSI_RE.sub("", s).split("\n")
+        )
+        for s in ss
+    )
 
 
 class _NullSink:
@@ -197,9 +145,9 @@ class _NullSink:
     descriptor, so that tqdm's `dynamic_ncols` can still detect the real
     terminal width.
 
-    The `encoding` attribute is set to "utf-8" so that tqdm's internal
-    _is_utf() check passes and Unicode block-fill characters are used
-    instead of falling back to the ASCII `123456789#` set.
+    The `encoding` attribute is set to "utf-8" so that tqdm's internal _is_utf()
+    check passes and Unicode block-fill characters are used instead of falling
+    back to the ASCII `123456789#` set.
     """
 
     encoding: str = "utf-8"
@@ -223,10 +171,10 @@ def _run_listener(queue: Queue) -> None:
     Instead of delegating to tqdm.write() (which causes flickering), this
     listener redirects all log messages and bar updates to a single render
     function. All actual terminal output is produced manually with ANSI escape
-    sequences. For details on these helpers, see:
+    sequences. For details on ANSI escape sequences, see:
     https://en.wikipedia.org/wiki/ANSI_escape_code
 
-    The listener drains the queue in batches, to merge multiple updates into a
+    The listener drains the queue in batches to merge multiple updates into a
     single render pass, which improves efficiency.
 
     We always reserve the bottom row for an empty line.
@@ -242,9 +190,9 @@ def _run_listener(queue: Queue) -> None:
     Args:
         queue: Queue that all processes send messages to.
     """
-    sink: _NullSink = _NullSink()
-    active: dict[str, tqdm] = {}
-    bar_order: list[str] = []
+    sink = _NullSink()
+    active = {}
+    bar_order = []
     prev_bar_rows = 0
 
     def render(log_msgs: list[str]) -> None:
@@ -368,22 +316,22 @@ def _run_listener(queue: Queue) -> None:
 def _teardown_listener() -> None:
     """Gracefully shut down the listener thread in the main process.
 
-    Sends a shutdown sentinel to the queue, waits for the listener thread to
+    Sends a shutdown message to the queue, waits for the listener thread to
     finish processing all remaining messages, and resets the module state.
-    Called automatically via atexit when setup_listener_queue() is used in the
-    main process, so manual calls are not required. Safe to call multiple times.
+    Called automatically via atexit on program exit. Safe to call multiple
+    times.
     """
     global _queue, _listener
 
     if _queue is None or _listener is None:
         return
 
-    # If we would immediately send the shutdown sentinel, a bug would occur
-    # where the listener shuts down while the loguru enqueue thread is still
-    # running, which would cause the remaining messages to be lost and never
-    # printed. The remove() call prevents this by calling join() on the enqueue
-    # thread, ensuring all pending messages are processed before we send the
-    # shutdown signal to the listener.
+    # If we would immediately send the shutdown message, a bug would occur where
+    # the listener shuts down while the loguru enqueue thread is still running,
+    # which would cause the remaining messages to be lost and never printed. The
+    # remove() call prevents this by calling join() on the enqueue thread,
+    # ensuring all pending messages are processed before we send the shutdown
+    # signal to the listener.
     logger.remove()
 
     _queue.put(("shutdown",))
@@ -392,38 +340,137 @@ def _teardown_listener() -> None:
     _listener = None
 
 
-def setup_listener_queue(queue: Queue | None = None) -> None:
-    """Set up the shared queue and start the listener if in the main process.
+# ------------------------------------------------------------------------------
+# Queue sharing between main process and worker processes
+# ------------------------------------------------------------------------------
+
+
+class _QueueManager(BaseManager):
+    pass
+
+
+def _start_manager_server(actual_queue: Queue) -> None:
+    """Start the manager server that exposes the queue to worker processes.
+
+    Registers a get_queue() callable on a random loopback port and stores the
+    address and a random authkey in environment variables so that spawned (or
+    forked) worker processes can connect without any explicit argument passing.
 
     Args:
-        queue: If called in the main process, this argument must be None. If
-            called in a worker process, this argument must be the queue created
-            by the main process.
+        actual_queue: The main process's multiprocessing queue.
+    """
+    _QueueManager.register(
+        "get_queue",
+        callable=lambda: actual_queue,
+        exposed=("put",),  # expose only the Queue.put() method for safety
+    )
+    authkey = os.urandom(32)
+    manager = _QueueManager(address=("127.0.0.1", 0), authkey=authkey)
+    server = manager.get_server()
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    _, port = server.address  # type: ignore
+    os.environ[_ENV_ADDR] = str(port)
+    os.environ[_ENV_AUTHKEY] = authkey.hex()
+
+
+def _connect_to_manager_server() -> Queue | None:
+    """Connect to the manager server started by the main process.
+
+    Reads the server address and authkey from environment variables and returns
+    a proxy object for the queue. Returns None if the env vars are not set,
+    which means the main process did not start a manager server (e.g. when
+    running without this module in the main process).
+
+    Returns:
+        A proxy for the queue, or None if no server address is available.
+    """
+    port_str = os.environ.get(_ENV_ADDR)
+    authkey_str = os.environ.get(_ENV_AUTHKEY)
+    if port_str is None or authkey_str is None:
+        return None
+
+    _QueueManager.register("get_queue")
+    manager = _QueueManager(
+        address=("127.0.0.1", int(port_str)), authkey=bytes.fromhex(authkey_str)
+    )
+    manager.connect()
+    return manager.get_queue()  # type: ignore
+
+
+# ------------------------------------------------------------------------------
+# Loguru sink patching
+# ------------------------------------------------------------------------------
+
+
+def _make_listener_sink(queue: Queue) -> Callable[[Message], None]:
+    """Build a loguru sink that routes messages to the listener queue.
+
+    Args:
+        queue: The queue (or queue proxy) to send log messages to.
+
+    Returns:
+        A callable that loguru calls with each log message.
+    """
+
+    def listener_sink(msg: Message) -> None:
+        queue.put(("log", msg))
+
+    return listener_sink
+
+
+def _patch_loguru(queue: Queue) -> None:
+    """Monkey-patch loguru so every sink added in this process is auto-wrapped.
+
+    We do not want log messages written directly to stderr (that would bypass
+    the listener and corrupt the terminal output). Instead, every call to
+    logger.add() is intercepted and the user-supplied sink is replaced by one
+    that forwards the formatted message to the listener queue.
+
+    The patch is applied once per process. Any sinks already registered before
+    the patch are removed first so there is no double-output during the brief
+    window between process start and the user's logger.add() call.
+
+    Args:
+        queue: The queue (or queue proxy) to forward all log messages to.
+    """
+    original_add = logger.__class__.add
+
+    listener_sink = _make_listener_sink(queue)
+
+    def patched_add(self: Any, sink: Any, **kwargs: Any) -> int:
+        # Regardless of what sink the caller provides, replace it with the
+        # listener sink.
+        return original_add(self, listener_sink, **kwargs)  # type: ignore
+
+    logger.__class__.add = patched_add
+
+    # Remove any sinks that were registered before the patch (e.g. the default
+    # stderr sink that loguru adds at import time).
+    logger.remove()
+
+
+# ---------------------------------------------------------------------------
+# Module-level initialization
+# ---------------------------------------------------------------------------
+
+
+def _init() -> None:
+    """Initialize the module for the current process.
+
+    If called in the main process: create the queue, start the listener thread,
+    start the manager server, and register the teardown hook.
+
+    If called in worker processes: if the queue is already populated (if fork
+    was used by the OS), do nothing. Otherwise (if spawn was used by the OS),
+    connect to the manager server and apply the loguru patch.
     """
     global _queue, _listener
 
-    process_name = mp.current_process().name
-    is_main = process_name == "MainProcess"
-    if is_main and queue is not None or not is_main and queue is None:
-        raise RuntimeError(
-            "setup_listener_queue() must be called with queue=None in the main"
-            " process, and with queue=<main_process_queue> in worker processes,"
-            " but this was not the case. Please do the following: (1) Call"
-            " setup_listener_queue() in the main process to initialize the"
-            " queue, (2) then call get_listener_queue() in the main process and"
-            " pass it to your worker initializer function, and (3) finally pass"
-            " it to setup_listener_queue() within each worker process to"
-            " initialize the queue there."
-        )
-
-    if _queue is not None:
-        raise RuntimeError(
-            f"Listener queue already initialized in {process_name}. Call"
-            " get_listener_queue() to access it."
-        )
+    is_main = mp.current_process().name == "MainProcess"
 
     if is_main:
-        _queue = mp.Queue()
+        actual_queue = mp.Queue()
+        _queue = actual_queue
 
         # Start the listener thread.
         # Python's shutdown sequence is as follows:
@@ -439,57 +486,48 @@ def setup_listener_queue(queue: Queue | None = None) -> None:
         # still waiting for that thread to exit, causing a deadlock. Thus, we
         # have to make it a daemon thread!
         _listener = threading.Thread(
-            target=_run_listener, args=(_queue,), daemon=True
+            target=_run_listener, args=(actual_queue,), daemon=True
         )
         _listener.start()
-
-        # Let the listener thread finish cleanly on program exit.
         atexit.register(_teardown_listener)
+
+        _start_manager_server(actual_queue)
+        _patch_loguru(actual_queue)
+
     else:
-        _queue = queue
+        # If this process was forked, _queue is already a valid Queue inherited
+        # from the parent process. In this case, we should reset _listener to
+        # None so _teardown_listener() is a no-op in this worker.
+        if _queue is not None:
+            _listener = None
+            return
+
+        # If this process was spawned, connect to the manager server via env
+        # vars. We need to use a lock here to prevent multiple threads in the
+        # same worker process from simultaneously trying to connect to the
+        # manager server, which would cause log message duplication.
+        with _auto_connect_lock:
+            if _queue is not None:
+                return  # another thread beat us to it
+
+            proxy_queue = _connect_to_manager_server()
+            if proxy_queue is None:
+                raise RuntimeError(
+                    "Failed to connect to tqdm_concurrent manager server. Make"
+                    " sure you import python_utils.modules.tqdm before spawning"
+                    " any worker processes."
+                )
+
+            _queue = proxy_queue
+            _patch_loguru(proxy_queue)
 
 
-def get_listener_queue() -> Queue:
-    """Get the shared queue for the listener.
-
-    This function should only be called after the queue has been set up by
-    setup_listener_queue().
-
-    Returns:
-        The shared queue for the listener.
-    """
-    global _queue
-
-    if _queue is None:
-        process_name = mp.current_process().name
-        raise RuntimeError(
-            f"Listener queue not initialized in {process_name}. Call"
-            " setup_listener_queue() first."
-        )
-
-    return _queue
+_init()
 
 
-def create_listener_sink() -> Callable[[Message], None]:
-    """Create a loguru sink that routes log messages to the listener.
-
-    Returns:
-        A function that takes a loguru Message and sends it to the listener.
-    """
-    global _queue
-
-    queue = _queue
-    if queue is None:
-        process_name = mp.current_process().name
-        raise RuntimeError(
-            f"Listener queue not initialized in {process_name}. Call"
-            " setup_listener_queue() first."
-        )
-
-    def listener_sink(msg: Message) -> None:
-        queue.put(("log", msg))
-
-    return listener_sink
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
 
 
 class tqdm_concurrent(Generic[T]):
@@ -515,8 +553,8 @@ class tqdm_concurrent(Generic[T]):
               handle dynamic column resizing automatically.
             - file: Silently ignored if supplied. The output is always written
               to sys.stderr through a custom sink that the listener manages. If
-              you need this feature, please submit a feature request with your
-              use case.
+              you need to supply a custom sink, please submit a feature request
+              with your use case.
     """
 
     def __init__(
@@ -529,8 +567,9 @@ class tqdm_concurrent(Generic[T]):
         if _queue is None:
             process_name = mp.current_process().name
             raise RuntimeError(
-                f"Listener queue not initialized in {process_name}. Call"
-                " setup_listener_queue() first."
+                f"Listener queue not initialized in {process_name}. Make sure"
+                " you import python_utils.modules.tqdm before spawning any"
+                " worker processes."
             )
 
         # Strip out reserved kwargs that are managed internally, and save the
@@ -561,8 +600,7 @@ class tqdm_concurrent(Generic[T]):
 
         if _queue is None:
             raise RuntimeError(
-                "Listener queue not initialized. Call setup_listener_queue()"
-                " first."
+                "Listener queue not initialized. This should never happen."
             )
 
         _queue.put(("bar_update", self._id, n))
@@ -576,8 +614,7 @@ class tqdm_concurrent(Generic[T]):
 
         if _queue is None:
             raise RuntimeError(
-                "Listener queue not initialized. Call setup_listener_queue()"
-                " first."
+                "Listener queue not initialized. This should never happen."
             )
 
         _queue.put(("bar_exit", self._id, self._leave))
