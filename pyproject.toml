@@ -83,3 +83,7 @@ geospatial = [
     "geopandas>=1.0.1",
     "shapely>=2.0.6",
 ]
+cloud = [
+    "boto3>=1.42.74",
+    "s3fs>=0.4.2",
+]
