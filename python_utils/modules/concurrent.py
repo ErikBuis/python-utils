@@ -292,3 +292,32 @@ def parallelize_threads(
         raise
     finally:
         executor.shutdown(wait=True, cancel_futures=True)
+
+
+def sequentialize_tasks(
+    tasks: Sequence[
+        tuple[Callable[..., T]]
+        | tuple[Callable[..., T], list[Any]]
+        | tuple[Callable[..., T], list[Any], dict[str, Any]]
+    ],
+) -> Iterator[T]:
+    """Run tasks sequentially and yield results.
+
+    Convenience function for running tasks sequentially with the same interface
+    as the parallel versions. This is useful to quickly create a sequential
+    path for when parallelism is not desired.
+
+    Args:
+        tasks: List of tuples containing:
+            - A callable to execute.
+            - An optional list of positional arguments to pass to the callable.
+            - An optional dict of keyword arguments to pass to the callable.
+
+    Yields:
+        The return value of each completed task, in submission order.
+    """
+    for task in tasks:
+        fn = task[0]
+        args = task[1] if len(task) > 1 else []
+        kwargs = task[2] if len(task) > 2 else {}
+        yield fn(*args, **kwargs)
