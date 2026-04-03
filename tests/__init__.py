@@ -1,11 +1,15 @@
 import inspect
 import logging
 from collections.abc import Callable
+from functools import partial
 
 from loguru import logger
 from loguru._handler import Message
 from tqdm import tqdm
 from typing_extensions import override
+
+_last_logging_level: str | int | None = None
+_last_filter: dict[str | None, str | int | bool] | None = None
 
 
 # Intercept standard logging messages (also from external libraries) toward
@@ -42,6 +46,10 @@ def configure_root_logger(
     worker_id: int | None = None,
     custom_sink: Callable[[Message], None] | None = None,
 ) -> None:
+    global _last_logging_level, _last_filter
+    _last_logging_level = logging_level
+    _last_filter = filter
+
     # Create a default sink that uses tqdm.write() when inside a tqdm progress
     # bar. This prevents overlap between the progress bar and the log messages.
     # Source: https://github.com/Delgan/loguru/issues/135
@@ -79,6 +87,26 @@ def configure_root_logger(
         },
         colorize=True,
         enqueue=True,
+    )
+
+
+def worker_init_fn(
+    worker_id: int,
+    logging_level: str | int,
+    filter: dict[str | None, str | int | bool],
+) -> None:
+    configure_root_logger(logging_level, filter=filter, worker_id=worker_id)
+
+
+def make_worker_init_fn() -> Callable[[int], None]:
+    if _last_logging_level is None or _last_filter is None:
+        raise ValueError(
+            "make_worker_init_fn() can only be called after"
+            " configure_root_logger() has already been called by the main"
+            " process."
+        )
+    return partial(
+        worker_init_fn, logging_level=_last_logging_level, filter=_last_filter
     )
 
 
