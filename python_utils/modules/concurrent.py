@@ -110,12 +110,17 @@ def parallelize_processes(
 ) -> Iterator[T]:
     """Submit tasks to a process pool and yield results as they complete.
 
+    Note that worker processes may be reused for multiple tasks if there are
+    more tasks than max_workers. If a worker_init_fn is provided, it will be
+    called once on each worker process at start-up, not once per task.
+
     Args:
         tasks: List of tuples containing:
             - A callable to execute.
             - An optional list of positional arguments to pass to the callable.
             - An optional dict of keyword arguments to pass to the callable.
-        max_workers: Maximum number of worker processes. Defaults to len(tasks).
+        max_workers: Maximum number of worker processes. If None, it is set by
+            the OS.
         worker_init_fn: If not None, this will be called on each worker
             subprocess with the worker id as its only argument (an int in
             [0, max_workers - 1]).
@@ -123,8 +128,6 @@ def parallelize_processes(
     Yields:
         The return value of each completed task, in completion order.
     """
-    max_workers = max_workers or len(tasks)
-
     # mp.Event() uses shared memory (semaphore), which can only be shared with
     # worker processes during spawning, not pickled through the work queue. We
     # therefore pass it via initargs so each worker receives it at start-up and
@@ -137,9 +140,12 @@ def parallelize_processes(
             initargs=(cancel_event,),
         )
     else:
+        # If max_workers is None, we don't know how many will be created, so to
+        # be safe we put as many IDs in the queue as the number of tasks.
         worker_id_queue = mp.Queue()
-        for i in range(max_workers):
+        for i in range(max_workers or len(tasks)):
             worker_id_queue.put(i)
+
         executor = ProcessPoolExecutor(
             max_workers=max_workers,
             initializer=__init_process,
@@ -224,12 +230,17 @@ def parallelize_threads(
     from running; tasks that are already running will complete normally even
     after a KeyboardInterrupt is received.
 
+    Note that worker threads may be reused for multiple tasks if there are
+    more tasks than max_workers. If a worker_init_fn is provided, it will be
+    called once on each worker thread at start-up, not once per task.
+
     Args:
         tasks: List of tuples containing:
             - A callable to execute.
             - An optional list of positional arguments to pass to the callable.
             - An optional dict of keyword arguments to pass to the callable.
-        max_workers: Maximum number of worker threads. Defaults to len(tasks).
+        max_workers: Maximum number of worker threads. If None, it is set by
+            the OS.
         worker_init_fn: If not None, this will be called on each worker thread
             with the worker id as its only argument (an int in
             [0, max_workers - 1]).
@@ -237,8 +248,6 @@ def parallelize_threads(
     Yields:
         The return value of each completed task, in completion order.
     """
-    max_workers = max_workers or len(tasks)
-
     # ThreadPoolExecutor doesn't have a built-in way to signal cancellation to
     # worker threads, so we use a shared threading.Event() that each thread
     # checks before starting a new task.
@@ -246,9 +255,12 @@ def parallelize_threads(
     if worker_init_fn is None:
         executor = ThreadPoolExecutor(max_workers=max_workers)
     else:
+        # If max_workers is None, we don't know how many will be created, so to
+        # be safe we put as many IDs in the queue as the number of tasks.
         worker_id_queue = queue.Queue()
-        for i in range(max_workers):
+        for i in range(max_workers or len(tasks)):
             worker_id_queue.put(i)
+
         executor = ThreadPoolExecutor(
             max_workers=max_workers,
             initializer=__init_thread,

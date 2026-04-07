@@ -71,7 +71,7 @@ def configure_root_logger(
         level=logging_level,
         format=(
             "<green>{time:HH:mm:ss.SSS}</green>"
-            + " | <level>{level:<8}</level>"
+            + " | <level>{level}</level>"
             + (
                 " | <cyan>{name}:{line}</cyan>"
                 if worker_id is None
@@ -80,9 +80,10 @@ def configure_root_logger(
             + " | <level>{message}</level>"
         ),
         filter={
-            "": "INFO",  # default level for external libraries
-            "__main__": "TRACE",  # all levels for the main file
-            __package__: "TRACE",  # all levels for internal modules
+            "": "INFO",  # external libraries
+            "__main__": "TRACE",  # main file
+            "__mp_main__": "TRACE",  # main file in spawned child processes
+            __package__: "TRACE",  # internal modules
             **filter,
         },
         colorize=True,
