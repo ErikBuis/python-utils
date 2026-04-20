@@ -18,13 +18,12 @@ import unittest
 
 from loguru import logger
 
+from python_utils.custom.init import configure_root_logger, make_worker_init_fn
 from python_utils.modules.concurrent import (
     parallelize_processes,
     parallelize_threads,
 )
 from python_utils.modules.tqdm import tqdm_concurrent
-
-from .. import configure_root_logger, make_worker_init_fn
 
 unittest.skip(
     "This is not a unit test and is meant to be run manually to visually check"
