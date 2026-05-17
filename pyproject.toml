@@ -20,9 +20,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Typing :: Typed",
 ]
-dependencies = [
-    "typing-extensions>=4.12.2",
-]
+dependencies = ["typing-extensions>=4.12.2"]
 
 [tool.setuptools.packages]
 find = {}
@@ -31,16 +29,14 @@ find = {}
 version = { attr = "python_utils.__version__" }
 
 [tool.pytest.ini_options]
-addopts = ["--doctest-modules"]
+addopts = ["--doctest-modules", "--ignore=python_utils/custom/init.py"]
 doctest_optionflags = ["NORMALIZE_WHITESPACE"]
 testpaths = ["python_utils/**/*.py", "tests/**/*.py"]
 
 [tool.uv.sources]
-torch = [
-    { index = "pytorch-cu124", marker = "platform_system != 'Darwin'"},
-]
+torch = [{ index = "pytorch-cu124", marker = "platform_system != 'Darwin'" }]
 torchvision = [
-    { index = "pytorch-cu124", marker = "platform_system != 'Darwin'"},
+    { index = "pytorch-cu124", marker = "platform_system != 'Darwin'" },
 ]
 
 [[tool.uv.index]]
@@ -56,13 +52,8 @@ dev = [
     "pre-commit>=4.1.0",
     "pytest>=8.3.4",
 ]
-logging = [
-    "loguru>=0.7.3",
-    "tqdm>=4.67.1",
-]
-pydantic = [
-    "pydantic>=2.10.6",
-]
+logging = ["loguru>=0.7.3", "tqdm>=4.67.1"]
+pydantic = ["pydantic>=2.10.6"]
 pytorch = [
     "lightning>=2.5.0.post0",
     "tensorboard>=2.18.0",

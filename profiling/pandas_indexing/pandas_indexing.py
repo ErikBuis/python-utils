@@ -8,7 +8,8 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
-from .. import configure_root_logger
+from python_utils.custom.init import configure_root_logger
+
 from ..plot_times import plot_times
 
 

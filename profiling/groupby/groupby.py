@@ -8,9 +8,9 @@ import numpy.typing as npt
 import pandas as pd
 from loguru import logger
 
+from python_utils.custom.init import configure_root_logger
 from python_utils.modules.numpy import groupby
 
-from .. import configure_root_logger
 from ..plot_times import plot_times
 
 

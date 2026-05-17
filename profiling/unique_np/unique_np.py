@@ -7,9 +7,9 @@ import numpy as np
 import numpy.typing as npt
 from loguru import logger
 
+from python_utils.custom.init import configure_root_logger
 from python_utils.modules.numpy import unique
 
-from .. import configure_root_logger
 from ..plot_times import plot_times
 
 

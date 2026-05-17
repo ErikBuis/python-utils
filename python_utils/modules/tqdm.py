@@ -20,13 +20,15 @@ example usage below for details.
 
 Additional usage notes:
 - You must route all print statements through the logger and all progress bars
-  through tqdm_concurrent(). Do NOT use print() and the native tqdm.tqdm(), as
+  through tqdm_concurrent(). Do NOT use print() or the native tqdm.tqdm(), as
   those would bypass the module's listener and cause corrupted terminal output.
 - This module monkey-patches logger.add() by replacing the user-supplied sink
   with our custom sink that forwards all log messages to the listener queue.
   This applies to the main process and all worker processes. Do NOT import this
   module after registering any sinks with logger.add(), as those sinks would
-  bypass the listener and cause corrupted terminal output.
+  bypass the listener and cause corrupted terminal output. Normally this should
+  not be an issue since imports at the top of files are executed before any
+  code executes, but just be aware of this if you are doing any dynamic imports.
 
 ---
 
@@ -193,7 +195,7 @@ def _run_listener(queue: Queue) -> None:
     sink = _NullSink()
     active = {}
     bar_order = []
-    prev_bar_rows = 0
+    curr_bar_rows = 0
 
     def render(log_msgs: list[str]) -> None:
         """Write log_msgs above the bars and redraw all active bars.
@@ -201,17 +203,20 @@ def _run_listener(queue: Queue) -> None:
         Args:
             log_msgs: Log lines to print above the bar block.
         """
-        nonlocal active, bar_order, prev_bar_rows
+        nonlocal active, bar_order, curr_bar_rows
 
         if not log_msgs and not bar_order:
             return
 
         ncols, nrows = shutil.get_terminal_size()
-
-        # Calculate how many rows the bars currently take up.
-        curr_bar_rows = min(len(bar_order), nrows - 1)
-
         buf = []
+
+        # Calculate how many rows the bars will take up after this render.
+        # We limit this to nrows - 1, because when there are more bars than the
+        # amount that would fit in the terminal, drawing all bars would cause
+        # temporary bar states to be added to the scrollback buffer permanently,
+        # which is undesirable.
+        new_bar_rows = min(len(bar_order), nrows - 1)
 
         # Start atomic update.
         buf.append("\x1b[?2026h")
@@ -221,20 +226,30 @@ def _run_listener(queue: Queue) -> None:
         # I spent a lot of time on trying to find a solution that works without
         # any flickering at all, but it seems to be basically impossible due to
         # the way terminal rendering and autoscrolling works. A solution that
-        # fully prevents flickering is "\x1b[{scroll}S", but this has the
-        # downside of not preserving the scrollback buffer, so you lose the
-        # ability to scroll up to see previous logs. The current solution of
-        # pre-scrolling with newlines and then moving the cursor back up seems
-        # to be the best compromise, as it preserves the scrollback buffer and
-        # only causes slight flickering.
-        scroll = curr_bar_rows + _visual_rows(log_msgs, ncols) - prev_bar_rows
+        # fully prevents flickering is "\x1b[{scroll}S", but this does not
+        # preserve the scrollback buffer, so you lose the ability to scroll up
+        # to see previous logs. This again could be overcome, this time with the
+        # "\x1b[!{scroll}S" code (which scrolls up and adds to scrollback), but
+        # unfortunately this code is not supported by all terminals (even major
+        # ones like the Windows PowerShell). The current solution pre-scrolls
+        # with newlines to preserve the scrollback buffer, then moves the cursor
+        # back up to where the bars should start. This causes some flickering,
+        # but it is minimal and seems to be the best compromise.
+        scroll = new_bar_rows + _visual_rows(log_msgs, ncols) - curr_bar_rows
+
+        # Since the ANSI cursor up command is a no-op if we try to scroll past
+        # the top of the terminal, we should cap the scoll to prevent this.
+        scroll = min(scroll, nrows - 1 - curr_bar_rows)
+
+        # Print newlines to trigger autoscrolling, then move the cursor back up
+        # to where the bars should start.
         if scroll > 0:
             buf.append("\n" * scroll)
             buf.append(f"\x1b[{scroll}A")
 
         # Move cursor up to top of the bar block and clear to end of the screen.
-        if prev_bar_rows > 0:
-            buf.append(f"\x1b[{prev_bar_rows}A")
+        if curr_bar_rows > 0:
+            buf.append(f"\x1b[{curr_bar_rows}A")
             buf.append("\x1b[J")
 
         # Print log messages.
@@ -242,7 +257,7 @@ def _run_listener(queue: Queue) -> None:
             buf.append(log_msg)
 
         # Redraw bars.
-        for bar_id in bar_order:
+        for bar_id in bar_order[-new_bar_rows:]:
             active[bar_id].ncols = ncols
             bar_str = str(active[bar_id]) + "\n"
             buf.append(bar_str)
@@ -253,7 +268,7 @@ def _run_listener(queue: Queue) -> None:
         sys.stderr.buffer.write("".join(buf).encode())
         sys.stderr.buffer.flush()
 
-        prev_bar_rows = curr_bar_rows
+        curr_bar_rows = new_bar_rows
 
     # Main loop.
     while True:

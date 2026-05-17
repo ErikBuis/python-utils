@@ -9,8 +9,8 @@ import numpy as np
 from loguru import logger
 
 from python_utils.custom.geometry import Interval, NumberSet
+from python_utils.custom.init import configure_root_logger
 
-from .. import configure_root_logger
 from ..plot_times import plot_times
 
 

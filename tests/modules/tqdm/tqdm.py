@@ -15,17 +15,15 @@ import random
 import threading
 import time
 import unittest
-from functools import partial
 
 from loguru import logger
 
+from python_utils.custom.init import configure_root_logger, make_worker_init_fn
 from python_utils.modules.concurrent import (
     parallelize_processes,
     parallelize_threads,
 )
 from python_utils.modules.tqdm import tqdm_concurrent
-
-from .. import configure_root_logger
 
 unittest.skip(
     "This is not a unit test and is meant to be run manually to visually check"
@@ -35,16 +33,6 @@ unittest.skip(
 
 THREADS = 2
 PROCESSES = 8
-
-
-def _worker_init_fn(worker_id: int, logging_level: str | int) -> None:
-    """Initialize a worker process by connecting it to the listener.
-
-    Args:
-        worker_id: Index assigned by parallelize_processes.
-        logging_level: Log level to apply in this worker.
-    """
-    configure_root_logger(logging_level, worker_id=worker_id)
 
 
 def _worker_thread(p: int, t: int) -> int:
@@ -91,8 +79,6 @@ def main(args: argparse.Namespace) -> None:
     Args:
         args: The command line arguments.
     """
-    worker_init_fn = partial(_worker_init_fn, logging_level=args.logging_level)
-
     # Start worker processes, each running their own threads.
     process_tasks = [(_worker_process, [p]) for p in range(1, PROCESSES)]
 
@@ -100,7 +86,7 @@ def main(args: argparse.Namespace) -> None:
         for p in parallelize_processes(
             process_tasks,
             max_workers=PROCESSES // 2,
-            worker_init_fn=worker_init_fn,
+            worker_init_fn=make_worker_init_fn(),
         ):
             logger.success(f"Worker process P{p} finished.")
 
