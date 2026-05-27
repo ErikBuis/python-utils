@@ -67,5 +67,15 @@ scientific = [
     "scikit-learn>=1.6.1",
     "scipy>=1.13.1",
 ]
-database = ["pandas>=2.2.3"]
-geospatial = ["geopandas>=1.0.1", "shapely>=2.0.6"]
+database = [
+    "pandas>=2.2.3",
+]
+geospatial = [
+    "geopandas>=1.0.1",
+    "shapely>=2.0.6",
+    "pyarrow>=24.0.0",
+]
+cloud = [
+    "boto3>=1.42.74",
+    "s3fs>=0.4.2",
+]
