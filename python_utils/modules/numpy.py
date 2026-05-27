@@ -2060,6 +2060,10 @@ def lexsort(
     if isinstance(keys, tuple):
         keys = np.stack(keys)  # [K, N_0, ..., N_axis, ..., N_{D-1}]
 
+    # If there is only one key, we can just sort by that key.
+    if keys.shape[0] == 1:
+        return keys[0].argsort(axis=axis, stable=stable)
+
     dtype = keys.dtype
 
     # If the array is an integer array, first try sorting by representing
