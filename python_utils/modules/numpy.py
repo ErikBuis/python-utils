@@ -2551,9 +2551,9 @@ def unique(
     taking all the other dimensions as constant tuples.
 
     This function is faster than numpy's version for small arrays (especially
-    when the amount of elements in the tuples is small), but slower for large
-    arrays. However, the main advantage of this function is that it can return
-    a backmap array that can be used in further processing.
+    when the amount of elements in the direction of the given axis is small),
+    but slower for large arrays. However, the main advantage of this function is
+    that it can return a backmap array that can be used in further processing.
 
     Args:
         x: The input array.
