@@ -75,7 +75,3 @@ geospatial = [
     "shapely>=2.0.6",
     "pyarrow>=24.0.0",
 ]
-cloud = [
-    "boto3>=1.42.74",
-    "s3fs>=0.4.2",
-]
