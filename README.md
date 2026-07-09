@@ -5,7 +5,7 @@
 
 
 # Acknowledgments
-Special thanks to [NEO BV](https://www.neo.nl) for sponsoring the development of this repository by allowing work on this open-source project during company hours. Their support in the ongoing development efforts is greatly appreciated and has been valuable in maturing this project to its current state.
+Special thanks to [Terramira](https://www.terramira.com) for sponsoring the development of this repository by allowing work on this open-source project during company hours. Their support in the ongoing development efforts is greatly appreciated and has been valuable in maturing this project to its current state.
 
 
 # Utility functions
