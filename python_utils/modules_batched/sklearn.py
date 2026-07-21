@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import torch
 
-from ..custom_batched.geometry import (
+from ..custom_batched.geometry_torch import (
     distance_line_to_point_batched,
     line_intersection_batched,
 )

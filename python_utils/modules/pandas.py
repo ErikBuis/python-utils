@@ -22,13 +22,17 @@ def create_func_values2idcs(
 def create_func_values2idcs(
     values_unique: npt.NDArray[NPGeneric],
     handle_missing_values: Literal[True] = ...,
-) -> Callable[[npt.NDArray[NPGeneric]], npt.NDArray[np.int64 | np.float64]]:
+) -> Callable[
+    [npt.NDArray[NPGeneric]], npt.NDArray[np.int64] | npt.NDArray[np.float64]
+]:
     pass
 
 
 def create_func_values2idcs(
     values_unique: npt.NDArray[NPGeneric], handle_missing_values: bool = False
-) -> Callable[[npt.NDArray[NPGeneric]], npt.NDArray[np.int64 | np.float64]]:
+) -> Callable[
+    [npt.NDArray[NPGeneric]], npt.NDArray[np.int64] | npt.NDArray[np.float64]
+]:
     """Create a function that maps each value to its index in the given array.
 
     Args:
@@ -62,7 +66,7 @@ def create_func_values2idcs(
     """
     if (
         not handle_missing_values
-        and np.issubdtype(values_unique.dtype, np.integer)
+        and pd.api.types.is_integer_dtype(values_unique.dtype)
         and len(values_unique) > 0
     ):
         values_unique_int = cast(npt.NDArray[np.integer], values_unique)
@@ -85,7 +89,7 @@ def create_func_values2idcs(
     # will use a dictionary for remapping. Note that pd.Series.map() will
     # return np.nan automatically if a value is not present in the dictionary.
     value2idx = {value: idx for idx, value in enumerate(values_unique)}
-    return lambda x: pd.Series(x).map(value2idx).to_numpy()
+    return lambda x: pd.Series(x).map(value2idx).to_numpy()  # type: ignore
 
 
 @overload

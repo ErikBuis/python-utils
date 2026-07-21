@@ -1,17 +1,14 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    import numpy as np
-    import numpy.typing as npt
-    import torch
+import torch
 
-    from ..modules_batched.numpy import (
-        arange_batched_packed,
-        meshgrid_batched_packed,
-    )
+from ..modules.torch import ravel_multi_index, unravel_index
+from ..modules_batched.torch import (
+    arange_batched_packed,
+    meshgrid_batched_packed,
+)
 
 
 def line_intersection_batched(
@@ -105,9 +102,7 @@ def distance_line_to_point_batched(
 def __get_theory_cells(
     cell_bounds: tuple[float, float, float, float],
     cell_size: tuple[float, float],
-) -> tuple[
-    npt.NDArray[np.intp], npt.NDArray[np.float64], npt.NDArray[np.float64]
-]:
+) -> tuple[int, int]:
     """Calculate the maximum number of cells per dimension.
 
     Args:
@@ -117,26 +112,17 @@ def __get_theory_cells(
             (cell_size_x, cell_size_y).
 
     Returns:
-        Tuple containing:
-        - The maximum number of cells per dimension.
-            Shape: [2]
-        - The cell bounds as a numpy array.
-            Shape: [4]
-        - The cell size as a numpy array.
-            Shape: [2]
+        The maximum number of cells per dimension.
     """
-    cell_bounds_np = np.array(cell_bounds)  # [4]
-    cell_size_np = np.array(cell_size)
-    theory_cells = (
-        (cell_bounds_np[[2, 3]] - cell_bounds_np[[0, 1]]) // cell_size_np
-    ).astype(np.intp)  # [2]  # fmt: skip
-    return theory_cells, cell_bounds_np, cell_size_np
+    theory_cells_x = int((cell_bounds[2] - cell_bounds[0]) // cell_size[0])
+    theory_cells_y = int((cell_bounds[3] - cell_bounds[1]) // cell_size[1])
+    return theory_cells_x, theory_cells_y
 
 
 def theory_cells_max(
     cell_bounds: tuple[float, float, float, float],
     cell_size: tuple[float, float],
-) -> np.int64:
+) -> int:
     """Calculate the maximum number of cells that can fit in the given bounds.
 
     Args:
@@ -149,15 +135,15 @@ def theory_cells_max(
         The maximum number of cells that can theoretically fit in the given
         bounds.
     """
-    theory_cells, _, _ = __get_theory_cells(cell_bounds, cell_size)
-    return np.prod(theory_cells)
+    theory_cells_x, theory_cells_y = __get_theory_cells(cell_bounds, cell_size)
+    return theory_cells_x * theory_cells_y
 
 
 def compress_coords_to_ids(
-    coords: npt.NDArray[np.floating],
+    coords: torch.Tensor,
     cell_bounds: tuple[float, float, float, float],
     cell_size: tuple[float, float],
-) -> npt.NDArray[np.intp]:
+) -> torch.Tensor:
     """Compress (x, y) cell coordinates to single integer IDs.
 
     Args:
@@ -174,17 +160,22 @@ def compress_coords_to_ids(
         Integer IDs representing the cells uniquely
             Shape: [*]
     """
-    theory_cells, cell_bounds_np, cell_size_np = __get_theory_cells(
-        cell_bounds, cell_size
+    device = coords.device
+    dtype = coords.dtype
+
+    theory_cells = __get_theory_cells(cell_bounds, cell_size)
+
+    cell_bounds_pt = torch.tensor(cell_bounds, device=device, dtype=dtype)
+    cell_size_pt = torch.tensor(cell_size, device=device, dtype=dtype)
+    theory_cells_pt = torch.tensor(
+        theory_cells, device=device, dtype=torch.int64
     )
 
     # Map the (x, y) coordinates to cell indices (i, j). The lowerleft corner of
     # the total cell area is considered the origin (0, 0), with each cell to the
     # right and above increasing the index by 1.
-    cells = (
-        (coords - cell_bounds_np[[0, 1]]) // cell_size_np
-    ).astype(np.intp)  # [*, 2]  # fmt: skip
-    cells = np.moveaxis(cells, -1, 0)  # [2, *]
+    cells = ((coords - cell_bounds_pt[:2]) // cell_size_pt).long()  # [*, 2]
+    cells = cells.movedim(-1, 0)  # [2, *]
 
     # Compress the cell indices (i, j) to cell IDs.
     # We use C order (default) to have y vary fastest (aka 'ij' indexing). This
@@ -196,15 +187,15 @@ def compress_coords_to_ids(
     #   0 | 0  3  6   9
     #     +-+--+--+--+--> x
     #       0  1  2  3
-    cell_ids = np.ravel_multi_index(cells, theory_cells)  # [*]
-    return cell_ids  # type: ignore
+    cell_ids = ravel_multi_index(cells, theory_cells_pt)  # [*]
+    return cell_ids
 
 
 def decompress_coords_from_ids(
-    cell_ids: npt.NDArray[np.intp],
+    cell_ids: torch.Tensor,
     cell_bounds: tuple[float, float, float, float],
     cell_size: tuple[float, float],
-) -> npt.NDArray[np.floating]:
+) -> torch.Tensor:
     """Decompress integer IDs back to (x, y) cell coordinates.
 
     Args:
@@ -219,27 +210,31 @@ def decompress_coords_from_ids(
         (x, y) coordinates of the lowerleft corner of the decompressed cells.
             Shape: [*, 2]
     """
-    theory_cells, cell_bounds_np, cell_size_np = __get_theory_cells(
-        cell_bounds, cell_size
+    theory_cells = __get_theory_cells(cell_bounds, cell_size)
+
+    cell_bounds_pt = torch.tensor(cell_bounds, device=cell_ids.device)
+    cell_size_pt = torch.tensor(cell_size, device=cell_ids.device)
+    theory_cells_pt = torch.tensor(
+        theory_cells, device=cell_ids.device, dtype=torch.int64
     )
 
     # Decompress the cell IDs back to cell indices (i, j). The lowerleft corner
     # of the total cell area is considered the origin (0, 0), with each cell to
     # the right and above increasing the index by 1.
-    cells = np.array(np.unravel_index(cell_ids, theory_cells))  # [2, *]
+    cells = torch.stack(unravel_index(cell_ids, theory_cells_pt))  # [2, *]
 
     # Map the cell indices (i, j) back to (x, y) coordinates.
-    cells = np.moveaxis(cells, 0, -1)
-    coords = cells * cell_size_np + cell_bounds_np[[0, 1]]  # [*, 2]
+    cells = cells.movedim(0, -1)  # [*, 2]
+    coords = cells * cell_size_pt + cell_bounds_pt[:2]  # [*, 2]
     return coords
 
 
 def __generate_cell_ids_between(
-    cell_ids_lowerleft: npt.NDArray[np.intp],
-    cell_ids_upperright: npt.NDArray[np.intp],
+    cell_ids_lowerleft: torch.Tensor,
+    cell_ids_upperright: torch.Tensor,
     cell_bounds: tuple[float, float, float, float],
     cell_size: tuple[float, float],
-) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]:
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Generate all cell IDs in the rectangular area between two cell IDs.
 
     Warning: This function assumes that the input cell IDs correspond to
@@ -258,8 +253,8 @@ def __generate_cell_ids_between(
 
     Returns:
         Tuple containing:
-        - Packed array of all cell IDs in the rectangular area between the given
-            corners.
+        - Packed tensor of all cell IDs in the rectangular area between the
+            given corners.
             Shape: [sum(O_ps)]
         - The number of cells covered by the rectangular area for each pair of
             corners.
@@ -296,24 +291,30 @@ def __generate_cell_ids_between(
     >>> #      1*10+7=17, 2*10+7=27.
     >>> #
     >>> # Now for the code:
-    >>> cell_ids_lowerleft = np.array([23, 17])
-    >>> cell_ids_upperright = np.array([55, 28])
+    >>> cell_bounds = (0.0, 0.0, 7.0, 10.0)
+    >>> cell_size = (1.0, 1.0)
+    >>> cell_ids_lowerleft = torch.tensor([23, 17])
+    >>> cell_ids_upperright = torch.tensor([55, 28])
     >>> cell_ids_packed, O_ps = __generate_cell_ids_between(
-    ...     cell_ids_lowerleft, cell_ids_upperright
+    ...     cell_ids_lowerleft, cell_ids_upperright, cell_bounds, cell_size
     ... )
     >>> cell_ids_packed
-    array([23, 24, 25, 33, 34, 35, 43, 44, 45, 53, 54, 55, 17, 18, 27, 28])
+    tensor([23, 24, 25, 33, 34, 35, 43, 44, 45, 53, 54, 55, 17, 18, 27, 28])
     >>> O_ps
-    array([12,  4])
+    tensor([12,  4])
     """
-    theory_cells, _, _ = __get_theory_cells(cell_bounds, cell_size)
+    theory_cells = __get_theory_cells(cell_bounds, cell_size)
+
+    theory_cells_pt = torch.tensor(
+        theory_cells, device=cell_ids_lowerleft.device, dtype=torch.int64
+    )
 
     # First, we convert the cell IDs to (i, j) coordinates on the cell grid.
-    i_lowerleft, j_lowerleft = np.unravel_index(
-        cell_ids_lowerleft, theory_cells
+    i_lowerleft, j_lowerleft = unravel_index(
+        cell_ids_lowerleft, theory_cells_pt
     )  # [P], [P]
-    i_upperright, j_upperright = np.unravel_index(
-        cell_ids_upperright, theory_cells
+    i_upperright, j_upperright = unravel_index(
+        cell_ids_upperright, theory_cells_pt
     )  # [P], [P]
     O_ps = (i_upperright - i_lowerleft + 1) * (
         j_upperright - j_lowerleft + 1
@@ -333,19 +334,18 @@ def __generate_cell_ids_between(
     )  # [sum(O_ps)], [sum(O_ps)]
 
     # Compress the (i, j) coordinates back to cell IDs.
-    cell_ids_packed = np.ravel_multi_index(
-        (i_coords_mesh_packed, j_coords_mesh_packed),  # type: ignore
-        theory_cells,
+    cell_ids_packed = ravel_multi_index(
+        (i_coords_mesh_packed, j_coords_mesh_packed), theory_cells_pt
     )  # [sum(O_ps)]
 
     return cell_ids_packed, O_ps
 
 
 def rects_cells_overlap(
-    rects: npt.NDArray[np.floating],
+    rects: torch.Tensor,
     cell_bounds: tuple[float, float, float, float],
     cell_size: tuple[float, float],
-) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]:
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Find all cells that overlap with the given rectangles.
 
     Note: This function returns cell IDs, not (x, y) coordinates. Use
@@ -362,9 +362,9 @@ def rects_cells_overlap(
 
     Returns:
         Tuple containing:
-        - Packed array of all cell IDs that overlap with the rectangles.
+        - Packed tensor of all cell IDs that overlap with the rectangles.
             Shape: [sum(O_ps)]
-        - Array with the number of cells that overlap with each rectangle.
+        - Tensor with the number of cells that overlap with each rectangle.
             Shape: [P]
     """
     # Compress the cell coordinates to single ints representing cell IDs.
