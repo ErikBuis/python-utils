@@ -22,8 +22,9 @@ classifiers = [
 ]
 dependencies = ["typing-extensions>=4.12.2"]
 
-[tool.setuptools.packages]
-find = {}
+[tool.setuptools.packages.find]
+include = ["python_utils*"]
+namespaces = false
 
 [tool.setuptools.dynamic]
 version = { attr = "python_utils.__version__" }
