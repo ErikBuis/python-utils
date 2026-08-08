@@ -358,7 +358,7 @@ def __count_freqs_until(
         The frequency of each element in x in range(0, high).
             Shape: [high]
     """
-    index = torch.from_numpy(obj_with_index.index.to_numpy()).to(device)
+    index = torch.tensor(obj_with_index.index.to_numpy()).to(device)
     return counts_segments_ints(index, high)
 
 
@@ -406,7 +406,7 @@ def LinearRings2LinearRingsVertices(
     # out to be the fastest.
     vertices_df = linearrings.get_coordinates()  # [V, 2]
     V_bs = __count_freqs_until(vertices_df, len(linearrings), device)  # [B]
-    vertices_packed = torch.from_numpy(vertices_df.to_numpy()).to(
+    vertices_packed = torch.tensor(vertices_df.to_numpy()).to(
         device=device, dtype=dtype
     )  # [V, 2]
     vertices = pad_packed(
