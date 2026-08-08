@@ -104,55 +104,68 @@ This subsection provides a brief overview of the most commonly used `uv` command
     ```bash
     source .venv/bin/activate
     ```
-    At the time of writing, there is no alias for this command. An open GitHub issue exists to make an alias, see [here](https://github.com/astral-sh/uv/issues/1910). However, if you already want a solution, you can add the following to your PowerShell profile (at `$HOME\Documents\PowerShell\Microsoft.PowerShell_profile.ps1`, create it if it doesn't exist):
-    ```powershell
-    # Activate the currently active uv env
-    function uvsh {
-        param([string]$venv_name = ".venv")
-        $venv_name = $venv_name -replace '[\\/]+$', ''
 
-        if ($env:WINDIR) {
-            $venv_bin = "Scripts\Activate"
-        } else {
-            $venv_bin = "bin/activate"
-        }
+- At the time of writing, there is no alias for this command. An open GitHub issue exists to make an alias, see [here](https://github.com/astral-sh/uv/issues/1910). However, if you already want a solution, you can do the following:
+    1. For Windows:
+        1. Open `$PROFILE` with your favourite editor, for example:
+            ```powershell
+            code $PROFILE
+            ```
+        2. Add the following function to the file:
+            ```powershell
+            # Activate the currently active uv env.
+            function uvsh {
+                param([string]$venv_name = ".venv")
+                $venv_name = $venv_name -replace '[\\/]+$', ''
 
-        $activator = Join-Path $venv_name $venv_bin
+                if ($env:WINDIR) {
+                    $venv_bin = "Scripts\Activate"
+                } else {
+                    $venv_bin = "bin/activate"
+                }
 
-        if (-Not (Test-Path $activator)) {
-            Write-Host "[ERROR] Python venv not found: $venv_name" -ForegroundColor Red
-            return
-        }
-        Write-Host "[INFO] Successfully activated Python venv: $venv_name (via $activator)"
+                $activator = Join-Path $venv_name $venv_bin
 
-        . $activator
-    }
-    ```
-    Or for bash (at `$HOME/.bashrc`):
-    ```bash
-    uvsh() {
-        local venv_name=${1:-'.venv'}
-        venv_name=${venv_name//\//}
+                if (-Not (Test-Path $activator)) {
+                    Write-Host "[ERROR] Python venv not found: $venv_name" -ForegroundColor Red
+                    return
+                }
+                Write-Host "[INFO] Successfully activated Python venv: $venv_name (via $activator)"
 
-        local venv_bin=
-        if [[ -d ${WINDIR} ]]; then
-            venv_bin='Scripts/activate'
-        else
-            venv_bin='bin/activate'
-        fi
+                . $activator
+            }
+            ```
+    2. For Linux/macOS:
+        1. Open `$HOME/.bashrc` with your favourite editor, for example:
+            ```bash
+            code $HOME/.bashrc
+            ```
+        2. Add the following function to the file:
+            ```bash
+            # Activate the currently active uv env.
+            uvsh() {
+                local venv_name=${1:-'.venv'}
+                venv_name=${venv_name//\//}
 
-        local activator="${venv_name}/${venv_bin}"
+                local venv_bin=
+                if [[ -d ${WINDIR} ]]; then
+                    venv_bin='Scripts/activate'
+                else
+                    venv_bin='bin/activate'
+                fi
 
-        if [[ ! -f ${activator} ]]; then
-            echo "[ERROR] Python venv not found: ${venv_name}"
-            return
-        fi
-        echo "[INFO] Successfully activated Python venv: ${venv_name} (via ${activator})"
+                local activator="${venv_name}/${venv_bin}"
 
-        . "${activator}"
-    }
-    ```
-    After adding this, you can run `uvsh` to activate the environment. If you want to activate an environment with a custom name, you can run `uvsh .my_env` instead.
+                if [[ ! -f ${activator} ]]; then
+                    echo "[ERROR] Python venv not found: ${venv_name}"
+                    return
+                fi
+                echo "[INFO] Successfully activated Python venv: ${venv_name} (via ${activator})"
+
+                . "${activator}"
+            }
+            ```
+- After adding this, you can run `uvsh` to activate the environment. If you want to activate an environment with a custom name, you can run `uvsh .my_env` instead.
 - To deactivate the `uv` environment, run the following command:
     ```powershell
     deactivate

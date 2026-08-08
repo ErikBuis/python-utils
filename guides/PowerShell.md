@@ -2,6 +2,24 @@
 The Windows PowerShell is the standard way of interacting with the Windows environment using a CLI. This guide will present tips and tricks you can use when interacting with PowerShell.
 
 
+## Change the default shell to PowerShell
+By default, the "Windows PowerShell" (v5.1) is the default shell on Windows. However, this version actually has some nasty bugs.
+
+<details>
+<summary>Bug example</summary>
+When you use "Open in Terminal" in the Windows Explorer, the shell tries to process the folder path. If it contains special characters such as square brackets (`[` or `]`) or dollar signs (`$`), they will be treated as wildcards or variables and the parsing may fail. It then loses the target path entirely and defaults to its home folder: `C:\Windows\System32\WindowsPowerShell\v1.0`.
+</details>
+
+The best long-term fix is to install the modern "PowerShell" (7+), and before you ask: yes, this is a confusing name change.
+1. Download and install it from the Microsoft Store or via the terminal:
+    ```powershell
+    winget install Microsoft.PowerShell
+    ```
+2. Open Windows Terminal.
+3. Press `Ctrl + ,` to open Settings.
+4. Change the Default Profile to `PowerShell` (the one with the modern black/grey icon, not the classic blue `Windows PowerShell`) and save.
+
+
 ## Exit using Ctrl+D
 Sometimes, it may be cumbersome to exit the PowerShell by typing "exit" followed by Enter. Thus, you might want to be able to exit the PowerShell in the same way as the Linux shell (using Ctrl+D). To do this, first run the following command with administrator privileges:
 ```powershell
@@ -13,6 +31,7 @@ code $PROFILE
 ```
 Change the file to contain the following:
 ```powershell
+# Exit on Ctrl+D.
 Set-PSReadlineKeyHandler -Chord Ctrl+d -Function DeleteCharOrExit
 ```
 And save the file. Reopen your PowerShell and now you should be able to press Ctrl+D to exit it!
@@ -21,20 +40,18 @@ And save the file. Reopen your PowerShell and now you should be able to press Ct
 ## Use a Unix-like colored prompt
 If you want to able to better recognize when a new command started (for example, this could be handy if your commands have a lot of output), you can change the color of the PowerShell prompt by adding the following to your `$PROFILE`:
 ```powershell
+# Unix-like colored prompt.
 function prompt {
     $ESC = [char]27
 
-    # Color codes
     $ColorGreen = "$ESC[32m"
     $ColorBlue = "$ESC[34m"
     $ColorWhite = "$ESC[37m"
     $ColorReset = "$ESC[0m"
 
-    # Conda environment
     $condaEnv = $env:CONDA_DEFAULT_ENV
     $condaPrompt = if ($condaEnv) { "$ColorWhite($condaEnv) " } else { "" }
 
-    # Construct the prompt
     "$condaPrompt${ColorGreen}PS $ColorBlue$($executionContext.SessionState.Path.CurrentLocation)$ColorWhite$('>' * ($nestedPromptLevel + 1)) $ColorReset"
 }
 ```
@@ -48,6 +65,7 @@ tree 'path/to/directory'
 
 Unfortunately, the default `tree` command does not allow much filtering. Thus, we have made a function that does allow such control for a more fine-grained output:
 ```powershell
+# Print a tree rooted at 'path/to/directory' with optional filtering.
 function Print-Tree {
     param (
         [string]$Path,
