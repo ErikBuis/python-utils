@@ -203,7 +203,7 @@ def _run_listener(queue: Queue) -> None:
         Args:
             log_msgs: Log lines to print above the bar block.
         """
-        nonlocal active, bar_order, curr_bar_rows
+        nonlocal curr_bar_rows
 
         if not log_msgs and not bar_order:
             return
@@ -523,7 +523,7 @@ def _init() -> None:
         # manager server, which would cause log message duplication.
         with _auto_connect_lock:
             if _queue is not None:
-                return  # another thread beat us to it
+                return  # another thread beat us to it  # type: ignore
 
             proxy_queue = _connect_to_manager_server()
             if proxy_queue is None:

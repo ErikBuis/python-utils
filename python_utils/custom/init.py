@@ -125,7 +125,7 @@ def configure_root_logger(
             "worker_id should always be None when called by the main process."
         )
 
-    global _last_logging_level, _last_filter, _package
+    global _last_logging_level, _last_filter
     _last_logging_level = logging_level
     _last_filter = filter
 

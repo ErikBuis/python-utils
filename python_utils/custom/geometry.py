@@ -322,10 +322,6 @@ class Interval:
                 or True, the end is included. If ')', or False, the end is not
                 excluded.
         """
-        if left_bracket not in ("[", "(", True, False):
-            raise ValueError("Left bracket must be '[', '(', or bool.")
-        if right_bracket not in ("]", ")", True, False):
-            raise ValueError("Right bracket must be ']', ')', or bool.")
         if start >= end:
             raise ValueError("Interval start must be less than interval end.")
         if start == -inf and left_bracket not in ("[", True):

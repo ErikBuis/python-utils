@@ -5,9 +5,10 @@ import inspect
 import logging
 import sys
 import warnings
-from collections.abc import Sequence
-from typing import Any, Callable, cast
+from collections.abc import Callable, Sequence
+from typing import Any, cast
 
+import matplotlib.axes as axes
 import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
@@ -619,7 +620,7 @@ def main(args: argparse.Namespace) -> None:
     for ax, (x_data, y_data, model_func, title, formula, bounds) in zip(
         axs.flatten(), datasets
     ):
-        ax = cast(plt.Axes, ax)
+        ax = cast(axes.Axes, ax)
         confs = (95, 68)
         colors = ["red", "orange"]
         alphas = [0.2, 0.4]

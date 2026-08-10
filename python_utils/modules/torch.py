@@ -1834,8 +1834,6 @@ def ravel_multi_index(
             torch.ones(1, device=device, dtype=torch.int64),
             dims[:-1].cumprod(0, dtype=torch.int64),
         ])  # [K]
-    else:
-        raise ValueError("only 'C' or 'F' order is permitted")
 
     # Reshape dims and factors to match the multi-index shape.
     dims = dims.reshape(
@@ -1856,10 +1854,6 @@ def ravel_multi_index(
         # Clip the multi-index to the range.
         multi_index = multi_index.clamp(
             torch.tensor(0, device=device), dims - 1
-        )
-    else:
-        raise ValueError(
-            f"clipmode must be one of 'clip', 'raise', or 'wrap' (got '{mode}')"
         )
 
     return (multi_index * factors).sum(dim=0)  # [N_0, ..., N_{D-1}]
@@ -1927,8 +1921,6 @@ def unravel_index(
         for dim in shape:
             multi_index.append(indices % dim)
             indices = indices // dim
-    else:
-        raise ValueError("only 'C' or 'F' order is permitted")
 
     return tuple(multi_index)
 

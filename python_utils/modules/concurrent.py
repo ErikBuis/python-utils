@@ -75,7 +75,6 @@ def __process_wrapper(
         The return value of fn(*args, **kwargs) if the cancellation event is
         not set.
     """
-    global _worker_cancel_event
     if _worker_cancel_event is None:
         raise RuntimeError(
             "Worker cancel event is not initialized. This should never happen"
