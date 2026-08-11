@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import overload
 
 import numpy as np
 import numpy.typing as npt
@@ -141,7 +142,7 @@ def theory_cells_max(
 
 
 def compress_coords_to_ids(
-    coords: npt.NDArray[np.floating],
+    coords: npt.NDArray[np.integer] | npt.NDArray[np.floating],
     cell_bounds: tuple[float, float, float, float],
     cell_size: tuple[float, float],
 ) -> npt.NDArray[np.intp]:
@@ -183,15 +184,33 @@ def compress_coords_to_ids(
     return cell_ids  # type: ignore
 
 
+@overload
+def decompress_coords_from_ids(  # type: ignore
+    cell_ids: npt.NDArray[np.intp],
+    cell_bounds: tuple[int, int, int, int],
+    cell_size: tuple[int, int],
+) -> npt.NDArray[np.intp]:
+    pass
+
+
+@overload
 def decompress_coords_from_ids(
     cell_ids: npt.NDArray[np.intp],
     cell_bounds: tuple[float, float, float, float],
     cell_size: tuple[float, float],
 ) -> npt.NDArray[np.floating]:
+    pass
+
+
+def decompress_coords_from_ids(
+    cell_ids: npt.NDArray[np.intp],
+    cell_bounds: tuple[float, float, float, float],
+    cell_size: tuple[float, float],
+) -> npt.NDArray[np.intp] | npt.NDArray[np.floating]:
     """Decompress integer IDs back to (x, y) cell coordinates.
 
     Args:
-        cells_ids: Integer IDs representing the cells uniquely.
+        cell_ids: Integer IDs representing the cells uniquely.
             Shape: [*]
         cell_bounds: The total area covered by the cells, in the form of
             (min_x, min_y, max_x, max_y).
@@ -325,7 +344,7 @@ def __generate_cell_ids_between(
 
 
 def rects_cells_overlap(
-    rects: npt.NDArray[np.floating],
+    rects: npt.NDArray[np.integer] | npt.NDArray[np.floating],
     cell_bounds: tuple[float, float, float, float],
     cell_size: tuple[float, float],
 ) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]:
