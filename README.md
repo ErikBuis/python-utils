@@ -9,7 +9,7 @@ Special thanks to [Terramira](https://www.terramira.com) for sponsoring the deve
 
 
 # Utility functions
-This repository contains utility functions that are meant to be fully reusable between different projects. The functions are organized by the Python module they correlate most with. Additionally, the care has been taken to separate the functionality of all files from other files, so that you can safely copy-paste a single file into your project. Despite our best efforts however, this was not viable everywhere, as some functions must call specific others to function correctly. In these cases, you may have to copy-paste the dependency files as well. However, you should note that the functions in the `modules` directory are completely independent from the rest of the files.
+This repository contains utility functions that are meant to be fully reusable between different projects. The functions are organized by the Python module they correlate most with. Additionally, care has been taken to separate the functionality of all files from other files, so that you can safely import a single file into your project. Despite our best efforts however, this was not viable everywhere, as some functions must call specific others to function correctly. In these cases, you may have to import some minimal third-party libraries. However, you should note that the functions in the `modules` directory are completely independent from the rest of the files.
 
 
 ## Project Structure
