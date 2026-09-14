@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/pycqa/isort
-    rev: 5.12.0
+    rev: 9.0.1
     hooks:
       - id: isort
         name: isort (python)
@@ -8,20 +8,21 @@ repos:
           - "--line-length=80"  # Same line length as Black
           - "--profile=black"  # Prevent conflicts with Black
   - repo: https://github.com/psf/black
-    rev: 24.3.0
+    rev: 26.5.1
     hooks:
       - id: black
+        name: black (python)
         args:
           - --line-length=80  # Black will only split lines that exceed this length
           - --skip-magic-trailing-comma  # Try to squish lists onto one line if possible
           - --preview  # Enable changes that will be added in a future version of Black
           - --enable-unstable-feature=string_processing  # Automatically split strings over multiple lines
           - --enable-unstable-feature=hug_parens_with_braces_and_square_brackets  # Hug all types of parens
-          - --enable-unstable-feature=wrap_long_dict_values_in_parens  # Use indent if a dict value is too long
   - repo: https://github.com/pycqa/flake8
-    rev: 6.0.0
+    rev: 7.3.0
     hooks:
       - id: flake8
+        name: flake8 (python)
         args:
           - "--max-line-length=80"  # Black only loosely adheres to line-length
           # E741: Ambiguous variable name
