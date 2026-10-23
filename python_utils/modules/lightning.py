@@ -11,6 +11,7 @@ import types
 from collections import defaultdict
 from collections.abc import Sequence
 from glob import glob
+from pathlib import Path
 from typing import Any, cast
 
 import lightning.pytorch as pl
@@ -224,14 +225,13 @@ def prepare_best_model_loading(
 
     This function is used to load the best model from the checkpoints saved
     during training. It is useful when you want to test/validate/predict using
-    the best model after training, without having to specfy the path to the
+    the best model after training, without having to specify the path to the
     best model manually. It will automatically find the best model based on
     the monitor and mode used in the ModelCheckpoint callback of the trainer.
 
-    After calling this function, you can call the `trainer.test()`,
-    `trainer.validate()`, or `trainer.predict()` methods with the
-    `ckpt_path="best"` argument to let PyTorch Lightning load the best
-    model automatically.
+    After calling this function, you can call the trainer.test(),
+    trainer.validate(), or trainer.predict() methods with the ckpt_path="best"
+    argument to let PyTorch Lightning load the best model automatically.
 
     Args:
         trainer: The PyTorch Lightning trainer.
@@ -246,18 +246,18 @@ def prepare_best_model_loading(
     # Unfortunately, we cannot use the trainer.test(ckpt_path="best") method
     # without first having called trainer.fit(), since the path to the best
     # model is saved in the trainer.checkpoint_callback.best_model_path
-    # attribute, which is only set during/after training. See this GitHub
-    # issue for further details on why this is the default behaviour:
+    # attribute, which is only set during/after training. See this GitHub issue
+    # for further details on why this is the default behaviour:
     # https://github.com/Lightning-AI/pytorch-lightning/issues/17312
 
     # Therefore, we have to load the best model ourselves. We could ask the
     # user to provide the path to the best model, but I think it is more
     # user-friendly to just try to infer the path to the best model from the
-    # path to the model directory. To do this, we could load every checkpoint
-    # and check them all for the best_model_score. Afterwards, we still need
-    # to verify that the state_dict is compatible with the model. This is a
-    # bit of a hack, but it is the best solution currently proposed in the
-    # aforementioned GitHub issue.
+    # path to the model directory. To do this, we load every checkpoint and
+    # check them for their score, keeping track of the best one. Then, we need
+    # to verify that its state_dict is compatible with the model the user
+    # passed to this function. This is a bit of a hack, but it is the best
+    # solution currently proposed in the aforementioned GitHub issue.
 
     # Determine where the checkpoints are saved.
     if not isinstance(
@@ -276,16 +276,14 @@ def prepare_best_model_loading(
     # We only keep one model in memory at a time to prevent running out of RAM.
     # models_dict will be a dict with the following structure:
     # {
-    #     (monitor, mode): [
-    #         (best_model_score, creation_time, ckpt_path),
-    #         ...
-    #     ],
+    #     (monitor, mode): [(score, creation_time, ckpt_path), ...],
     #     ...
     # }
     # where:
     # - monitor: Metric that was monitored during training, e.g. 'loss/val'.
     # - mode: Mode that was used to monitor the metric, e.g. 'min' or 'max'.
-    # - best_model_score: The best score of the model for the monitored metric.
+    # - score: The checkpoint's own score for the monitored metric, or None if
+    #   it is not a top-k checkpoint (e.g. last.ckpt).
     # - creation_time: Time when the checkpoint was created.
     # - ckpt_path: Path to the checkpoint file as a string.
     models_dict: dict[
@@ -298,13 +296,34 @@ def prepare_best_model_loading(
         for callback_name, internal_state in curr_model["callbacks"].items():
             if callback_name.startswith("ModelCheckpoint"):
                 curr_kwargs = eval(callback_name[len("ModelCheckpoint") :])
+                # We can't use internal_state["best_model_score"] here, since
+                # that's the best score at the time of saving instead of the
+                # checkpoint's own score. A copy of the latest weights (like
+                # last.ckpt) would then get the same score as the actual best
+                # checkpoint. Unfortunately though, the score is not stored
+                # directly under some dedicated key. So instead, we look the
+                # checkpoint up in the best_k_models key, which maps the path
+                # of each top-k checkpoint to its score, and then just select
+                # the score corresponding to the current checkpoint. Note that
+                # if the checkpoint is not a top-k checkpoint, the score will
+                # be None. We only compare file names, since the directory may
+                # have been moved after training, possibly even from Windows
+                # to Linux. Path doesn't split on '\' on Linux, so we replace
+                # them with '/' first.
+                ckpt_name = Path(ckpt_path).name
+                score = next(
+                    (
+                        float(top_k_score)
+                        for top_k_path, top_k_score in internal_state[
+                            "best_k_models"
+                        ].items()
+                        if Path(top_k_path.replace("\\", "/")).name == ckpt_name
+                    ),
+                    None,
+                )
                 models_dict[
                     (curr_kwargs["monitor"], curr_kwargs["mode"])
-                ].append((
-                    internal_state["best_model_score"],
-                    os.path.getctime(ckpt_path),
-                    ckpt_path,
-                ))
+                ].append((score, os.path.getctime(ckpt_path), ckpt_path))
                 break
     if not models_dict:
         raise FileNotFoundError(
@@ -364,29 +383,26 @@ def prepare_best_model_loading(
 
     # At this point, we have a list of candidate models that match the
     # (monitor, mode) combination of the Trainer's ModelCheckpoint. We
-    # will now filter out models that have no best_model_score set and warn
-    # the user about it.
-    for i, (best_model_score, _, ckpt_path) in reversed(
-        list(enumerate(candidate_models))
-    ):
-        if best_model_score is None:
-            logger.warning(
-                f"Skipping checkpoint at '{ckpt_path}' because it has no"
-                " `best_model_score`. If you want to use this checkpoint"
+    # will now filter out models that have no score of their own. This is
+    # expected for last.ckpt, so we only inform the user about it.
+    for i, (score, _, ckpt_path) in reversed(list(enumerate(candidate_models))):
+        if score is None:
+            logger.info(
+                f"Skipping checkpoint at '{ckpt_path}' because it is not one"
+                " of the top-k checkpoints saved by ModelCheckpoint, so it has"
+                " no score of its own. If you want to use this checkpoint"
                 " anyway, please specify the path to the checkpoint manually"
                 " using `ckpt_path='path/to/your/model.ckpt'`."
             )
             del candidate_models[i]
     if not candidate_models:
         raise FileNotFoundError(
-            "No checkpoints found with a valid `best_model_score` for the"
-            f" (monitor, mode) combination {monitor_mode!r}. Note that we only"
-            " searched through models which had their (monitor, mode) set to"
-            f" {monitor_mode!r}."
+            "No top-k checkpoints with a score found for the (monitor, mode)"
+            f" combination {monitor_mode!r}."
         )
     candidate_models = cast(list[tuple[float, float, str]], candidate_models)
 
-    # Sort the models by their best score, then by creation time.
+    # Sort the models by their score, then by creation time.
     sorted_models = sorted(
         candidate_models,
         key=lambda candidate_model: (
@@ -402,7 +418,7 @@ def prepare_best_model_loading(
 
     # Check if the best model's state_dict is compatible with the given model.
     expected_state_dict_keys = set(model.state_dict().keys())
-    for best_model_score, ctime, ckpt_path in sorted_models:
+    for score, ctime, ckpt_path in sorted_models:
         try:
             best_model = model.__class__.load_from_checkpoint(
                 ckpt_path, map_location=trainer.strategy.root_device, **kwargs
@@ -430,9 +446,8 @@ def prepare_best_model_loading(
             continue
 
         logger.info(
-            f"Found best model at '{ckpt_path}' with"
-            f" {monitor_mode[0]}={best_model_score}. File was created on"
-            f" {time.ctime(ctime)}."
+            f"Found best model at '{ckpt_path}' with {monitor_mode[0]}={score}."
+            f" File was created on {time.ctime(ctime)}."
         )
         break
     else:
